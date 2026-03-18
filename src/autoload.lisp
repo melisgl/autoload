@@ -45,11 +45,18 @@
                    (error "~@<Autoloaded function ~S was not redefined ~
                          by the ~A ASDF:SYSTEM.~:@>"
                           ',name ,asdf-system-name)))
-           (asdf:load-system ,asdf-system-name)
+           (load-system ,asdf-system-name ',name)
            ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
            ;; is invoked and not this stub, which could be the case
            ;; without the FDEFINITION call.
            (apply (fdefinition ',name) args))))))
+
+(defun load-system (asdf-system-name function-name)
+  (unless (asdf:find-system asdf-system-name nil)
+    (error "~@<Could not ~S ASDF:SYSTEM ~S for function ~S. ~
+           It may not be installed.~:@>"
+           'autoload asdf-system-name function-name))
+  (asdf:load-system asdf-system-name))
 
 (defmacro without-redefinition-warnings (&body body)
   #+sbcl
