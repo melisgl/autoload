@@ -2,12 +2,8 @@
 
 (pax:defsection @autoload-manual (:title "Autoload Manual" :export nil)
   (@links-and-systems pax:section)
-  (@api pax:section))
-
-(pax:defsection @api (:title "API" :export nil)
-  (autoload pax:macro)
-  (defun/autoloaded pax:macro)
-  (defvar/autoloaded pax:macro))
+  (@api pax:section)
+  (@asdf-integration pax:section))
 
 (pax:defsection @links-and-systems (:title "Links and Systems" :export nil)
   "Here is the [official
@@ -16,6 +12,17 @@
   for the latest version."
   ("autoload" asdf:system)
   ("autoload-doc" asdf:system))
+
+(pax:defsection @api (:title "API" :export nil)
+  (autoload pax:macro)
+  (function-autoload-p function)
+  (defun/autoloaded pax:macro)
+  (defvar/autoloaded pax:macro))
+
+(pax:defsection @asdf-integration (:title "ASDF Integration" :export nil)
+  (autoload-system class)
+  (system-autoloaded-systems (pax:reader autoload-system))
+  (autoloaded-systems function))
 
 
 ;;;; Register in PAX World
@@ -27,8 +34,7 @@
   `((:objects
      (, @autoload-manual)
      :source-uri-fn ,(pax:make-github-source-uri-fn
-                      "autoload"
-                      "https://github.com/melisgl/autoload"))))
+                      "autoload" "https://github.com/melisgl/autoload"))))
 
 (pax:register-doc-in-pax-world :autoload (autoload-sections) (autoload-pages))
 

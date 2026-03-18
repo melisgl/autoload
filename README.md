@@ -6,6 +6,7 @@
 
 - [1 Links and Systems][d60b]
 - [2 API][706f]
+- [3 ASDF Integration][0c5c]
 
 ###### \[in package AUTOLOAD\]
 <a id="x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29"></a>
@@ -50,29 +51,39 @@ for the latest version.
 
 - [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME*
 
-    Unless `NAME` already has an [`FDEFINITION`][eea4], define a stub function with
-    `NAME` to autoload `ASDF-SYSTEM-NAME`. When called, this stub will do
-    the following:
-    
-    1. Set the `FDEFINITION` of `NAME` to a function that signals an error.
-    
-    2. Call `ASDF:LOAD-SYSTEM` on `ASDF-SYSTEM-NAME`.
-    
-    3. Call `NAME` with the original arguments.
-    
-    Thus, the loaded system is expected to redefine the stub. If it
-    doesn't, then an error will be signalled and all subsequent calls to
-    the function will produce the same error without attempting to load
-    the system again.
+    Define a stub function with `NAME` to load
+    `ASDF-SYSTEM-NAME` and return `NAME`. The arguments are not evaluated.
+    If `NAME` has a [function definition][eea4] and it is
+    not [`FUNCTION-AUTOLOAD-P`][57ad], then do nothing and return `NIL`.
     
     The stub is not defined at [compile time][27c6], which matches
-    the required semantics of [`DEFUN`][f472].
+    the required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1]
+    `FUNCTION`([`0`][119e] [`1`][81f7]) and [`NOTINLINE`][9514].
+    
+    Consistency checks:
+    
+    - The autoloaded system is expected to redefine `NAME`. If it doesn't,
+      then an error will be signalled. If `NAME` is redefined but not with
+      [`DEFUN/AUTOLOADED`][3b15], then a warning is signalled.
+    
+    - When the `AUTOLOAD` form is macroexpanded in the process of ASDF
+      compilation or load of an [`AUTOLOAD-SYSTEM`][cd2d], a warning is emitted if
+      `ASDF-SYSTEM-NAME` is not among the declared
+      [`SYSTEM-AUTOLOADED-SYSTEMS`][8429] of that system.
+
+<a id="x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29"></a>
+
+- [function] **FUNCTION-AUTOLOAD-P** *NAME*
+
+    See if `NAME`'s function definition is an autoloader function
+    established by [`AUTOLOAD`][7da0].
 
 <a id="x-28AUTOLOAD-3ADEFUN-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFUN/AUTOLOADED** *NAME LAMBDA-LIST &BODY BODY*
 
-    Like [`DEFUN`][f472], but silence redefinition warnings.
+    Like [`DEFUN`][f472], but silence redefinition warnings. Also, warn if `NAME`
+    does not denote a function or it was never [`FUNCTION-AUTOLOAD-P`][57ad].
 
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -87,18 +98,71 @@ for the latest version.
     ;; Some base system only foreshadows *X*.
     (declaim (special *x*))
     (let ((*x* 1))
-      ;; Imagine that the system that defines *X* is autoload here.
+      ;; Imagine that the system that defines *X* is autoloaded here.
       (defvar/autoloaded *x* 2)
       *x*)
     => 1
     ```
 
+<a id="x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29"></a>
+
+## 3 ASDF Integration
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29"></a>
+
+- [class] **AUTOLOAD-SYSTEM** *ASDF/SYSTEM:SYSTEM*
+
+    Inherit from this class in your `ASDF:DEFSYSTEM` form
+    to be able to specify the list of systems autoloaded by the system
+    being defined, against which [`AUTOLOAD`][7da0]s are then
+    checked.
+    
+    ```
+    (asdf:defsystem "some-system"
+      :defsystem-depends-on ("autoload")
+      :class "autoload:autoload-system"
+      :autoloaded-systems ("other-system"))
+    ```
+
+<a id="x-28AUTOLOAD-3ASYSTEM-AUTOLOADED-SYSTEMS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
+
+- [reader] **SYSTEM-AUTOLOADED-SYSTEMS** *[AUTOLOAD-SYSTEM][cd2d] (:AUTOLOADED-SYSTEMS = NIL)*
+
+    Return the list of the names of systems autoloaded
+    directly by this system. The names are canonicalized with
+    `ASDF:COERCE-NAME`.
+
+<a id="x-28AUTOLOAD-3AAUTOLOADED-SYSTEMS-20FUNCTION-29"></a>
+
+- [function] **AUTOLOADED-SYSTEMS** *SYSTEM &KEY (FOLLOW-AUTOLOADED T)*
+
+    Return the list of the names of systems that may be autoloaded by
+    `SYSTEM` or any of its normal dependencies (the transitive closure of
+    its `:DEPENDS-ON`). This works even if `SYSTEM` is not an
+    [`AUTOLOAD-SYSTEM`][cd2d].
+    
+    If `FOLLOW-AUTOLOADED`, look further for autoloaded systems among the
+    normal and autoloaded dependencies of any autoloaded systems found.
+    If an autoloaded system is not installed (i.e. `ASDF:FIND-SYSTEM`
+    fails), then that system is not followed.
+
+  [05c1]: http://www.lispworks.com/documentation/HyperSpec/Body/d_ftype.htm "FTYPE (MGL-PAX:CLHS DECLARATION)"
+  [0c5c]: #x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29 "ASDF Integration"
+  [119e]: http://www.lispworks.com/documentation/HyperSpec/Body/t_fn.htm "FUNCTION (MGL-PAX:CLHS CLASS)"
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
+  [3b15]: #x-28AUTOLOAD-3ADEFUN-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFUN/AUTOLOADED MGL-PAX:MACRO"
+  [57ad]: #x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29 "AUTOLOAD:FUNCTION-AUTOLOAD-P FUNCTION"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
   [6caf]: #x-28AUTOLOAD-3A-40AUTOLOAD-MANUAL-20MGL-PAX-3ASECTION-29 "Autoload Manual"
   [706f]: #x-28AUTOLOAD-3A-40API-20MGL-PAX-3ASECTION-29 "API"
   [7334]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpar.htm "DEFVAR (MGL-PAX:CLHS MGL-PAX:MACRO)"
+  [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
+  [81f7]: http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm "FUNCTION (MGL-PAX:CLHS MGL-PAX:MACRO)"
+  [8429]: #x-28AUTOLOAD-3ASYSTEM-AUTOLOADED-SYSTEMS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTOLOADED-SYSTEMS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
+  [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
+  [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
+  [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [eea4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fdefin.htm "FDEFINITION (MGL-PAX:CLHS FUNCTION)"
   [f472]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defun.htm "DEFUN (MGL-PAX:CLHS MGL-PAX:MACRO)"
 
