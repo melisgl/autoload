@@ -8,7 +8,7 @@
   :homepage "http://github.com/melisgl/autoload"
   :bug-tracker "https://github.com/melisgl/autoload/issues"
   :source-control (:git "https://github.com/melisgl/autoload.git")
-  :description "Bare-bones autoloading facility. See
+  :description "An ASDF autoloading facility. See
   AUTOLOAD::@AUTOLOAD-MANUAL."
   :components ((:module "src/"
                 :serial t
