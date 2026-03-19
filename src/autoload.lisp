@@ -4,7 +4,7 @@
 ;;; compiled or loaded
 (defvar *autoload-system* nil)
 
-(defmacro autoload (name asdf-system-name)
+(defmacro autoload (name asdf-system-name &key (docstring nil docstringp))
   "Define a stub function with NAME to [load][asdf:load-system]
   ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
   If NAME has a [function definition][fdefinition pax:clhs] and it is
@@ -13,6 +13,9 @@
   The stub is not defined at [compile time][pax:clhs], which matches
   the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
   FUNCTION and NOTINLINE.
+
+  - The stub is defined with DOCSTRING if specified, else with a
+    generic docstring that says what system it autoloads.
 
   Consistency checks:
 
@@ -51,8 +54,11 @@
      (when (or (null (fdefinition* ',name))
                (function-autoload-p ',name))
        (defun ,name (&rest args)
-         ,(format nil "[AUTOLOADed][pax:macro] function in the ~A ASDF:SYSTEM."
-                  (%escape-markdown asdf-system-name))
+         ,(if docstringp
+              docstring
+              (format nil "[AUTOLOADed][pax:macro] function in the ~
+                          ~A ASDF:SYSTEM."
+                      (%escape-markdown asdf-system-name)))
          (load-system-and-check-redefinition ',asdf-system-name ',name)
          ;; Make sure that the function redefined by
          ;; ASDF:LOAD-SYSTEM is invoked and not this stub, which

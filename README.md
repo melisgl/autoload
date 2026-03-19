@@ -49,7 +49,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME*
+- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (DOCSTRING NIL)*
 
     Define a stub function with `NAME` to load
     `ASDF-SYSTEM-NAME` and return `NAME`. The arguments are not evaluated.
@@ -59,6 +59,9 @@ for the latest version.
     The stub is not defined at [compile time][27c6], which matches
     the required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1]
     `FUNCTION`([`0`][119e] [`1`][81f7]) and [`NOTINLINE`][9514].
+    
+    - The stub is defined with `DOCSTRING` if specified, else with a
+      generic docstring that says what system it autoloads.
     
     Consistency checks:
     

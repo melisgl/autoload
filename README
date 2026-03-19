@@ -40,7 +40,7 @@ for the latest version.
 
 ## API
 
-- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME
+- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (DOCSTRING NIL)
 
     Define a stub function with NAME to load
     ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
@@ -50,6 +50,9 @@ for the latest version.
     The stub is not defined at compile time, which matches
     the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
     FUNCTION and NOTINLINE.
+
+    - The stub is defined with DOCSTRING if specified, else with a
+      generic docstring that says what system it autoloads.
 
     Consistency checks:
 
