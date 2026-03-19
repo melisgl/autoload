@@ -23,6 +23,10 @@
   (autoload-system class)
   (system-autoloaded-systems (pax:reader autoload-system))
   (autoloaded-systems function))
+
+(pax:define-glossary-term @slime-autodoc
+    (:title "SLIME autodoc"
+     :url "https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode"))
 
 
 ;;;; Register in PAX World

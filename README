@@ -40,7 +40,7 @@ for the latest version.
 
 ## API
 
-- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (DOCSTRING NIL)
+- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL)
 
     Define a stub function with NAME to load
     ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
@@ -53,6 +53,11 @@ for the latest version.
 
     - The stub is defined with DOCSTRING if specified, else with a
       generic docstring that says what system it autoloads.
+
+    - For introspective purposes only, the stub's arglist is set to
+      LAMBDA-LIST if specified and it's supported on the
+      platform (currently only SBCL). The arglist is shown by e.g.
+      SLIME autodoc and returned by DREF:ARGLIST.
 
     Consistency checks:
 

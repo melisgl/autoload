@@ -4,7 +4,8 @@
 ;;; compiled or loaded
 (defvar *autoload-system* nil)
 
-(defmacro autoload (name asdf-system-name &key (docstring nil docstringp))
+(defmacro autoload (name asdf-system-name &key (lambda-list nil lambda-list-p)
+                    (docstring nil docstringp))
   "Define a stub function with NAME to [load][asdf:load-system]
   ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
   If NAME has a [function definition][fdefinition pax:clhs] and it is
@@ -16,6 +17,11 @@
 
   - The stub is defined with DOCSTRING if specified, else with a
     generic docstring that says what system it autoloads.
+
+  - For introspective purposes only, the stub's arglist is set to
+    LAMBDA-LIST if specified and it's supported on the
+    platform (currently only SBCL). The arglist is shown by e.g.
+    @SLIME-AUTODOC and returned by DREF:ARGLIST.
 
   Consistency checks:
 
@@ -64,6 +70,10 @@
          ;; ASDF:LOAD-SYSTEM is invoked and not this stub, which
          ;; could be the case without the FDEFINITION call.
          (apply (fdefinition ',name) args))
+       #+sbcl
+       ,@(when lambda-list-p
+           `((setf (sb-c::%fun-lambda-list (fdefinition ',name))
+                   ',lambda-list)))
        (setf (get ',name 'autoload-fn) (fdefinition ',name))
        ',name)))
 

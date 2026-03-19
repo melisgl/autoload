@@ -49,7 +49,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (DOCSTRING NIL)*
+- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL)*
 
     Define a stub function with `NAME` to load
     `ASDF-SYSTEM-NAME` and return `NAME`. The arguments are not evaluated.
@@ -62,6 +62,11 @@ for the latest version.
     
     - The stub is defined with `DOCSTRING` if specified, else with a
       generic docstring that says what system it autoloads.
+    
+    - For introspective purposes only, the stub's arglist is set to
+      `LAMBDA-LIST` if specified and it's supported on the
+      platform (currently only SBCL). The arglist is shown by e.g.
+      [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
     
     Consistency checks:
     
@@ -165,6 +170,7 @@ for the latest version.
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
+  [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"
   [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [eea4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fdefin.htm "FDEFINITION (MGL-PAX:CLHS FUNCTION)"
   [f472]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defun.htm "DEFUN (MGL-PAX:CLHS MGL-PAX:MACRO)"
