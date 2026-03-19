@@ -29,14 +29,8 @@
        (unless (ignore-errors (fdefinition ',name))
          (declaim (notinline ,name))
          (defun ,name (&rest args)
-           ;; ~A ASDF:SYSTEM is autolinked by PAX in generated
-           ;; documentation. To be really correct, we should
-           ;; PAX:ESCAPE-MARKDOWN the name, but we cannot because
-           ;; mgl-pax-bootstrap depends on autoload. If needed, PAX
-           ;; could patch this up, but ASDF system names are rarely
-           ;; funny.
            ,(format nil "Autoloaded function in the ~A ASDF:SYSTEM."
-                    asdf-system-name)
+                    (%escape-markdown asdf-system-name))
            ;; Prevent infinite recursion which would happen if the
            ;; loaded system doesn't redefine the function.
            (setf (fdefinition ',name)
@@ -50,6 +44,15 @@
            ;; is invoked and not this stub, which could be the case
            ;; without the FDEFINITION call.
            (apply (fdefinition ',name) args))))))
+
+;;; Even though ASDF:SYSTEM names rarely contain special Markdown
+;;; characters, play nice with PAX and escape the names if
+;;; MGL-PAX:ESCAPE-MARKDOWN is loaded.
+(defun %escape-markdown (string)
+  (let ((symbol(uiop:find-symbol* '#:escape-markdown '#:mgl-pax nil)))
+    (if (and symbol (not (function-autoload-p symbol)))
+        (funcall symbol string)
+        string)))
 
 (defun load-system (asdf-system-name function-name)
   (unless (asdf:find-system asdf-system-name nil)
