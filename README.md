@@ -95,6 +95,23 @@ for the latest version.
     Like [`DEFUN`][f472], but silence redefinition warnings. Also, warn if `NAME`
     does not denote a function or it was never [`FUNCTION-AUTOLOAD-P`][57ad].
 
+<a id="x-28AUTOLOAD-3ADEFGENERIC-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
+
+- [macro] **DEFGENERIC/AUTOLOADED** *NAME LAMBDA-LIST &BODY BODY*
+
+    Like [`DEFUN/AUTOLOADED`][3b15], but defines `NAME` with [`DEFGENERIC`][c7f7].
+
+<a id="x-28AUTOLOAD-3ADEFINE-AUTOLOADED-FUNCTION-20MGL-PAX-3AMACRO-29"></a>
+
+- [macro] **DEFINE-AUTOLOADED-FUNCTION** *DEFINER NAME LAMBDA-LIST &BODY BODY*
+
+    Like [`DEFUN/AUTOLOADED`][3b15], but establish a function binding for `NAME`
+    with `DEFINER`. For example, the autoloaded counterpart to `UIOP:DEFUN*`
+    can be defined as
+    
+        (defmacro defun*/autoloaded (name lambda-list &body body)
+          `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))
+
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFVAR/AUTOLOADED** *VAR &OPTIONAL (VAL NIL) (DOC NIL)*
@@ -291,6 +308,7 @@ for the latest version.
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
+  [c7f7]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defgen.htm "DEFGENERIC (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
   [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"

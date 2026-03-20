@@ -82,9 +82,9 @@
            'autoload asdf-system-name function-name))
   (let ((this-stub (fdefinition* function-name)))
     (asdf:load-system asdf-system-name)
-    (check-redefinition this-stub function-name asdf-system-name)))
+    (check-function-redefinition this-stub function-name asdf-system-name)))
 
-(defun check-redefinition (original-stub name asdf-system-name)
+(defun check-function-redefinition (original-stub name asdf-system-name)
   (when (eq (fdefinition* name) original-stub)
     (error "~@<Autoloaded function ~S was not redefined ~
            by the ~S ASDF:SYSTEM.~:@>"
@@ -94,9 +94,10 @@
                in the ~S ASDF:SYSTEM.~:@>"
                name 'autoload asdf-system-name))
         ((functionp (get name 'autoload-fn))
-         (warn "~@<Autoloaded function ~S was redefined but not by ~S ~
-               in the ~S ASDF:SYSTEM.~:@>"
-               name 'defun/autoloaded asdf-system-name))
+         (warn "~@<Autoloaded function ~S was redefined in the ~S ASDF:SYSTEM ~
+               but not by ~S, ~S or ~S.~:@>"
+               name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
+               'define-autoloaded-function))
         (t
          (assert (eq (get name 'autoload-fn) :resolved)))))
 
@@ -109,27 +110,46 @@
 (defmacro defun/autoloaded (name lambda-list &body body)
   "Like DEFUN, but silence redefinition warnings. Also, warn if NAME
   does not denote a function or it was never FUNCTION-AUTOLOAD-P."
+  `(define-autoloaded-function defun ,name ,lambda-list ,@body))
+
+(defmacro defgeneric/autoloaded (name lambda-list &body body)
+  "Like DEFUN/AUTOLOADED, but defines NAME with DEFGENERIC."
+  `(define-autoloaded-function defgeneric ,name ,lambda-list ,@body))
+
+(defmacro define-autoloaded-function (definer name lambda-list &body body)
+  "Like DEFUN/AUTOLOADED, but establish a function binding for NAME
+  with DEFINER. For example, the autoloaded counterpart to UIOP:DEFUN*
+  can be defined as
+
+      (defmacro defun*/autoloaded (name lambda-list &body body)
+        `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))"
   (maybe-record-autoload-info `(defun/autoloaded ,name ,lambda-list
                                  ,(when (and (stringp (first body))
                                              (< 1 (length body)))
                                     (first body))))
   `(progn
-     (check-defun/autoloaded ',name)
-     (without-redefinition-warnings
-       (defun ,name ,lambda-list
-         ,@body))
-     ;; Leave the property around so that CHECK-DEFUN/AUTOLOADED knows
-     ;; not to warn when a DEFUN/AUTOLOADED is evaluated multiple
-     ;; times (e.g. during interactive development).
+     (check-and-unbind-autoloaded-function-definition ',name)
+     (,definer ,name ,lambda-list ,@body)
+     ;; Leave the property around so that
+     ;; CHECK-AUTOLOADED-FUNCTION-DEFINITION knows not to warn when,
+     ;; for example, a DEFUN/AUTOLOADED is evaluated multiple times
+     ;; (e.g. during interactive development).
      (setf (get ',name 'autoload-fn) :resolved)))
 
-(defun check-defun/autoloaded (name)
+(defun check-and-unbind-autoloaded-function-definition (name)
   (cond ((null (fdefinition* name))
          (warn "~@<~S function ~S not defined.~:@>" 'defun/autoloaded name))
         ((not (or (function-autoload-p name)
                   (eq (get name 'autoload-fn) :resolved)))
          (warn "~@<~S function ~S not ~S.~:@>" 'defun/autoloaded name
-               'function-autoload-p))))
+               'function-autoload-p)))
+  ;; We don't want to FMAKUNBOUND a generic function and lose its
+  ;; methods.
+  (when (function-autoload-p name)
+    ;; This prevents redefinition warnings and allows DEFINER to be a
+    ;; DEFGENERIC without running into an error when trying to
+    ;; redefine a DEFUN (the autoload stub).
+    (fmakunbound name)))
 
 (defmacro defvar/autoloaded (var &optional (val nil valp) (doc nil docp))
   "Like DEFVAR, but works with the global binding on Lisps that

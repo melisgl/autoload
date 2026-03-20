@@ -81,6 +81,19 @@ for the latest version.
     Like DEFUN, but silence redefinition warnings. Also, warn if NAME
     does not denote a function or it was never FUNCTION-AUTOLOAD-P.
 
+- [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
+
+    Like DEFUN/AUTOLOADED, but defines NAME with DEFGENERIC.
+
+- [macro] DEFINE-AUTOLOADED-FUNCTION DEFINER NAME LAMBDA-LIST &BODY BODY
+
+    Like DEFUN/AUTOLOADED, but establish a function binding for NAME
+    with DEFINER. For example, the autoloaded counterpart to UIOP:DEFUN*
+    can be defined as
+
+        (defmacro defun*/autoloaded (name lambda-list &body body)
+          `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))
+
 - [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) (DOC NIL)
 
     Like DEFVAR, but works with the global binding on Lisps that

@@ -17,6 +17,8 @@
   (autoload pax:macro)
   (function-autoload-p function)
   (defun/autoloaded pax:macro)
+  (defgeneric/autoloaded pax:macro)
+  (define-autoloaded-function pax:macro)
   (defvar/autoloaded pax:macro))
 
 (pax:defsection @asdf-integration (:title "ASDF Integration" :export nil)
