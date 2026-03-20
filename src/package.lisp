@@ -2,7 +2,8 @@
   (:use #:common-lisp)
   (:export
    ;; Basics
-   #:autoload #:defun/autoloaded #:defvar/autoloaded
+   #:autoload #:function-autoload-p #:defun/autoloaded #:defgeneric/autoloaded
+   #:define-autoloaded-function #:defvar/autoloaded
    ;; ASDF integration
    #:autoload-system #:system-autoloaded-systems #:system-record-autoloads
    #:autoloaded-systems
