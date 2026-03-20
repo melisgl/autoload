@@ -11,6 +11,13 @@
 
 (defun fdefinition* (name)
   (ignore-errors (fdefinition name)))
+
+(defun external-symbol-p (symbol &optional (package (symbol-package symbol)))
+  (and package
+       (multiple-value-bind (symbol* status)
+           (find-symbol (symbol-name symbol) package)
+         (and (eq status :external)
+              (eq symbol symbol*)))))
 
 
 (defun special-variable-name-p (obj)
