@@ -41,7 +41,7 @@ for the latest version.
 
 ## Basics
 
-- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL)
+- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL) (EXPLICITP T)
 
     Define a stub function with NAME to load
     ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
@@ -52,24 +52,35 @@ for the latest version.
     the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
     FUNCTION and NOTINLINE.
 
-    - The stub is defined with DOCSTRING if specified, else with a
-      generic docstring that says what system it autoloads.
-
-    - For introspective purposes only, the stub's arglist is set to
-      LAMBDA-LIST if specified and it's supported on the
+    - LAMBDA-LIST will be installed as the stub's arglist for
+      interactive purposes only. if specified and it's supported on the
       platform (currently only SBCL). The arglist is shown by e.g.
       SLIME autodoc and returned by DREF:ARGLIST.
 
-    Consistency checks:
+    - DOCSTRING, if specified, will be the stub's docstring. If not
+      specified, a generic docstring that says what system it autoloads
+      will be used.
 
-    - The autoloaded system is expected to redefine NAME. If it doesn't,
-      then an error will be signalled. If NAME is redefined but not with
-      DEFUN/AUTOLOADED, then a warning is signalled.
+    - EXPLICITP T indicates that ASDF-SYSTEM-NAME will redefine NAME by
+      one of DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED or
+      DEFINE-AUTOLOADED-FUNCTION. EXPLICITP NIL indicates that the
+      redefinition will use another mechanism (e.g. a DEFUN, as a
+      DEFCLASS accessor, or even a (SETF FDEFINITION``)).
 
-    - When the AUTOLOAD form is macroexpanded in the process of ASDF
-      compilation or load of an AUTOLOAD-SYSTEM, a warning is emitted if
-      ASDF-SYSTEM-NAME is not among the declared
-      SYSTEM-AUTOLOADED-SYSTEMS of that system.
+    Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
+    function NAME. After loading it, the following checks are made.
+
+    - It is an error if NAME is not redefined at all.
+
+    - It is a warning if NAME is redefined with another
+      AUTOLOAD.
+
+    - It is a warning if the promise of EXPLICITP is broken, as it
+      indicates confusion whether Generating Autoloads should be done
+      automatically or not.
+
+    Also, see SYSTEM-AUTOLOADED-SYSTEMS for further consistency
+    checking.
 
 - [function] FUNCTION-AUTOLOAD-P NAME
 
@@ -83,7 +94,7 @@ for the latest version.
 
 - [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN/AUTOLOADED, but defines NAME with DEFGENERIC.
+    Like DEFUN/AUTOLOADED, but define NAME with DEFGENERIC.
 
 - [macro] DEFINE-AUTOLOADED-FUNCTION DEFINER NAME LAMBDA-LIST &BODY BODY
 
@@ -141,8 +152,8 @@ for the latest version.
     Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
-    AUTOLOAD checks that the ASDF:SYSTEM to be loaded is
-    among those declared.
+    AUTOLOAD signals an error if the ASDF:SYSTEM to be
+    loaded is among those declared here.
 
 - [reader] SYSTEM-RECORD-AUTOLOADS AUTOLOAD-SYSTEM (:RECORD-AUTOLOADS = NIL)
 
@@ -182,9 +193,9 @@ for the latest version.
 - [function] AUTOLOADS SYSTEM &KEY (LAMBDA-LISTS T) (DOCSTRINGS T) EXPORTS
 
     Return a list of forms that set up autoloading for definitions such
-    as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM. For DEFUN/AUTOLOADED, this is
-    an AUTOLOAD form; for DEFVAR/AUTOLOADED, this is a
-    DECLAIM SPECIAL.
+    as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM. For function definitions such
+    as DEFUN/AUTOLOADED, this is an AUTOLOAD form; for
+    DEFVAR/AUTOLOADED, this is a DECLAIM SPECIAL.
 
     - If LAMBDA-LISTS, then the autoload forms will pass the LAMBDA-LIST
       argument of the corresponding DEFUN/AUTOLOADED to AUTOLOAD.
@@ -195,7 +206,12 @@ for the latest version.
     - If EXPORTS, then emit EXPORT forms for symbolic names that are
       exported from their home package.
 
-    Note that this is an expensive operation, as it reloads the direct
+    Note that if a function is not defined by DEFUN/AUTOLOADED or its
+    kin in Basics, then AUTOLOADS will not detect it. For such
+    functions, AUTOLOADs must be written manually using the
+    MANUALP argument.
+
+    Also note that this is an expensive operation, as it reloads the direct
     dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
     association with the system and the autoloaded definitions such as
     DEFUN/AUTOLOADED.
@@ -230,7 +246,7 @@ for the latest version.
     and is thus sensitive to the order of definitions.
 
     This function is called automatically by ASDF:TEST-OP on a
-    AUTOLOAD-SYSTEM from a :BEFORE method.
+    AUTOLOAD-SYSTEM method if SYSTEM-TEST-AUTOLOADS.
 
 * * *
 ###### \[generated by [MGL-PAX](https://github.com/melisgl/mgl-pax)\]

@@ -51,7 +51,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL)*
+- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL) (EXPLICITP T)*
 
     Define a stub function with `NAME` to load
     `ASDF-SYSTEM-NAME` and return `NAME`. The arguments are not evaluated.
@@ -62,24 +62,35 @@ for the latest version.
     the required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1]
     `FUNCTION`([`0`][119e] [`1`][81f7]) and [`NOTINLINE`][9514].
     
-    - The stub is defined with `DOCSTRING` if specified, else with a
-      generic docstring that says what system it autoloads.
-    
-    - For introspective purposes only, the stub's arglist is set to
-      `LAMBDA-LIST` if specified and it's supported on the
+    - `LAMBDA-LIST` will be installed as the stub's arglist for
+      interactive purposes only. if specified and it's supported on the
       platform (currently only SBCL). The arglist is shown by e.g.
       [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
     
-    Consistency checks:
+    - `DOCSTRING`, if specified, will be the stub's docstring. If not
+      specified, a generic docstring that says what system it autoloads
+      will be used.
     
-    - The autoloaded system is expected to redefine `NAME`. If it doesn't,
-      then an error will be signalled. If `NAME` is redefined but not with
-      [`DEFUN/AUTOLOADED`][3b15], then a warning is signalled.
+    - `EXPLICITP` `T` indicates that `ASDF-SYSTEM-NAME` will redefine `NAME` by
+      one of [`DEFUN/AUTOLOADED`][3b15], [`DEFGENERIC/AUTOLOADED`][8b6e] or
+      [`DEFINE-AUTOLOADED-FUNCTION`][24b9]. `EXPLICITP` `NIL` indicates that the
+      redefinition will use another mechanism (e.g. a `DEFUN`, as a
+      [`DEFCLASS`][ead6] accessor, or even a `(`[`SETF`][a138] `FDEFINITION``)`).
     
-    - When the `AUTOLOAD` form is macroexpanded in the process of ASDF
-      compilation or load of an [`AUTOLOAD-SYSTEM`][cd2d], a warning is emitted if
-      `ASDF-SYSTEM-NAME` is not among the declared
-      [`SYSTEM-AUTOLOADED-SYSTEMS`][8429] of that system.
+    Thus, the system `ASDF-SYSTEM-NAME` is expected to redefine the
+    function `NAME`. After loading it, the following checks are made.
+    
+    - It is an error if `NAME` is not redefined at all.
+    
+    - It is a warning if `NAME` is redefined with another
+      [`AUTOLOAD`][7da0].
+    
+    - It is a warning if the promise of `EXPLICITP` is broken, as it
+      indicates confusion whether [Generating Autoloads][48d3] should be done
+      automatically or not.
+    
+    Also, see [`SYSTEM-AUTOLOADED-SYSTEMS`][8429] for further consistency
+    checking.
 
 <a id="x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29"></a>
 
@@ -99,7 +110,7 @@ for the latest version.
 
 - [macro] **DEFGENERIC/AUTOLOADED** *NAME LAMBDA-LIST &BODY BODY*
 
-    Like [`DEFUN/AUTOLOADED`][3b15], but defines `NAME` with [`DEFGENERIC`][c7f7].
+    Like [`DEFUN/AUTOLOADED`][3b15], but define `NAME` with [`DEFGENERIC`][c7f7].
 
 <a id="x-28AUTOLOAD-3ADEFINE-AUTOLOADED-FUNCTION-20MGL-PAX-3AMACRO-29"></a>
 
@@ -171,8 +182,8 @@ for the latest version.
     Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with `ASDF:COERCE-NAME`. In [`AUTOLOAD-SYSTEM`][cd2d]s,
-    [`AUTOLOAD`][7da0] checks that the `ASDF:SYSTEM` to be loaded is
-    among those declared.
+    [`AUTOLOAD`][7da0] signals an error if the `ASDF:SYSTEM` to be
+    loaded is among those declared here.
 
 <a id="x-28AUTOLOAD-3ASYSTEM-RECORD-AUTOLOADS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
 
@@ -222,9 +233,9 @@ for the latest version.
 - [function] **AUTOLOADS** *SYSTEM &KEY (LAMBDA-LISTS T) (DOCSTRINGS T) EXPORTS*
 
     Return a list of forms that set up autoloading for definitions such
-    as [`DEFUN/AUTOLOADED`][3b15] in [autoloaded direct dependencies][8429] of `SYSTEM`. For `DEFUN/AUTOLOADED`, this is
-    an [`AUTOLOAD`][7da0] form; for [`DEFVAR/AUTOLOADED`][453a], this is a
-    [`DECLAIM`][ebea] [`SPECIAL`][0bd4].
+    as [`DEFUN/AUTOLOADED`][3b15] in [autoloaded direct dependencies][8429] of `SYSTEM`. For function definitions such
+    as `DEFUN/AUTOLOADED`, this is an [`AUTOLOAD`][7da0] form; for
+    [`DEFVAR/AUTOLOADED`][453a], this is a [`DECLAIM`][ebea] [`SPECIAL`][0bd4].
     
     - If `LAMBDA-LISTS`, then the autoload forms will pass the `LAMBDA-LIST`
       argument of the corresponding `DEFUN/AUTOLOADED` to `AUTOLOAD`.
@@ -235,7 +246,12 @@ for the latest version.
     - If `EXPORTS`, then emit [`EXPORT`][0c4f] forms for symbolic names that are
       exported from their [home package][407c].
     
-    Note that this is an expensive operation, as it reloads the direct
+    Note that if a function is not defined by `DEFUN/AUTOLOADED` or its
+    kin in [Basics][fa90], then `AUTOLOADS` will not detect it. For such
+    functions, [`AUTOLOAD`][7da0]s must be written manually using the
+    MANUALP argument.
+    
+    Also note that this is an expensive operation, as it reloads the direct
     dependencies one by one with `ASDF:LOAD-SYSTEM` `:FORCE` and records the
     association with the system and the autoloaded definitions such as
     `DEFUN/AUTOLOADED`.
@@ -276,7 +292,7 @@ for the latest version.
     and is thus sensitive to the order of definitions.
     
     This function is called automatically by `ASDF:TEST-OP` on a
-    `AUTOLOAD-SYSTEM` from a `:BEFORE` method.
+    `AUTOLOAD-SYSTEM` method if [`SYSTEM-TEST-AUTOLOADS`][3ab0].
 
   [0317]: http://www.lispworks.com/documentation/HyperSpec/Body/t_pn.htm "PATHNAME (MGL-PAX:CLHS CLASS)"
   [05c1]: http://www.lispworks.com/documentation/HyperSpec/Body/d_ftype.htm "FTYPE (MGL-PAX:CLHS DECLARATION)"
@@ -286,9 +302,11 @@ for the latest version.
   [119e]: http://www.lispworks.com/documentation/HyperSpec/Body/t_fn.htm "FUNCTION (MGL-PAX:CLHS CLASS)"
   [125e]: http://www.lispworks.com/documentation/HyperSpec/Body/m_in_pkg.htm "IN-PACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [1e20]: #x-28AUTOLOAD-3AAUTOLOADS-20FUNCTION-29 "AUTOLOAD:AUTOLOADS FUNCTION"
+  [24b9]: #x-28AUTOLOAD-3ADEFINE-AUTOLOADED-FUNCTION-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFINE-AUTOLOADED-FUNCTION MGL-PAX:MACRO"
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [3140]: #x-28AUTOLOAD-3AWRITE-AUTOLOADS-20FUNCTION-29 "AUTOLOAD:WRITE-AUTOLOADS FUNCTION"
   [3914]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_p.htm#pathname_designator "\"pathname designator\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
+  [3ab0]: #x-28AUTOLOAD-3ASYSTEM-TEST-AUTOLOADS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-TEST-AUTOLOADS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [3b15]: #x-28AUTOLOAD-3ADEFUN-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFUN/AUTOLOADED MGL-PAX:MACRO"
   [3fb5]: http://www.lispworks.com/documentation/HyperSpec/Body/f_equal.htm "EQUAL (MGL-PAX:CLHS FUNCTION)"
   [407c]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_h.htm#home_package "\"home package\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
@@ -305,7 +323,9 @@ for the latest version.
   [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
   [81f7]: http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm "FUNCTION (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [8429]: #x-28AUTOLOAD-3ASYSTEM-AUTOLOADED-SYSTEMS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTOLOADED-SYSTEMS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
+  [8b6e]: #x-28AUTOLOAD-3ADEFGENERIC-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFGENERIC/AUTOLOADED MGL-PAX:MACRO"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
+  [a138]: http://www.lispworks.com/documentation/HyperSpec/Body/m_setf_.htm "SETF (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c7f7]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defgen.htm "DEFGENERIC (MGL-PAX:CLHS MGL-PAX:MACRO)"
@@ -313,6 +333,7 @@ for the latest version.
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
   [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"
   [dceb]: #x-28AUTOLOAD-3ARECORD-SYSTEM-AUTOLOADS-20FUNCTION-29 "AUTOLOAD:RECORD-SYSTEM-AUTOLOADS FUNCTION"
+  [ead6]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defcla.htm "DEFCLASS (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [eea4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fdefin.htm "FDEFINITION (MGL-PAX:CLHS FUNCTION)"
   [f472]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defun.htm "DEFUN (MGL-PAX:CLHS MGL-PAX:MACRO)"

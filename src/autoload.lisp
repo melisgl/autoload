@@ -3,7 +3,7 @@
 ;;;; @BASICS
 
 (defmacro autoload (name asdf-system-name &key (lambda-list nil lambda-list-p)
-                    (docstring nil docstringp))
+                    (docstring nil docstringp) (explicitp t))
   "Define a stub function with NAME to [load][asdf:load-system]
   ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
   If NAME has a [function definition][fdefinition pax:clhs] and it is
@@ -13,28 +13,39 @@
   the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
   FUNCTION and NOTINLINE.
 
-  - The stub is defined with DOCSTRING if specified, else with a
-    generic docstring that says what system it autoloads.
-
-  - For introspective purposes only, the stub's arglist is set to
-    LAMBDA-LIST if specified and it's supported on the
+  - LAMBDA-LIST will be installed as the stub's arglist for
+    interactive purposes only. if specified and it's supported on the
     platform (currently only SBCL). The arglist is shown by e.g.
     @SLIME-AUTODOC and returned by DREF:ARGLIST.
 
-  Consistency checks:
+  - DOCSTRING, if specified, will be the stub's docstring. If not
+    specified, a generic docstring that says what system it autoloads
+    will be used.
 
-  - The autoloaded system is expected to redefine NAME. If it doesn't,
-    then an error will be signalled. If NAME is redefined but not with
-    DEFUN/AUTOLOADED, then a warning is signalled.
+  - EXPLICITP T indicates that ASDF-SYSTEM-NAME will redefine NAME by
+    one of DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED or
+    DEFINE-AUTOLOADED-FUNCTION. EXPLICITP NIL indicates that the
+    redefinition will use another mechanism (e.g. a DEFUN, as a
+    DEFCLASS accessor, or even a `(`SETF FDEFINITION`)`).
 
-  - When the AUTOLOAD form is macroexpanded in the process of ASDF
-    compilation or load of an AUTOLOAD-SYSTEM, a warning is emitted if
-    ASDF-SYSTEM-NAME is not among the declared
-    SYSTEM-AUTOLOADED-SYSTEMS of that system."
+  Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
+  function NAME. After loading it, the following checks are made.
+
+  - It is an error if NAME is not redefined at all.
+
+  - It is a warning if NAME is redefined with another
+    [AUTOLOAD][pax:macro].
+
+  - It is a warning if the promise of EXPLICITP is broken, as it
+    indicates confusion whether @GENERATING-AUTOLOADS should be done
+    automatically or not.
+
+  Also, see SYSTEM-AUTOLOADED-SYSTEMS for further consistency
+  checking."
   (check-function-autoload name asdf-system-name)
   `(progn
      (declaim
-      ;; This is mainly to prevent undefined function compilation
+      ;; This is mainly to prevent undefined function compiler
       ;; warnings about NAME. A normal DEFUN takes care of this at
       ;; compile time, but the DEFUN below is not a [top level
       ;; form][pax:clhs].
@@ -54,7 +65,8 @@
               (format nil "[AUTOLOADed][pax:macro] function in the ~
                           ~A ASDF:SYSTEM."
                       (%escape-markdown asdf-system-name)))
-         (load-system-and-check-redefinition ',asdf-system-name ',name)
+         (load-system-and-check-redefinition ',asdf-system-name ',name
+                                             ',explicitp)
          ;; Make sure that the function redefined by
          ;; ASDF:LOAD-SYSTEM is invoked and not this stub, which
          ;; could be the case without the FDEFINITION call.
@@ -63,6 +75,7 @@
        ,@(when lambda-list-p
            `((setf (sb-c::%fun-lambda-list (fdefinition ',name))
                    ',lambda-list)))
+       ;; FIXME: NAME can be SETF or similar
        (setf (get ',name 'autoload-fn) (fdefinition ',name))
        ',name)))
 
@@ -75,16 +88,19 @@
         (funcall symbol string)
         string)))
 
-(defun load-system-and-check-redefinition (asdf-system-name function-name)
+(defun load-system-and-check-redefinition (asdf-system-name function-name
+                                           explicitp)
   (unless (asdf:find-system asdf-system-name nil)
     (error "~@<Could not ~S ASDF:SYSTEM ~S for function ~S. ~
            It may not be installed.~:@>"
            'autoload asdf-system-name function-name))
   (let ((this-stub (fdefinition* function-name)))
     (asdf:load-system asdf-system-name)
-    (check-function-redefinition this-stub function-name asdf-system-name)))
+    (check-function-redefinition this-stub function-name asdf-system-name
+                                 explicitp)))
 
-(defun check-function-redefinition (original-stub name asdf-system-name)
+(defun check-function-redefinition (original-stub name asdf-system-name
+                                    explicitp)
   (when (eq (fdefinition* name) original-stub)
     (error "~@<Autoloaded function ~S was not redefined ~
            by the ~S ASDF:SYSTEM.~:@>"
@@ -94,12 +110,19 @@
                in the ~S ASDF:SYSTEM.~:@>"
                name 'autoload asdf-system-name))
         ((functionp (get name 'autoload-fn))
-         (warn "~@<Autoloaded function ~S was redefined in the ~S ASDF:SYSTEM ~
-               but not by ~S, ~S or ~S.~:@>"
-               name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
-               'define-autoloaded-function))
+         (when explicitp
+           (warn "~@<Autoloaded function ~S was redefined ~
+                 in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
+                 name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
+                 'define-autoloaded-function)))
         (t
-         (assert (eq (get name 'autoload-fn) :resolved)))))
+         (assert (eq (get name 'autoload-fn) :resolved))
+         (unless explicitp
+           (warn "~@<Autoloaded function ~S was declared with ~S ~S but was ~
+                 redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S ~
+                 or ~S.~:@>"
+                 name :explicitp nil asdf-system-name 'defun/autoloaded
+                 'defgeneric/autoloaded 'define-autoloaded-function)))))
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function
@@ -113,7 +136,7 @@
   `(define-autoloaded-function defun ,name ,lambda-list ,@body))
 
 (defmacro defgeneric/autoloaded (name lambda-list &body body)
-  "Like DEFUN/AUTOLOADED, but defines NAME with DEFGENERIC."
+  "Like DEFUN/AUTOLOADED, but define NAME with DEFGENERIC."
   `(define-autoloaded-function defgeneric ,name ,lambda-list ,@body))
 
 (defmacro define-autoloaded-function (definer name lambda-list &body body)
@@ -209,8 +232,8 @@
     :documentation "Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
-    [AUTOLOAD][pax:macro] checks that the ASDF:SYSTEM to be loaded is
-    among those declared.")
+    [AUTOLOAD][pax:macro] signals an error if the ASDF:SYSTEM to be
+    loaded is among those declared here.")
    (record-autoloads
     :initform nil
     :initarg :record-autoloads
@@ -343,9 +366,9 @@
 (defun autoloads (system &key (lambda-lists t) (docstrings t) exports)
   "Return a list of forms that set up autoloading for definitions such
   as DEFUN/AUTOLOADED in [autoloaded direct dependencies][
-  SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM. For DEFUN/AUTOLOADED, this is
-  an [AUTOLOAD][pax:macro] form; for DEFVAR/AUTOLOADED, this is a
-  DECLAIM SPECIAL.
+  SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM. For function definitions such
+  as DEFUN/AUTOLOADED, this is an [AUTOLOAD][pax:macro] form; for
+  DEFVAR/AUTOLOADED, this is a DECLAIM SPECIAL.
 
   - If LAMBDA-LISTS, then the autoload forms will pass the LAMBDA-LIST
     argument of the corresponding DEFUN/AUTOLOADED to AUTOLOAD.
@@ -356,7 +379,12 @@
   - If EXPORTS, then emit EXPORT forms for symbolic names that are
     exported from their [home package][pax:clhs].
 
-  Note that this is an expensive operation, as it reloads the direct
+  Note that if a function is not defined by DEFUN/AUTOLOADED or its
+  kin in @BASICS, then AUTOLOADS will not detect it. For such
+  functions, [AUTOLOAD][pax:macro]s must be written manually using the
+  MANUALP argument.
+
+  Also note that this is an expensive operation, as it reloads the direct
   dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
   association with the system and the autoloaded definitions such as
   DEFUN/AUTOLOADED."
@@ -472,7 +500,7 @@
   and is thus sensitive to the order of definitions.
 
   This function is called automatically by ASDF:TEST-OP on a
-  AUTOLOAD-SYSTEM from a :BEFORE method."
+  AUTOLOAD-SYSTEM method if SYSTEM-TEST-AUTOLOADS."
   (let ((system (asdf:find-system system)))
     (check-type system autoload-system)
     (when (system-record-autoloads system)
@@ -482,12 +510,13 @@
             args
           (flet ((fail (control &rest args)
                    (if errorp
-                       (error "~@<~? in system ~S.~:@>" control args
-                              (asdf:component-name system))
+                       (error "~@<In system ~S, ~?.~:@>"
+                              (asdf:component-name system)
+                              control args)
                        (return-from check-system-autoloads nil))))
             (let ((pathname (asdf:system-relative-pathname system pathname)))
               (unless (probe-file pathname)
-                (fail "Missing file ~S" pathname))
+                (fail "~A file ~S is missing." :record-autoloads pathname))
               (let ((recorded-forms
                       (let ((*package* (if package
                                            (find-package package)
@@ -497,22 +526,21 @@
                                               :docstrings docstrings
                                               :exports exports)))
                 (when package
-                  (let ((first-form (pop recorded-forms)))
-                    (unless (and (consp first-form)
-                                 (eq (first first-form) 'in-package))
-                      (fail "Missing ~S form" 'in-package))))
+                  (let ((expected `(in-package ,(package-name package))))
+                    (unless (equal (pop recorded-forms) expected)
+                      (fail "the expected ~S form is not found." expected))))
                 (loop for recorded-form in recorded-forms
                       for current-form in current-forms
                       do (unless (equal recorded-form current-form)
-                           (fail "Recorded and current forms differ.~%~
-                                  Recorded form:~%~S~%~%Current form:~%~S"
+                           (fail "recorded and current forms differ.~%~
+                                  Recorded form:~%  ~S~%~%Current form:~%  ~S"
                                  recorded-form current-form)))
                 (unless (= (length recorded-forms) (length current-forms))
-                  (fail "Number of recorded (~S) and current forms (~S) differ"
+                  (fail "number of recorded (~S) and current forms (~S) differ."
                         (length recorded-forms) (length current-forms)))
                 t))))))))
 
-(defmethod asdf:perform :before ((op asdf:test-op) (system autoload-system))
+(defmethod asdf:perform ((op asdf:test-op) (system autoload-system))
   (when (system-test-autoloads system)
     (check-system-autoloads system)))
 
