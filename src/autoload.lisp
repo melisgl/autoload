@@ -1,9 +1,5 @@
 (in-package :autoload)
 
-;;; The AUTOLOAD-SYSTEM being in which the current file is being
-;;; compiled or loaded
-(defvar *autoload-system* nil)
-
 (defmacro autoload (name asdf-system-name &key (lambda-list nil lambda-list-p)
                     (docstring nil docstringp))
   "Define a stub function with NAME to [load][asdf:load-system]
@@ -33,16 +29,7 @@
     compilation or load of an AUTOLOAD-SYSTEM, a warning is emitted if
     ASDF-SYSTEM-NAME is not among the declared
     SYSTEM-AUTOLOADED-SYSTEMS of that system."
-  (when *autoload-system*
-    (let ((asdf-system-name (asdf:coerce-name asdf-system-name))
-          (system-autoloaded-systems
-            (system-autoloaded-systems *autoload-system*)))
-      (unless (find asdf-system-name system-autoloaded-systems :test #'equal)
-        (warn "~@<~S, the system to be autoloaded for function ~S, is ~
-              not among ~S, the ~S of ~S.~:@>"
-              asdf-system-name name system-autoloaded-systems
-              'system-autoloaded-systems
-              (asdf:component-name *autoload-system*)))))
+  (check-function-autoload name asdf-system-name)
   `(progn
      (declaim
       ;; This is mainly to prevent undefined function compilation
@@ -126,8 +113,7 @@
   (maybe-record-autoload-info `(defun/autoloaded ,name ,lambda-list
                                  ,(when (and (stringp (first body))
                                              (< 1 (length body)))
-                                    (first body))
-                                 ,*autoload-system*))
+                                    (first body))))
   `(progn
      (check-defun/autoloaded ',name)
      (without-redefinition-warnings
@@ -163,8 +149,7 @@
   ```"
   ;; FIXME
   (assert (special-variable-name-p var))
-  (maybe-record-autoload-info
-   `(defvar/autoloaded ,var ,doc ,*autoload-system*))
+  (maybe-record-autoload-info `(defvar/autoloaded ,var ,doc))
   `(progn
      (defvar ,var)
      ,@(when valp
@@ -176,6 +161,10 @@
 
 (defclass autoload-cl-source-file (asdf:cl-source-file)
   ())
+
+;;; The AUTOLOAD-SYSTEM being in which the current file is being
+;;; compiled or loaded
+(defvar *autoload-system* nil)
 
 (defmethod asdf:perform :around ((op asdf:compile-op)
                                  (c autoload-cl-source-file))
@@ -288,6 +277,18 @@
                    (asdf:operate 'list-autoloads-op s :force t)))
                (setq processed (append pending processed))))
     (reverse *listed-autoloaded-systems*)))
+
+(defun check-function-autoload (name asdf-system-name)
+  (when *autoload-system*
+    (let ((asdf-system-name (asdf:coerce-name asdf-system-name))
+          (system-autoloaded-systems
+            (system-autoloaded-systems *autoload-system*)))
+      (unless (find asdf-system-name system-autoloaded-systems :test #'equal)
+        (warn "~@<~S, the system to be autoloaded for function ~S, is ~
+              not among ~S, the ~S of ~S.~:@>"
+              asdf-system-name name system-autoloaded-systems
+              'system-autoloaded-systems
+              (asdf:component-name *autoload-system*))))))
 
 
 (defvar *recording-from-system* nil)
@@ -298,7 +299,8 @@
   ;; systems.
   (when (and *recording-from-system*
              (eq *recording-from-system* *autoload-system*))
-    (push info *recorded-autoload-infos*)))
+    (push (cons (asdf:component-name *autoload-system*) info)
+          *recorded-autoload-infos*)))
 
 (defun autoloads (system &key (lambda-lists t) (docstrings t))
   "Return a list forms that set up autoloading for definitions such as
@@ -351,21 +353,19 @@
     (asdf:load-system system :force t)
     *recorded-autoload-infos*))
 
-(defun info-to-autoload-forms (extract &key include-lambda-list
-                                         include-docstring)
-  (let ((definer (first extract)))
+(defun info-to-autoload-forms (info &key include-lambda-list include-docstring)
+  (let ((asdf-system-name (first info))
+        (definer (second info)))
     (ecase definer
       ((defun/autoloaded)
-       (destructuring-bind (name lambda-list docstring system)
-           (rest extract)
-         `((autoload ,name ,(asdf:component-name system)
+       (destructuring-bind (name lambda-list docstring) (cddr info)
+         `((autoload ,name ,asdf-system-name
                      ,@(when include-lambda-list
                          `((:lambda-list ',lambda-list)))
                      ,@(when include-docstring
                          `((:docstring ,docstring)))))))
       ((defvar/autoloaded)
-       (destructuring-bind (name docstring system) (rest extract)
-         (declare (ignore system))
+       (destructuring-bind (name docstring) (cddr info)
          `((declaim (special ,name))
            ,@(when (and include-docstring docstring)
                `((setf (documentation ',name 'variable) ,docstring)))))))))
