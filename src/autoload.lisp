@@ -1,5 +1,7 @@
 (in-package :autoload)
 
+;;;; @BASICS
+
 (defmacro autoload (name asdf-system-name &key (lambda-list nil lambda-list-p)
                     (docstring nil docstringp))
   "Define a stub function with NAME to [load][asdf:load-system]
@@ -107,9 +109,6 @@
 (defmacro defun/autoloaded (name lambda-list &body body)
   "Like DEFUN, but silence redefinition warnings. Also, warn if NAME
   does not denote a function or it was never FUNCTION-AUTOLOAD-P."
-  ;; We could also remember autoloaded functions (e.g. in an
-  ;; :AROUND-COMPILE in the ASDF system definition) and generate
-  ;; autoload definitions.
   (maybe-record-autoload-info `(defun/autoloaded ,name ,lambda-list
                                  ,(when (and (stringp (first body))
                                              (< 1 (length body)))
@@ -147,8 +146,6 @@
     *x*)
   => 1
   ```"
-  ;; FIXME
-  (assert (special-variable-name-p var))
   (maybe-record-autoload-info `(defvar/autoloaded ,var ,doc))
   `(progn
      (defvar ,var)
@@ -182,40 +179,58 @@
     (call-next-method)))
 
 
+;;;; @ASDF-INTEGRATION
+
 (defclass autoload-system (asdf:system)
   ((system-autoloaded-systems
     :initarg :autoloaded-systems
     :initform nil
     :reader system-autoloaded-systems
-    :documentation "Return the list of the names of systems autoloaded
-    directly by this system. The names are canonicalized with
-    ASDF:COERCE-NAME.")
+    :documentation "Return the list of the names of systems declared
+    to be autoloaded directly by this system. The names are
+    canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
+    [AUTOLOAD][pax:macro] checks that the ASDF:SYSTEM to be loaded is
+    among those declared.")
    (record-autoloads
     :initform nil
     :initarg :record-autoloads
     :reader system-record-autoloads
-    :documentation "This specifies where autoload definitions shall be
-    written by RECORD-SYSTEM-AUTOLOADS.")
+    :documentation "This specifies where the automatically extracted
+    autoload forms shall be written by RECORD-SYSTEM-AUTOLOADS.")
+   (test-autoloads
+    :initform t
+    :initarg :test-autoloads
+    :reader system-test-autoloads
+    :documentation "Specifies whether CHECK-SYSTEM-AUTOLOADS shall be
+    invoked on ASDF:TEST-OP.")
    ;; KLUDGE: (:DEFAULT-INITARGS :DEFAULT-COMPONENT-CLASS
    ;; 'AUTOLOAD-CL-SOURCE-FILE) doesn't work, so do it directly.
    (asdf::default-component-class :initform 'autoload-cl-source-file))
   (:documentation "Inheriting from this class in your ASDF:DEFSYSTEM
-  form enables the following features.
-
-  - [AUTOLOAD][pax:macro] checks the correctness of
-    [:AUTOLOADED-SYSTEMS][ system-autoloaded-systems].
-
-  - [:RECORD-AUTOLOADS][ system-record-autoloads] can be specified to
-    tell RECORD-SYSTEM-AUTOLOADS where to write the generated autoload
-    forms.
+  form enables the features documented in the reader methods. Consider
+  the following example.
 
   ```
-  (asdf:defsystem \"some-system\"
+  (asdf:defsystem \"my-system\"
     :defsystem-depends-on (\"autoload\")
     :class \"autoload:autoload-system\"
-    :autoloaded-systems (\"other-system\")
-    :record-autoloads (\"src/autoloads.lisp\" :package #:my-pkg)
-  ```"))
+    :autoloaded-systems (\"dyndep\")
+    :record-autoloads (\"autoloads.lisp\" :package #:my-pkg)
+    :components ((:file \"package\")
+                 (:file \"autoloads\")
+                 ...))
+  ```
+
+  With the above,
+
+  - It is an error if an [AUTOLOAD][pax:macro] refers to a
+    system other than `dyndep`.
+
+  - `(`RECORD-SYSTEM-AUTOLOADS `\"my-system\")` will update
+    `autoloads.lisp`.
+
+  - `(`ASDF:TEST-SYSTEM `\"my-system\")` [checks][
+    check-system-autoloads] that `autoload.lisp` is up-to-date."))
 
 (defmethod shared-initialize :after ((system autoload-system) slot-names
                                      &key &allow-other-keys)
@@ -263,19 +278,20 @@
 
           (autoloaded-systems \"my-system\" :installer #'ql:quickload)"
   (let ((*listed-autoloaded-systems* ()))
-    (asdf:operate 'list-autoloads-op system :force t)
-    (when follow-autoloaded
-      (loop with processed = ()
-            for pending = (set-difference *listed-autoloaded-systems* processed
-                                          :test #'equal)
-            while pending
-            do (dolist (s pending)
-                 (when (and (null (asdf:find-system s nil))
-                            installer)
-                   (funcall installer s))
-                 (when (asdf:find-system s nil)
-                   (asdf:operate 'list-autoloads-op s :force t)))
-               (setq processed (append pending processed))))
+    (without-asdf-session
+      (asdf:operate 'list-autoloads-op system :force t)
+      (when follow-autoloaded
+        (loop with processed = ()
+              for pending = (set-difference *listed-autoloaded-systems*
+                                            processed :test #'equal)
+              while pending
+              do (dolist (s pending)
+                   (when (and (null (asdf:find-system s nil))
+                              installer)
+                     (funcall installer s))
+                   (when (asdf:find-system s nil)
+                     (asdf:operate 'list-autoloads-op s :force t)))
+                 (setq processed (append pending processed)))))
     (reverse *listed-autoloaded-systems*)))
 
 (defun check-function-autoload (name asdf-system-name)
@@ -291,6 +307,8 @@
               (asdf:component-name *autoload-system*))))))
 
 
+;;;; @GENERATING-DOCUMENTATION
+
 (defvar *recording-from-system* nil)
 (defvar *recorded-autoload-infos*)
 
@@ -303,8 +321,8 @@
           *recorded-autoload-infos*)))
 
 (defun autoloads (system &key (lambda-lists t) (docstrings t) exports)
-  "Return a list forms that set up autoloading for definitions such as
-  DEFUN/AUTOLOADED in [autoloaded direct dependencies][
+  "Return a list of forms that set up autoloading for definitions such
+  as DEFUN/AUTOLOADED in [autoloaded direct dependencies][
   SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM. For DEFUN/AUTOLOADED, this is
   an [AUTOLOAD][pax:macro] form; for DEFVAR/AUTOLOADED, this is a
   DECLAIM SPECIAL.
@@ -322,23 +340,19 @@
   dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
   association with the system and the autoloaded definitions such as
   DEFUN/AUTOLOADED."
-  (mapcan (lambda (info)
-            (info-to-autoload-forms info
-                                    :include-lambda-list lambda-lists
-                                    :include-docstring docstrings
-                                    :export exports))
-          (mapcan #'extract-autoload-infos (system-autoloaded-systems
-                                            (asdf:find-system system)))))
+  (without-asdf-session
+    (mapcan (lambda (info)
+              (info-to-autoload-forms info
+                                      :include-lambda-list lambda-lists
+                                      :include-docstring docstrings
+                                      :export exports))
+            (mapcan #'extract-autoload-infos (system-autoloaded-systems
+                                              (asdf:find-system system))))))
 
-(defun write-autoloads (forms stream &key (package :cl-user))
-  "Write the autoload FORMS to OUTPUT that can be LOADed. When
+(defun write-autoloads (forms stream &key package)
+  "Write the autoload FORMS to STREAM that can be LOADed. When
   PACKAGE, emit an IN-PACKAGE form with its name, and print the forms
-  with *PACKAGE* bound to it.
-
-  - OUTPUT can be a STREAM, NIL or T with the same semantics as the
-    `DESTINATION` argument of FORMAT. If OUTPUT is a STRING or a
-    PATHNAME, then it is OPENed as file (with :SUPERSEDE), and the
-    forms are written to it."
+  with *PACKAGE* bound to it."
   (let ((*package* (if package
                        (find-package package)
                        *package*))
@@ -355,7 +369,7 @@
          (*recording-from-system* system)
          (*recorded-autoload-infos* ()))
     (asdf:load-system system :force t)
-    *recorded-autoload-infos*))
+    (reverse *recorded-autoload-infos*)))
 
 (defun info-to-autoload-forms (info &key include-lambda-list include-docstring
                                export)
@@ -381,7 +395,7 @@
               `((export ',name ,(package-name (symbol-package name))))))))
 
 (defun record-autoloads (system output &key (lambda-lists t) (docstrings t)
-                         (package :cl-user) exports)
+                         package exports)
   (write-autoloads (autoloads system :lambda-lists lambda-lists
                               :docstrings docstrings :exports exports)
                    output :package package))
@@ -391,11 +405,12 @@
   [:RECORD-AUTOLOADS][ SYSTEM-RECORD-AUTOLOADS], which may be a
   [pathname designator][pax:clhs] or a list of the form
 
-      (pathname &key (lambda-lists t) (docstrings t) (package :cl-user)
-                      exports)
+      (pathname &key (lambda-lists t) (docstrings t) package exports)
 
   See [AUTOLOADS][pax:macro] and WRITE-AUTOLOADS for the description
-  of these arguments."
+  of these arguments. PATHNAME is relative to
+  ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
+  :SUPERSEDE."
   (let ((system (asdf:find-system system)))
     (check-type system autoload-system)
     (multiple-value-bind (pathname args) (system-record-autoloads* system)
@@ -416,7 +431,7 @@
   (let ((args (uiop:ensure-list (system-record-autoloads system))))
     (handler-case
         (destructuring-bind (pathname &key (lambda-lists t) (docstrings t)
-                             (package :cl-user) exports)
+                             package exports)
             args
           (declare (ignore lambda-lists docstrings package exports))
           (check-type pathname (or string pathname))
@@ -425,7 +440,61 @@
         (error "~@<~S, the ~S of ~S, is not of the form ~S.~:@>"
                args :record-autoloads (asdf:component-name system)
                '(pathname &key (lambda-lists t) (docstrings t)
-                 (package :cl-user)))))))
+                 package exports))))))
+
+(defun check-system-autoloads (system &key (errorp t))
+  "In the AUTOLOAD-SYSTEM SYSTEM, check that there is a
+  [:RECORD-AUTOLOADS][ system-record-autoloads] and the file generated
+  by RECORD-SYSTEM-AUTOLOADS is up-to-date. If ERRORP, then signal an
+  error if it is not.
+
+  This compares the current AUTOLOADS to those in the file with EQUAL
+  and is thus sensitive to the order of definitions.
+
+  This function is called automatically by ASDF:TEST-OP on a
+  AUTOLOAD-SYSTEM from a :BEFORE method."
+  (let ((system (asdf:find-system system)))
+    (check-type system autoload-system)
+    (when (system-record-autoloads system)
+      (multiple-value-bind (pathname args) (system-record-autoloads* system)
+        (destructuring-bind (&key (lambda-lists t) (docstrings t)
+                             package exports)
+            args
+          (flet ((fail (control &rest args)
+                   (if errorp
+                       (error "~@<~? in system ~S.~:@>" control args
+                              (asdf:component-name system))
+                       (return-from check-system-autoloads nil))))
+            (let ((pathname (asdf:system-relative-pathname system pathname)))
+              (unless (probe-file pathname)
+                (fail "Missing file ~S" pathname))
+              (let ((recorded-forms
+                      (let ((*package* (if package
+                                           (find-package package)
+                                           *package*)))
+                        (uiop:read-file-forms pathname)))
+                    (current-forms (autoloads system :lambda-lists lambda-lists
+                                              :docstrings docstrings
+                                              :exports exports)))
+                (when package
+                  (let ((first-form (pop recorded-forms)))
+                    (unless (and (consp first-form)
+                                 (eq (first first-form) 'in-package))
+                      (fail "Missing ~S form" 'in-package))))
+                (loop for recorded-form in recorded-forms
+                      for current-form in current-forms
+                      do (unless (equal recorded-form current-form)
+                           (fail "Recorded and current forms differ.~%~
+                                  Recorded form:~%~S~%~%Current form:~%~S"
+                                 recorded-form current-form)))
+                (unless (= (length recorded-forms) (length current-forms))
+                  (fail "Number of recorded (~S) and current forms (~S) differ"
+                        (length recorded-forms) (length current-forms)))
+                t))))))))
+
+(defmethod asdf:perform :before ((op asdf:test-op) (system autoload-system))
+  (when (system-test-autoloads system)
+    (check-system-autoloads system)))
 
 #+nil
 (write-autoload-forms (autoload-forms "mgl-pax") t)
@@ -433,3 +502,5 @@
 (system-autoloaded-systems (asdf:find-system "mgl-pax"))
 #+nil
 (record-system-autoloads "mgl-pax")
+#+nil
+(check-system-autoloads "mgl-pax")

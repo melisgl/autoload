@@ -101,31 +101,45 @@ for the latest version.
 - [class] AUTOLOAD-SYSTEM SYSTEM
 
     Inheriting from this class in your ASDF:DEFSYSTEM
-    form enables the following features.
+    form enables the features documented in the reader methods. Consider
+    the following example.
 
-    - AUTOLOAD checks the correctness of
-      :AUTOLOADED-SYSTEMS.
-
-    - :RECORD-AUTOLOADS can be specified to
-      tell RECORD-SYSTEM-AUTOLOADS where to write the generated autoload
-      forms.
-
-        (asdf:defsystem "some-system"
+        (asdf:defsystem "my-system"
           :defsystem-depends-on ("autoload")
           :class "autoload:autoload-system"
-          :autoloaded-systems ("other-system")
-          :record-autoloads ("src/autoloads.lisp" :package #:my-pkg)
+          :autoloaded-systems ("dyndep")
+          :record-autoloads ("autoloads.lisp" :package #:my-pkg)
+          :components ((:file "package")
+                       (:file "autoloads")
+                       ...))
+
+    With the above,
+
+    - It is an error if an AUTOLOAD refers to a
+      system other than dyndep.
+
+    - (RECORD-SYSTEM-AUTOLOADS "my-system") will update
+      autoloads.lisp.
+
+    - (``ASDF:TEST-SYSTEM "my-system") checks that autoload.lisp is up-to-date.
 
 - [reader] SYSTEM-AUTOLOADED-SYSTEMS AUTOLOAD-SYSTEM (:AUTOLOADED-SYSTEMS = NIL)
 
-    Return the list of the names of systems autoloaded
-    directly by this system. The names are canonicalized with
-    ASDF:COERCE-NAME.
+    Return the list of the names of systems declared
+    to be autoloaded directly by this system. The names are
+    canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
+    AUTOLOAD checks that the ASDF:SYSTEM to be loaded is
+    among those declared.
 
 - [reader] SYSTEM-RECORD-AUTOLOADS AUTOLOAD-SYSTEM (:RECORD-AUTOLOADS = NIL)
 
-    This specifies where autoload definitions shall be
-    written by RECORD-SYSTEM-AUTOLOADS.
+    This specifies where the automatically extracted
+    autoload forms shall be written by RECORD-SYSTEM-AUTOLOADS.
+
+- [reader] SYSTEM-TEST-AUTOLOADS AUTOLOAD-SYSTEM (:TEST-AUTOLOADS = T)
+
+    Specifies whether CHECK-SYSTEM-AUTOLOADS shall be
+    invoked on ASDF:TEST-OP.
 
 - [function] AUTOLOADED-SYSTEMS SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER
 
@@ -150,12 +164,12 @@ for the latest version.
 
             (autoloaded-systems "my-system" :installer #'ql:quickload)
 
-## Generating Autoloads
+### Generating Autoloads
 
-- [function] AUTOLOADS SYSTEM &KEY (LAMBDA-LISTS T) (DOCSTRINGS T)
+- [function] AUTOLOADS SYSTEM &KEY (LAMBDA-LISTS T) (DOCSTRINGS T) EXPORTS
 
-    Return a list forms that set up autoloading for definitions such as
-    DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM. For DEFUN/AUTOLOADED, this is
+    Return a list of forms that set up autoloading for definitions such
+    as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM. For DEFUN/AUTOLOADED, this is
     an AUTOLOAD form; for DEFVAR/AUTOLOADED, this is a
     DECLAIM SPECIAL.
 
@@ -165,21 +179,19 @@ for the latest version.
     - If DOCSTRINGS, then the docstrings extracted from DEFUN/AUTOLOADED
       or DEFVAR/AUTOLOADED will be associated with the definition.
 
+    - If EXPORTS, then emit EXPORT forms for symbolic names that are
+      exported from their home package.
+
     Note that this is an expensive operation, as it reloads the direct
     dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
     association with the system and the autoloaded definitions such as
     DEFUN/AUTOLOADED.
 
-- [function] WRITE-AUTOLOADS FORMS STREAM &KEY (PACKAGE :CL-USER)
+- [function] WRITE-AUTOLOADS FORMS STREAM &KEY PACKAGE
 
-    Write the autoload FORMS to OUTPUT that can be LOADed. When
+    Write the autoload FORMS to STREAM that can be LOADed. When
     PACKAGE, emit an IN-PACKAGE form with its name, and print the forms
     with *PACKAGE* bound to it.
-
-    - OUTPUT can be a STREAM, NIL or T with the same semantics as the
-      DESTINATION argument of FORMAT. If OUTPUT is a STRING or a
-      PATHNAME, then it is OPENed as file (with :SUPERSEDE), and the
-      forms are written to it.
 
 - [function] RECORD-SYSTEM-AUTOLOADS SYSTEM
 
@@ -187,10 +199,25 @@ for the latest version.
     :RECORD-AUTOLOADS, which may be a
     pathname designator or a list of the form
 
-        (pathname &key (lambda-lists t) (docstrings t) (package :cl-user))
+        (pathname &key (lambda-lists t) (docstrings t) package exports)
 
     See AUTOLOADS and WRITE-AUTOLOADS for the description
-    of these arguments.
+    of these arguments. PATHNAME is relative to
+    ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
+    :SUPERSEDE.
+
+- [function] CHECK-SYSTEM-AUTOLOADS SYSTEM &KEY (ERRORP T)
+
+    In the AUTOLOAD-SYSTEM SYSTEM, check that there is a
+    :RECORD-AUTOLOADS and the file generated
+    by RECORD-SYSTEM-AUTOLOADS is up-to-date. If ERRORP, then signal an
+    error if it is not.
+
+    This compares the current AUTOLOADS to those in the file with EQUAL
+    and is thus sensitive to the order of definitions.
+
+    This function is called automatically by ASDF:TEST-OP on a
+    AUTOLOAD-SYSTEM from a :BEFORE method.
 
 * * *
 ###### \[generated by [MGL-PAX](https://github.com/melisgl/mgl-pax)\]

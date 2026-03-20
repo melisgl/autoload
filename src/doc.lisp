@@ -3,8 +3,7 @@
 (pax:defsection @autoload-manual (:title "Autoload Manual" :export nil)
   (@links-and-systems pax:section)
   (@basics pax:section)
-  (@asdf-integration pax:section)
-  (@generating-autoloads pax:section))
+  (@asdf-integration pax:section))
 
 (pax:defsection @links-and-systems (:title "Links and Systems" :export nil)
   "Here is the [official
@@ -24,13 +23,16 @@
   (autoload-system class)
   (system-autoloaded-systems (pax:reader autoload-system))
   (system-record-autoloads (pax:reader autoload-system))
-  (autoloaded-systems function))
+  (system-test-autoloads (pax:reader autoload-system))
+  (autoloaded-systems function)
+  (@generating-autoloads pax:section))
 
 (pax:defsection @generating-autoloads
     (:title "Generating Autoloads" :export nil)
   (autoloads function)
   (write-autoloads function)
-  (record-system-autoloads function))
+  (record-system-autoloads function)
+  (check-system-autoloads function))
 
 (pax:define-glossary-term @slime-autodoc
     (:title "SLIME autodoc"
