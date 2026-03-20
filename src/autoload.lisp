@@ -1,5 +1,33 @@
 (in-package :autoload)
 
+;;;; Machinery for associating autoload stubs with function names,
+;;;; including setf names.
+
+(defun get-stub (name)
+  (multiple-value-bind (name setf*) (unpack-function-name name)
+    (getf (get name 'autoload-fn) setf*)))
+
+(defun unpack-function-name (name)
+  (cond ((symbolp name)
+         (values name nil))
+        ;; (SETF NAME) => NAME SETF.
+        ((and (consp name)
+              (eq (car name) 'setf)
+              (consp (cdr name))
+              (symbolp (cadr name))
+              (null (cddr name)))
+         (values (second name) (first name)))
+        (t
+         (error "~@<Unsupported function name ~S.~:@>" name))))
+
+(defun set-stub (name fn)
+  (multiple-value-bind (name setflike) (unpack-function-name name)
+    (setf (getf (get name 'autoload-fn) setflike)
+          fn)))
+
+(defsetf get-stub set-stub)
+
+
 ;;;; @BASICS
 
 (defmacro autoload (name asdf-system-name &key (lambda-list nil lambda-list-p)
@@ -13,9 +41,9 @@
   the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
   FUNCTION and NOTINLINE.
 
-  - LAMBDA-LIST will be installed as the stub's arglist for
-    interactive purposes only. if specified and it's supported on the
-    platform (currently only SBCL). The arglist is shown by e.g.
+  - LAMBDA-LIST will be installed as the stub's arglist if specified
+    and it's supported on the platform (currently only SBCL). Arglists
+    are for interactive purposes only. For example, they are shown by
     @SLIME-AUTODOC and returned by DREF:ARGLIST.
 
   - DOCSTRING, if specified, will be the stub's docstring. If not
@@ -73,10 +101,10 @@
          (apply (fdefinition ',name) args))
        #+sbcl
        ,@(when lambda-list-p
-           `((setf (sb-c::%fun-lambda-list (fdefinition ',name))
+           `((setf (sb-c::%fun-lambda-list (fdefinition* ',name))
                    ',lambda-list)))
        ;; FIXME: NAME can be SETF or similar
-       (setf (get ',name 'autoload-fn) (fdefinition ',name))
+       (setf (get-stub ',name) (fdefinition* ',name))
        ',name)))
 
 ;;; Even though ASDF:SYSTEM names rarely contain special Markdown
@@ -109,14 +137,14 @@
          (warn "~@<Autoloaded function ~S was redefined with ~S ~
                in the ~S ASDF:SYSTEM.~:@>"
                name 'autoload asdf-system-name))
-        ((functionp (get name 'autoload-fn))
+        ((functionp (get-stub name))
          (when explicitp
            (warn "~@<Autoloaded function ~S was redefined ~
                  in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
                  name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
                  'define-autoloaded-function)))
         (t
-         (assert (eq (get name 'autoload-fn) :resolved))
+         (assert (eq (get-stub name) :resolved))
          (unless explicitp
            (warn "~@<Autoloaded function ~S was declared with ~S ~S but was ~
                  redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S ~
@@ -128,7 +156,7 @@
   "See if NAME's function definition is an autoloader function
   established by [AUTOLOAD][pax:macro]."
   ;; This detects redefinitions by DEFUN too.
-  (eq (get name 'autoload-fn) (fdefinition* name)))
+  (eq (get-stub name) (fdefinition* name)))
 
 (defmacro defun/autoloaded (name lambda-list &body body)
   "Like DEFUN, but silence redefinition warnings. Also, warn if NAME
@@ -157,13 +185,13 @@
      ;; CHECK-AUTOLOADED-FUNCTION-DEFINITION knows not to warn when,
      ;; for example, a DEFUN/AUTOLOADED is evaluated multiple times
      ;; (e.g. during interactive development).
-     (setf (get ',name 'autoload-fn) :resolved)))
+     (setf (get-stub ',name) :resolved)))
 
 (defun check-and-unbind-autoloaded-function-definition (name)
   (cond ((null (fdefinition* name))
          (warn "~@<~S function ~S not defined.~:@>" 'defun/autoloaded name))
         ((not (or (function-autoload-p name)
-                  (eq (get name 'autoload-fn) :resolved)))
+                  (eq (get-stub name) :resolved)))
          (warn "~@<~S function ~S not ~S.~:@>" 'defun/autoloaded name
                'function-autoload-p)))
   ;; We don't want to FMAKUNBOUND a generic function and lose its
