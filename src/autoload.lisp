@@ -185,7 +185,8 @@
      ;; CHECK-AUTOLOADED-FUNCTION-DEFINITION knows not to warn when,
      ;; for example, a DEFUN/AUTOLOADED is evaluated multiple times
      ;; (e.g. during interactive development).
-     (setf (get-stub ',name) :resolved)))
+     (setf (get-stub ',name) :resolved)
+     ',name))
 
 (defun check-and-unbind-autoloaded-function-definition (name)
   (cond ((null (fdefinition* name))
