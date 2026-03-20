@@ -31,8 +31,9 @@ for the latest version.
 - [system] "autoload-doc"
 
     - Description: Parts of autoload that depend on
-    mgl-pax. This is split off autoload because mgl-pax-bootstrap depends
-    on autoload. Note that mgl-pax/navigate and
+    mgl-pax. This is a separate system because
+    mgl-pax-bootstrap depends on autoload. Note that
+    mgl-pax/navigate and
     mgl-pax/document depend on this system, which
     renders most of this an implementation detail.
 

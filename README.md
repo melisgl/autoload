@@ -38,8 +38,9 @@ for the latest version.
 - [system] **"autoload-doc"**
 
     - _Description:_ Parts of [`autoload`][5968] that depend on
-        `mgl-pax`. This is split off `autoload` because `mgl-pax-bootstrap` depends
-        on `autoload`. Note that `mgl-pax/navigate` and
+        `mgl-pax`. This is a separate system because
+        `mgl-pax-bootstrap` depends on [`autoload`][7da0]. Note that
+        `mgl-pax/navigate` and
         `mgl-pax/document` depend on this system, which
         renders most of this an implementation detail.
     - *Depends on:* [autoload][5968], mgl-pax

@@ -11,9 +11,9 @@
   :bug-tracker ""
   :source-control ""
   :description "Parts of [`autoload`][asdf:system] that depend on
-  [`mgl-pax`][asdf:system]. This is split off [`autoload`][
-  pax:dislocated] because [`mgl-pax-bootstrap`][asdf:system] depends
-  on `autoload`. Note that [`mgl-pax/navigate`][asdf:system] and
+  [`mgl-pax`][asdf:system]. This is a separate system because
+  [`mgl-pax-bootstrap`][asdf:system] depends on `autoload`. Note that
+  [`mgl-pax/navigate`][asdf:system] and
   [`mgl-pax/document`][asdf:system] depend on this system, which
   renders most of this an implementation detail."
   :depends-on ("autoload" "mgl-pax")
