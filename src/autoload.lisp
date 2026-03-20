@@ -392,7 +392,7 @@
     (push (cons (asdf:component-name *autoload-system*) info)
           *recorded-autoload-infos*)))
 
-(defun autoloads (system &key (lambda-lists t) (docstrings t) exports)
+(defun autoloads (system &key (lambda-lists t) (docstrings t) export-from)
   "Return a list of forms that set up autoloading for definitions such
   as DEFUN/AUTOLOADED in [autoloaded direct dependencies][
   SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM. For function definitions such
@@ -405,8 +405,13 @@
   - If DOCSTRINGS, then the docstrings extracted from DEFUN/AUTOLOADED
     or DEFVAR/AUTOLOADED will be associated with the definition.
 
-  - If EXPORTS, then emit EXPORT forms for symbolic names that are
-    exported from their [home package][pax:clhs].
+  - EXPORT-FROM is a package designator or a list thereof. If a NAME
+    is involved in a e.g. DEFUN/AUTOLOADED, DEFVAR/AUTOLOADED, then an
+    EXPORT form is added to the autoload forms for each package in
+    EXPORT-FROM from which NAME is exported. For SETF names, the
+    SECOND element is exported. EXPORT-FROM is not needed in the usual
+    case of a static DEFPACKAGE, but is a convenient way to foreshadow
+    the exports dynamically performed by an autoloaded system.
 
   Note that if a function is not defined by DEFUN/AUTOLOADED or its
   kin in @BASICS, then AUTOLOADS will not detect it. For such
@@ -422,7 +427,7 @@
               (info-to-autoload-forms info
                                       :include-lambda-list lambda-lists
                                       :include-docstring docstrings
-                                      :export exports))
+                                      :export-from export-from))
             (mapcan #'extract-autoload-infos (system-autoloaded-systems
                                               (asdf:find-system system))))))
 
@@ -449,7 +454,7 @@
     (reverse *recorded-autoload-infos*)))
 
 (defun info-to-autoload-forms (info &key include-lambda-list include-docstring
-                               export)
+                               export-from)
   (let ((asdf-system-name (first info))
         (definer (second info))
         (name (third info)))
@@ -467,14 +472,17 @@
                    ,@(when (and include-docstring docstring)
                        `((setf (documentation ',name 'variable)
                                ,docstring)))))))
-            (when (and export (symbolp name)
-                       (external-symbol-p name))
-              `((export ',name ,(package-name (symbol-package name))))))))
+            (when export-from
+              (let ((name (unpack-function-name name)))
+                (loop for pkg-designator in export-from
+                      for pkg = (find-package pkg-designator)
+                      when (and pkg (external-symbol-p name pkg))
+                        collect `(export ',name ,(package-name pkg))))))))
 
 (defun record-autoloads (system output &key (lambda-lists t) (docstrings t)
-                         package exports)
+                         package export-from)
   (write-autoloads (autoloads system :lambda-lists lambda-lists
-                              :docstrings docstrings :exports exports)
+                              :docstrings docstrings :export-from export-from)
                    output :package package))
 
 (defun record-system-autoloads (system)
@@ -482,7 +490,7 @@
   [:RECORD-AUTOLOADS][ SYSTEM-RECORD-AUTOLOADS], which may be a
   [pathname designator][pax:clhs] or a list of the form
 
-      (pathname &key (lambda-lists t) (docstrings t) package exports)
+      (pathname &key (lambda-lists t) (docstrings t) package export-from)
 
   See [AUTOLOADS][pax:macro] and WRITE-AUTOLOADS for the description
   of these arguments. PATHNAME is relative to
@@ -508,16 +516,18 @@
   (let ((args (uiop:ensure-list (system-record-autoloads system))))
     (handler-case
         (destructuring-bind (pathname &key (lambda-lists t) (docstrings t)
-                             package exports)
+                             package export-from)
             args
-          (declare (ignore lambda-lists docstrings package exports))
           (check-type pathname (or string pathname))
-          (values pathname (rest args)))
+          (values pathname `(:lambda-lists ,lambda-lists
+                             :docstrings ,docstrings
+                             :package ,package
+                             :export-from ,(uiop:ensure-list export-from))))
       ((and error (not type-error)) ()
         (error "~@<~S, the ~S of ~S, is not of the form ~S.~:@>"
                args :record-autoloads (asdf:component-name system)
                '(pathname &key (lambda-lists t) (docstrings t)
-                 package exports))))))
+                 package export-from))))))
 
 (defun check-system-autoloads (system &key (errorp t))
   "In the AUTOLOAD-SYSTEM SYSTEM, check that there is a
@@ -535,7 +545,7 @@
     (when (system-record-autoloads system)
       (multiple-value-bind (pathname args) (system-record-autoloads* system)
         (destructuring-bind (&key (lambda-lists t) (docstrings t)
-                             package exports)
+                             package export-from)
             args
           (flet ((fail (control &rest args)
                    (if errorp
@@ -553,7 +563,7 @@
                         (uiop:read-file-forms pathname)))
                     (current-forms (autoloads system :lambda-lists lambda-lists
                                               :docstrings docstrings
-                                              :exports exports)))
+                                              :export-from export-from)))
                 (when package
                   (let ((expected `(in-package ,(package-name package))))
                     (unless (equal (pop recorded-forms) expected)
