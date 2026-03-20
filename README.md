@@ -157,17 +157,28 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3AAUTOLOADED-SYSTEMS-20FUNCTION-29"></a>
 
-- [function] **AUTOLOADED-SYSTEMS** *SYSTEM &KEY (FOLLOW-AUTOLOADED T)*
+- [function] **AUTOLOADED-SYSTEMS** *SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER*
 
     Return the list of the names of systems that may be autoloaded by
     `SYSTEM` or any of its normal dependencies (the transitive closure of
     its `:DEPENDS-ON`). This works even if `SYSTEM` is not an
     [`AUTOLOAD-SYSTEM`][cd2d].
     
-    If `FOLLOW-AUTOLOADED`, look further for autoloaded systems among the
-    normal and autoloaded dependencies of any autoloaded systems found.
-    If an autoloaded system is not installed (i.e. `ASDF:FIND-SYSTEM`
-    fails), then that system is not followed.
+    - If `FOLLOW-AUTOLOADED`, look further for autoloaded systems among
+      the normal and autoloaded dependencies of any autoloaded systems
+      found. If an autoloaded system is not installed (i.e.
+      `ASDF:FIND-SYSTEM` fails), then that system is not followed.
+    
+    - If `INSTALLER` is non-`NIL`, it is called when a system encounteres a
+      system that is not installed. This is an autoloaded system if
+      normal ASDF dependencies are installed as is the case with e.g.
+      [Quicklisp][ae25]. `INSTALLER` is passed a single argument, the name of the
+      system to be installed, and it may or may not install the system.
+    
+        The following example, makes sure that all normal and autoloaded
+        dependencies (direct or indirect) of `my-system` are installed:
+    
+            (autoloaded-systems "my-system" :installer #'ql:quickload)
 
 <a id="x-28AUTOLOAD-3A-40GENERATING-AUTOLOADS-20MGL-PAX-3ASECTION-29"></a>
 
@@ -244,6 +255,7 @@ for the latest version.
   [8429]: #x-28AUTOLOAD-3ASYSTEM-AUTOLOADED-SYSTEMS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTOLOADED-SYSTEMS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [ad78]: http://www.lispworks.com/documentation/HyperSpec/Body/f_format.htm "FORMAT (MGL-PAX:CLHS FUNCTION)"
+  [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [b93c]: http://www.lispworks.com/documentation/HyperSpec/Body/t_string.htm "STRING (MGL-PAX:CLHS CLASS)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"

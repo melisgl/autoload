@@ -35,6 +35,10 @@
 (pax:define-glossary-term @slime-autodoc
     (:title "SLIME autodoc"
      :url "https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode"))
+
+(pax:define-glossary-term @quicklisp
+    (:title "Quicklisp"
+     :url "https://www.quicklisp.org/"))
 
 
 ;;;; Register in PAX World

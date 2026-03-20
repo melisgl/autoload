@@ -252,16 +252,27 @@
 (defmethod asdf:perform ((op list-autoloads-op) (system asdf:system))
   nil)
 
-(defun autoloaded-systems (system &key (follow-autoloaded t))
+(defun autoloaded-systems (system &key (follow-autoloaded t) installer)
   "Return the list of the names of systems that may be autoloaded by
   SYSTEM or any of its normal dependencies (the transitive closure of
   its :DEPENDS-ON). This works even if SYSTEM is not an
   AUTOLOAD-SYSTEM.
 
-  If FOLLOW-AUTOLOADED, look further for autoloaded systems among the
-  normal and autoloaded dependencies of any autoloaded systems found.
-  If an autoloaded system is not installed (i.e. ASDF:FIND-SYSTEM
-  fails), then that system is not followed."
+  - If FOLLOW-AUTOLOADED, look further for autoloaded systems among
+    the normal and autoloaded dependencies of any autoloaded systems
+    found. If an autoloaded system is not installed (i.e.
+    ASDF:FIND-SYSTEM fails), then that system is not followed.
+
+  - If INSTALLER is non-NIL, it is called when a system encounteres a
+    system that is not installed. This is an autoloaded system if
+    normal ASDF dependencies are installed as is the case with e.g.
+    @QUICKLISP. INSTALLER is passed a single argument, the name of the
+    system to be installed, and it may or may not install the system.
+
+      The following example, makes sure that all normal and autoloaded
+      dependencies (direct or indirect) of `my-system` are installed:
+
+          (autoloaded-systems \"my-system\" :installer #'ql:quickload)"
   (let ((*listed-autoloaded-systems* ()))
     (asdf:operate 'list-autoloads-op system :force t)
     (when follow-autoloaded
@@ -270,6 +281,9 @@
                                           :test #'equal)
             while pending
             do (dolist (s pending)
+                 (when (and (null (asdf:find-system s nil))
+                            installer)
+                   (funcall installer s))
                  (when (asdf:find-system s nil)
                    (asdf:operate 'list-autoloads-op s :force t)))
                (setq processed (append pending processed))))

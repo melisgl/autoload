@@ -127,17 +127,28 @@ for the latest version.
     This specifies where autoload definitions shall be
     written by RECORD-SYSTEM-AUTOLOADS.
 
-- [function] AUTOLOADED-SYSTEMS SYSTEM &KEY (FOLLOW-AUTOLOADED T)
+- [function] AUTOLOADED-SYSTEMS SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER
 
     Return the list of the names of systems that may be autoloaded by
     SYSTEM or any of its normal dependencies (the transitive closure of
     its :DEPENDS-ON). This works even if SYSTEM is not an
     AUTOLOAD-SYSTEM.
 
-    If FOLLOW-AUTOLOADED, look further for autoloaded systems among the
-    normal and autoloaded dependencies of any autoloaded systems found.
-    If an autoloaded system is not installed (i.e. ASDF:FIND-SYSTEM
-    fails), then that system is not followed.
+    - If FOLLOW-AUTOLOADED, look further for autoloaded systems among
+      the normal and autoloaded dependencies of any autoloaded systems
+      found. If an autoloaded system is not installed (i.e.
+      ASDF:FIND-SYSTEM fails), then that system is not followed.
+
+    - If INSTALLER is non-NIL, it is called when a system encounteres a
+      system that is not installed. This is an autoloaded system if
+      normal ASDF dependencies are installed as is the case with e.g.
+      Quicklisp. INSTALLER is passed a single argument, the name of the
+      system to be installed, and it may or may not install the system.
+
+        The following example, makes sure that all normal and autoloaded
+        dependencies (direct or indirect) of my-system are installed:
+
+            (autoloaded-systems "my-system" :installer #'ql:quickload)
 
 ## Generating Autoloads
 
