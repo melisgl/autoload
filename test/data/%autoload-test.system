@@ -1,0 +1,23 @@
+;;;; -*- mode: Lisp -*-
+
+;;;; The extension of this file is "system" to prevent e.g.
+;;;; QL:REGISTER-LOCAL-PROJECTS from picking it up.
+
+(asdf:defsystem "%autoload-test"
+  :depends-on ("autoload")
+  :defsystem-depends-on ("autoload")
+  :class "autoload:autoload-system"
+  :autoloaded-systems ("%autoload-test/full")
+  :record-autoloads ("autoloads.lisp"
+                     :package #:%autoload-test
+                     :export-from #:%autoload-test)
+  :serial t
+  :components ((:file "package")
+               (:file "autoloads")))
+
+(asdf:defsystem "%autoload-test/full"
+  :depends-on ("autoload" "%autoload-test")
+  :defsystem-depends-on ("autoload")
+  :class "autoload:autoload-system"
+  :serial t
+  :components ((:file "full")))

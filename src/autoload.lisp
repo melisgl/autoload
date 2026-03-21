@@ -80,6 +80,7 @@
 
   Also, see SYSTEM-AUTOLOADED-SYSTEMS for further consistency
   checking."
+  (declare (ignorable arglist))
   (check-function-autoload name asdf-system-name)
   `(progn
      (declaim
@@ -192,10 +193,13 @@
      (after-autoloaded-function-definition ',name)
      ',name))
 
+(defvar *suppress-has-not-been-declared-warnings* nil)
+
 (defun before-autoloaded-function-definition (name)
   (unless (state name :function)
-    (warn "~@<Defining ~S as an autoloaded function, ~
-          but it has not been declared with ~S.~:@>" name 'autoload))
+    (unless *suppress-has-not-been-declared-warnings*
+      (warn "~@<Defining ~S as an autoloaded function, ~
+            but it has not been declared with ~S.~:@>" name 'autoload)))
   ;; We don't want to FMAKUNBOUND a generic function and lose its
   ;; methods.
   (when (function-autoload-p name)
@@ -235,7 +239,7 @@
   with DEFVAR/AUTOLOADED since."
   (eq (state name :variable) :declared))
 
-(defmacro defvar/autoloaded (var &optional (val nil valp) docstring)
+(defmacro defvar/autoloaded (var &optional (val nil valp) doc)
   "Like DEFVAR, but works with the global binding on Lisps that
   support it (currently Allegro, CCL, ECL, SBCL). This is to
   handle the case when a system that uses DEFVAR with a default value
@@ -252,24 +256,25 @@
   ```
 
   DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P."
-  (maybe-record-autoload-info `(defvar/autoloaded ,var ,val ,valp ,docstring))
+  (maybe-record-autoload-info `(defvar/autoloaded ,var ,val ,valp ,doc))
   `(progn
      (before-autoloaded-variable-definition ',var)
      (defvar ,var)
-     (after-autoloaded-variable-definition ',var ,val ,valp ,docstring)
+     (after-autoloaded-variable-definition ',var ,val ,valp ,doc)
      ',var))
 
 (defun before-autoloaded-variable-definition (name)
   (unless (state name :variable)
-    (warn "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
-          name 'defvar/autoloaded 'defvar/autoload)))
+    (unless *suppress-has-not-been-declared-warnings*
+      (warn "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
+            name 'defvar/autoloaded 'defvar/autoload))))
 
-(defun after-autoloaded-variable-definition (name val valp docstring)
+(defun after-autoloaded-variable-definition (name val valp doc)
   (when valp
     (unless (symbol-globally-boundp name)
       (setf (symbol-global-value name) val)))
-  (when docstring
-    (setf (documentation name 'variable) docstring))
+  (when doc
+    (setf (documentation name 'function) doc))
   (setf (state name :variable) :resolved))
 
 
@@ -354,7 +359,11 @@
   (declare (ignore slot-names))
   (setf (slot-value system 'system-autoloaded-systems)
         (mapcar #'asdf:coerce-name
-                (slot-value system 'system-autoloaded-systems))))
+                (slot-value system 'system-autoloaded-systems)))
+  #+clisp
+  (unless (slot-value system 'asdf::default-component-class)
+    (setf (slot-value system 'asdf::default-component-class)
+          'autoload-cl-source-file)))
 
 ;;; ASDF:PERFORM is designed for side effects, and we can't just
 ;;; return stuff normally. LIST-AUTOLOADS-OP gathers systems here.
@@ -531,15 +540,22 @@
                  `((autoload ,name ,asdf-system-name
                              ,@(when process-arglist
                                  `(:arglist ',arglist))
-                             ,@(when (and process-docstring docstring)
-                                 `(:docstring ,docstring))))))
+                             ,@(let ((docstring
+                                       ;; Prefer the current one.
+                                       (or (documentation name 'function)
+                                           docstring)))
+                                 (when (and process-docstring docstring)
+                                   `(:docstring ,docstring)))))))
               ((defvar/autoloaded)
                (destructuring-bind (val-form valp docstring) (cdddr info)
                  `((defvar/autoload ,name
                        ,@(when (and valp (simple-constant-form-p val-form))
                            `(:initial-value ,val-form))
-                     ,@(when (and process-docstring docstring)
-                         `(:docstring ,docstring)))))))
+                     ,@(let ((docstring
+                               (or (documentation name 'variable)
+                                   docstring)))
+                         (when (and process-docstring docstring)
+                           `(:docstring ,docstring))))))))
             (when export-from
               (let ((name (unpack-function-name name)))
                 (loop for pkg-designator in export-from
@@ -563,26 +579,35 @@
       (pathname &key (process-arglist t) (process-docstring t)
                      package export-from)
 
-  See [AUTOLOADS][pax:macro] and WRITE-AUTOLOADS for the description
-  of these arguments. PATHNAME is relative to
+  See [AUTOLOADS][function] and WRITE-AUTOLOADS for the description of
+  these arguments. PATHNAME is relative to
   ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
   :SUPERSEDE."
   (let ((system (asdf:find-system system)))
     (check-type system autoload-system)
     (multiple-value-bind (pathname args) (system-record-autoloads* system)
-      (with-open-file (stream (asdf:system-relative-pathname system pathname)
-                              :direction :output
-                              :if-does-not-exist :create
-                              :if-exists :supersede)
-        (let ((*print-case* :downcase)
-              (*package* (find-package :keyword)))
-          (format stream ";;;; This file was generated by~%~
+      (let ((pathname (asdf:system-relative-pathname system pathname)))
+        (with-file-superseded (stream pathname)
+          (let ((*print-case* :downcase)
+                (*package* (find-package :keyword)))
+            (format stream ";;;; This file was emptied by
                           ;;;;~%~
                           ;;;;   ~S~%~
                           ;;;;~%~
-                          ;;;; Do not edit.~%~%"
-                  `(record-system-autoloads ,(asdf:component-name system))))
-        (apply #'record-autoloads system stream args)))))
+                          ;;;; Recording is ongoing or has failed. ~
+                               Do not edit.~%~%"
+                    `(record-system-autoloads ,(asdf:component-name system)))))
+        (with-file-superseded (stream pathname)
+          (let ((*print-case* :downcase)
+                (*package* (find-package :keyword)))
+            (format stream ";;;; This file was generated by~%~
+                            ;;;;~%~
+                            ;;;;   ~S~%~
+                            ;;;;~%~
+                            ;;;; Do not edit.~%~%"
+                    `(record-system-autoloads ,(asdf:component-name system))))
+          (let ((*suppress-has-not-been-declared-warnings* t))
+            (apply #'record-autoloads system stream args)))))))
 
 (defun system-record-autoloads* (system)
   (let ((args (uiop:ensure-list (system-record-autoloads system))))
@@ -662,12 +687,3 @@
 (defmethod asdf:perform ((op asdf:test-op) (system autoload-system))
   (when (system-test-autoloads system)
     (check-system-autoloads system)))
-
-#+nil
-(write-autoload-forms (autoload-forms "mgl-pax") t)
-#+nil
-(system-autoloaded-systems (asdf:find-system "mgl-pax"))
-#+nil
-(record-system-autoloads "mgl-pax")
-#+nil
-(check-system-autoloads "mgl-pax")
