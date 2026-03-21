@@ -78,26 +78,38 @@
                                                    nil))))
       `(let (,@(when sym `((,sym nil))))
          ,@body))))
-
 
-(defun special-variable-name-p (obj)
-  (and (symbolp obj)
-       #+abcl (ext:special-variable-p obj)
-       #+allegro (eq (sys:variable-information obj) :special)
-       #+ccl (eq (ccl::variable-information obj) :special)
-       #+clisp (and (ext:special-variable-p obj)
-                    (not (constant-variable-name-p obj)))
-       #+cmucl (eq (ext:info :variable :kind obj) :special)
-       #+ecl (or (si:specialp obj)
-                 (constant-variable-name-p obj))
-       #+sbcl (member (sb-int:info :variable :kind obj) '(:special))))
+;;; Detect some common constant forms that are print-read consistent
+;;; given only the existence of the standard packages :CL and
+;;; :KEYWORD.
+(defun simple-constant-form-p (form)
+  (let ((cl-package (find-package :cl)))
+    (labels
+        ((simple-self-evaluating-form-p (form)
+           (or (stringp form) (numberp form) (characterp form) (keywordp form)
+               (and (symbolp form)
+                    (eq (symbol-package form) cl-package)
+                    (constantp form))))
+         (recurse (form depth)
+           (cond ((atom form)
+                  (or (simple-self-evaluating-form-p form)
+                      (and (symbolp form)
+                           (eq (symbol-package form) cl-package))))
+                 ;; Circularities and deep nesting bail out here.
+                 ((= depth 100)
+                  (return-from simple-constant-form-p nil))
+                 ((and (recurse (car form) (1+ depth))
+                       (recurse (cdr form) (1+ depth)))))))
+      (or (simple-self-evaluating-form-p form)
+          (and (consp form)
+               (eq (car form) 'quote)
+               (consp (cdr form))
+               (null (cddr form))
+               (recurse (second form) 0))))))
 
-(defun constant-variable-name-p (obj)
-  (and (symbolp obj)
-       (not (keywordp obj))
-       ;; CONSTANTP may detect constant symbol macros, for example.
-       (boundp obj)
-       (constantp obj)))
+(defun find-package-or-error (designator)
+  (or (find-package designator)
+      (error "~@<~S does not denote a package.~:@>" designator)))
 
 
 ;;;; Global bindings of specials

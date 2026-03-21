@@ -41,7 +41,9 @@ for the latest version.
 
 ## Basics
 
-- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (LAMBDA-LIST NIL) (DOCSTRING NIL) (EXPLICITP T)
+### Functions
+
+- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL) (EXPLICITP T)
 
     Define a stub function with NAME to load
     ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
@@ -52,9 +54,9 @@ for the latest version.
     the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
     FUNCTION and NOTINLINE.
 
-    - LAMBDA-LIST will be installed as the stub's arglist for
-      interactive purposes only. if specified and it's supported on the
-      platform (currently only SBCL). The arglist is shown by e.g.
+    - ARGLIST will be installed as the stub's arglist if specified and
+      it's supported on the platform (currently only SBCL). Arglists are
+      for interactive purposes only. For example, they are shown by
       SLIME autodoc and returned by DREF:ARGLIST.
 
     - DOCSTRING, if specified, will be the stub's docstring. If not
@@ -90,7 +92,7 @@ for the latest version.
 - [macro] DEFUN/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
     Like DEFUN, but silence redefinition warnings. Also, warn if NAME
-    does not denote a function or it was never FUNCTION-AUTOLOAD-P.
+    has never been FUNCTION-AUTOLOAD-P.
 
 - [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
@@ -105,7 +107,18 @@ for the latest version.
         (defmacro defun*/autoloaded (name lambda-list &body body)
           `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))
 
-- [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) (DOC NIL)
+### Variables
+
+- [macro] DEFVAR/AUTOLOAD VAR &KEY (INITIAL-VALUE NIL) DOCSTRING
+
+    Like DEFVAR, but mark VAR as VARIABLE-AUTOLOAD-P. Unlike DEFVAR,
+    this also allows for specifying a DOCSTRING even if INITIAL-VALUE is
+    not provided.
+
+    Note that on accessing VAR, nothing is autoloaded. DEFVAR/AUTOLOAD
+    is solely to allow DEFVAR/AUTOLOADED to perform some checking.
+
+- [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOCSTRING
 
     Like DEFVAR, but works with the global binding on Lisps that
     support it (currently Allegro, CCL, ECL, SBCL). This is to
@@ -119,6 +132,8 @@ for the latest version.
           (defvar/autoloaded *x* 2)
           *x*)
         => 1
+
+    DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P.
 
 ## ASDF Integration
 
@@ -190,21 +205,39 @@ for the latest version.
 
 ### Generating Autoloads
 
-- [function] AUTOLOADS SYSTEM &KEY (LAMBDA-LISTS T) (DOCSTRINGS T) EXPORTS
+- [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) EXPORT-FROM
 
     Return a list of forms that set up autoloading for definitions such
-    as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM. For function definitions such
-    as DEFUN/AUTOLOADED, this is an AUTOLOAD form; for
-    DEFVAR/AUTOLOADED, this is a DECLAIM SPECIAL.
+    as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM.
 
-    - If LAMBDA-LISTS, then the autoload forms will pass the LAMBDA-LIST
-      argument of the corresponding DEFUN/AUTOLOADED to AUTOLOAD.
+    - For function definitions such as DEFUN/AUTOLOADED, an
+      AUTOLOAD form is emitted.
 
-    - If DOCSTRINGS, then the docstrings extracted from DEFUN/AUTOLOADED
-      or DEFVAR/AUTOLOADED will be associated with the definition.
+    If PROCESS-ARGLIST is T, then the autoload forms will pass the
+       ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
+       AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
+       AUTOLOAD.
 
-    - If EXPORTS, then emit EXPORT forms for symbolic names that are
-      exported from their home package.
+    - For DEFVAR/AUTOLOADED, a DEFVAR/AUTOLOAD is emitted.
+
+    If the initial value form in DEFVAR/AUTOLOADED is detected as a
+       simple constant form, then it is passed as :INITIAL-VALUE to
+       DEFVAR/AUTOLOAD. Simple constant forms are strings, numbers,
+       characters, keywords, constants in the CL package, and QUOTEd
+       nested lists containing any of the previous or any symbol from
+       the CL.
+
+    - If PROCESS-DOCSTRINGs, then the docstrings extracted from
+      DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
+      definition.
+
+    - EXPORT-FROM is a package designator or a list thereof. If a NAME
+      is involved in e.g. a DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED, then
+      an EXPORT form is added to the autoload forms for each package in
+      EXPORT-FROM from which NAME is exported. For SETF names, the
+      SECOND element is exported. EXPORT-FROM is not needed in the usual
+      case of a static DEFPACKAGE, but is a convenient way to foreshadow
+      the exports dynamically performed by an autoloaded system.
 
     Note that if a function is not defined by DEFUN/AUTOLOADED or its
     kin in Basics, then AUTOLOADS will not detect it. For such
@@ -228,7 +261,8 @@ for the latest version.
     :RECORD-AUTOLOADS, which may be a
     pathname designator or a list of the form
 
-        (pathname &key (lambda-lists t) (docstrings t) package exports)
+        (pathname &key (process-arglist t) (process-docstring t)
+                       package export-from)
 
     See AUTOLOADS and WRITE-AUTOLOADS for the description
     of these arguments. PATHNAME is relative to
@@ -240,7 +274,7 @@ for the latest version.
     In the AUTOLOAD-SYSTEM SYSTEM, check that there is a
     :RECORD-AUTOLOADS and the file generated
     by RECORD-SYSTEM-AUTOLOADS is up-to-date. If ERRORP, then signal an
-    error if it is not.
+    error if it is not or the file cannot be read.
 
     This compares the current AUTOLOADS to those in the file with EQUAL
     and is thus sensitive to the order of definitions.

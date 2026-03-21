@@ -14,11 +14,18 @@
   ("autoload-doc" asdf:system))
 
 (pax:defsection @basics (:title "Basics" :export nil)
+  (@functions pax:section)
+  (@variables pax:section))
+
+(pax:defsection @functions (:title "Functions" :export nil)
   (autoload pax:macro)
   (function-autoload-p function)
   (defun/autoloaded pax:macro)
   (defgeneric/autoloaded pax:macro)
-  (define-autoloaded-function pax:macro)
+  (define-autoloaded-function pax:macro))
+
+(pax:defsection @variables (:title "Variables" :export nil)
+  (defvar/autoload pax:macro)
   (defvar/autoloaded pax:macro))
 
 (pax:defsection @asdf-integration (:title "ASDF Integration" :export nil)

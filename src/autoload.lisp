@@ -1,11 +1,21 @@
 (in-package :autoload)
 
 ;;;; Machinery for associating autoload stubs with function names,
-;;;; including setf names.
+;;;; including setf names, and for recording the state of variable
+;;;; definitions.
 
-(defun get-stub (name)
+(declaim (inline kind-to-indicator))
+
+;;; Translate KIND to an package internal variable, which we use as an
+;;; indicator on SYMBOL-PLISTs.
+(defun kind-to-indicator (kind)
+  (ecase kind
+    ((:function) 'autoload-function)
+    ((:variable) 'autoload-variable)))
+
+(defun state (name kind)
   (multiple-value-bind (name setf*) (unpack-function-name name)
-    (getf (get name 'autoload-fn) setf*)))
+    (getf (get name (kind-to-indicator kind)) setf*)))
 
 (defun unpack-function-name (name)
   (cond ((symbolp name)
@@ -20,17 +30,17 @@
         (t
          (error "~@<Unsupported function name ~S.~:@>" name))))
 
-(defun set-stub (name fn)
+(defun set-state (name kind fn)
   (multiple-value-bind (name setflike) (unpack-function-name name)
-    (setf (getf (get name 'autoload-fn) setflike)
+    (setf (getf (get name (kind-to-indicator kind)) setflike)
           fn)))
 
-(defsetf get-stub set-stub)
+(defsetf state set-state)
 
 
-;;;; @BASICS
+;;;; @FUNCTIONS
 
-(defmacro autoload (name asdf-system-name &key (lambda-list nil lambda-list-p)
+(defmacro autoload (name asdf-system-name &key (arglist nil arglistp)
                     (docstring nil docstringp) (explicitp t))
   "Define a stub function with NAME to [load][asdf:load-system]
   ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
@@ -41,9 +51,9 @@
   the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
   FUNCTION and NOTINLINE.
 
-  - LAMBDA-LIST will be installed as the stub's arglist if specified
-    and it's supported on the platform (currently only SBCL). Arglists
-    are for interactive purposes only. For example, they are shown by
+  - ARGLIST will be installed as the stub's arglist if specified and
+    it's supported on the platform (currently only SBCL). Arglists are
+    for interactive purposes only. For example, they are shown by
     @SLIME-AUTODOC and returned by DREF:ARGLIST.
 
   - DOCSTRING, if specified, will be the stub's docstring. If not
@@ -100,11 +110,10 @@
          ;; could be the case without the FDEFINITION call.
          (apply (fdefinition ',name) args))
        #+sbcl
-       ,@(when lambda-list-p
+       ,@(when arglistp
            `((setf (sb-c::%fun-lambda-list (fdefinition* ',name))
-                   ',lambda-list)))
-       ;; FIXME: NAME can be SETF or similar
-       (setf (get-stub ',name) (fdefinition* ',name))
+                   ',arglist)))
+       (setf (state ',name :function) (fdefinition* ',name))
        ',name)))
 
 ;;; Even though ASDF:SYSTEM names rarely contain special Markdown
@@ -137,14 +146,14 @@
          (warn "~@<Autoloaded function ~S was redefined with ~S ~
                in the ~S ASDF:SYSTEM.~:@>"
                name 'autoload asdf-system-name))
-        ((functionp (get-stub name))
+        ((functionp (state name :function))
          (when explicitp
            (warn "~@<Autoloaded function ~S was redefined ~
                  in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
                  name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
                  'define-autoloaded-function)))
         (t
-         (assert (eq (get-stub name) :resolved))
+         (assert (eq (state name :function) :resolved))
          (unless explicitp
            (warn "~@<Autoloaded function ~S was declared with ~S ~S but was ~
                  redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S ~
@@ -154,13 +163,13 @@
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function
-  established by [AUTOLOAD][pax:macro]."
+   established by [AUTOLOAD][pax:macro]."
   ;; This detects redefinitions by DEFUN too.
-  (eq (get-stub name) (fdefinition* name)))
+  (eq (state name :function) (fdefinition* name)))
 
 (defmacro defun/autoloaded (name lambda-list &body body)
   "Like DEFUN, but silence redefinition warnings. Also, warn if NAME
-  does not denote a function or it was never FUNCTION-AUTOLOAD-P."
+  has never been FUNCTION-AUTOLOAD-P."
   `(define-autoloaded-function defun ,name ,lambda-list ,@body))
 
 (defmacro defgeneric/autoloaded (name lambda-list &body body)
@@ -175,26 +184,18 @@
       (defmacro defun*/autoloaded (name lambda-list &body body)
         `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))"
   (maybe-record-autoload-info `(defun/autoloaded ,name ,lambda-list
-                                 ,(when (and (stringp (first body))
-                                             (< 1 (length body)))
+                                 ,(when (stringp (first body))
                                     (first body))))
   `(progn
-     (check-and-unbind-autoloaded-function-definition ',name)
+     (before-autoloaded-function-definition ',name)
      (,definer ,name ,lambda-list ,@body)
-     ;; Leave the property around so that
-     ;; CHECK-AUTOLOADED-FUNCTION-DEFINITION knows not to warn when,
-     ;; for example, a DEFUN/AUTOLOADED is evaluated multiple times
-     ;; (e.g. during interactive development).
-     (setf (get-stub ',name) :resolved)
+     (after-autoloaded-function-definition ',name)
      ',name))
 
-(defun check-and-unbind-autoloaded-function-definition (name)
-  (cond ((null (fdefinition* name))
-         (warn "~@<~S function ~S not defined.~:@>" 'defun/autoloaded name))
-        ((not (or (function-autoload-p name)
-                  (eq (get-stub name) :resolved)))
-         (warn "~@<~S function ~S not ~S.~:@>" 'defun/autoloaded name
-               'function-autoload-p)))
+(defun before-autoloaded-function-definition (name)
+  (unless (state name :function)
+    (warn "~@<Defining ~S as an autoloaded function, ~
+          but it has not been declared with ~S.~:@>" name 'autoload))
   ;; We don't want to FMAKUNBOUND a generic function and lose its
   ;; methods.
   (when (function-autoload-p name)
@@ -203,7 +204,38 @@
     ;; redefine a DEFUN (the autoload stub).
     (fmakunbound name)))
 
-(defmacro defvar/autoloaded (var &optional (val nil valp) (doc nil docp))
+(defun after-autoloaded-function-definition (name)
+  ;; Leave the property around so that
+  ;; BEFORE-AUTOLOADED-FUNCTION-DEFINITION knows not to warn when, for
+  ;; example, a DEFUN/AUTOLOADED is evaluated multiple times (e.g.
+  ;; during interactive development).
+  (setf (state name :function) :resolved))
+
+
+;;;; @VARIABLES
+
+(defmacro defvar/autoload (var &key (initial-value nil initial-value-p)
+                           docstring)
+  "Like DEFVAR, but mark VAR as VARIABLE-AUTOLOAD-P. Unlike DEFVAR,
+  this also allows for specifying a DOCSTRING even if INITIAL-VALUE is
+  not provided.
+
+  Note that on accessing VAR, nothing is autoloaded. DEFVAR/AUTOLOAD
+  is solely to allow DEFVAR/AUTOLOADED to perform some checking."
+  `(progn
+     (defvar ,var
+       ,@(when initial-value-p
+           `(,initial-value)))
+     ,@(when docstring
+         `((setf (documentation ',var 'variable) ,docstring)))
+     (setf (state ',var :variable) :declared)))
+
+(defun variable-autoload-p (name)
+  "See if NAME has been declared with DEFVAR/AUTOLOAD and not defined
+  with DEFVAR/AUTOLOADED since."
+  (eq (state name :variable) :declared))
+
+(defmacro defvar/autoloaded (var &optional (val nil valp) docstring)
   "Like DEFVAR, but works with the global binding on Lisps that
   support it (currently Allegro, CCL, ECL, SBCL). This is to
   handle the case when a system that uses DEFVAR with a default value
@@ -217,15 +249,28 @@
     (defvar/autoloaded *x* 2)
     *x*)
   => 1
-  ```"
-  (maybe-record-autoload-info `(defvar/autoloaded ,var ,doc))
+  ```
+
+  DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P."
+  (maybe-record-autoload-info `(defvar/autoloaded ,var ,val ,valp ,docstring))
   `(progn
+     (before-autoloaded-variable-definition ',var)
      (defvar ,var)
-     ,@(when valp
-         `((unless (symbol-globally-boundp ',var)
-             (setf (symbol-global-value ',var) ,val))))
-     ,@(when docp
-         `((setf (documentation ',var 'variable) ,doc)))))
+     (after-autoloaded-variable-definition ',var ,val ,valp ,docstring)
+     ',var))
+
+(defun before-autoloaded-variable-definition (name)
+  (unless (state name :variable)
+    (warn "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
+          name 'defvar/autoloaded 'defvar/autoload)))
+
+(defun after-autoloaded-variable-definition (name val valp docstring)
+  (when valp
+    (unless (symbol-globally-boundp name)
+      (setf (symbol-global-value name) val)))
+  (when docstring
+    (setf (documentation name 'variable) docstring))
+  (setf (state name :variable) :resolved))
 
 
 (defclass autoload-cl-source-file (asdf:cl-source-file)
@@ -389,25 +434,41 @@
   ;; systems.
   (when (and *recording-from-system*
              (eq *recording-from-system* *autoload-system*))
-    (push (cons (asdf:component-name *autoload-system*) info)
-          *recorded-autoload-infos*)))
+    ;; This is called from a macro, and macros are allowed to be
+    ;; expanded multiple times.
+    (pushnew (cons (asdf:component-name *autoload-system*) info)
+             *recorded-autoload-infos* :test #'equal)))
 
-(defun autoloads (system &key (lambda-lists t) (docstrings t) export-from)
+(defun autoloads (system &key (process-arglist t) (process-docstring t)
+                  export-from)
   "Return a list of forms that set up autoloading for definitions such
   as DEFUN/AUTOLOADED in [autoloaded direct dependencies][
-  SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM. For function definitions such
-  as DEFUN/AUTOLOADED, this is an [AUTOLOAD][pax:macro] form; for
-  DEFVAR/AUTOLOADED, this is a DECLAIM SPECIAL.
+  SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM.
 
-  - If LAMBDA-LISTS, then the autoload forms will pass the LAMBDA-LIST
-    argument of the corresponding DEFUN/AUTOLOADED to AUTOLOAD.
+  - For function definitions such as DEFUN/AUTOLOADED, an
+    [AUTOLOAD][pax:macro] form is emitted.
 
-  - If DOCSTRINGS, then the docstrings extracted from DEFUN/AUTOLOADED
-    or DEFVAR/AUTOLOADED will be associated with the definition.
+     If PROCESS-ARGLIST is T, then the autoload forms will pass the
+     ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
+     AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
+     AUTOLOAD.
+
+  - For DEFVAR/AUTOLOADED, a DEFVAR/AUTOLOAD is emitted.
+
+     If the initial value form in DEFVAR/AUTOLOADED is detected as a
+     simple constant form, then it is passed as :INITIAL-VALUE to
+     DEFVAR/AUTOLOAD. Simple constant forms are strings, numbers,
+     characters, keywords, constants in the CL package, and QUOTEd
+     nested lists containing any of the previous or any symbol from
+     the [CL][package].
+
+  - If PROCESS-DOCSTRINGS, then the docstrings extracted from
+    DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
+    definition.
 
   - EXPORT-FROM is a package designator or a list thereof. If a NAME
-    is involved in a e.g. DEFUN/AUTOLOADED, DEFVAR/AUTOLOADED, then an
-    EXPORT form is added to the autoload forms for each package in
+    is involved in e.g. a DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED, then
+    an EXPORT form is added to the autoload forms for each package in
     EXPORT-FROM from which NAME is exported. For SETF names, the
     SECOND element is exported. EXPORT-FROM is not needed in the usual
     case of a static DEFPACKAGE, but is a convenient way to foreshadow
@@ -424,10 +485,8 @@
   DEFUN/AUTOLOADED."
   (without-asdf-session
     (mapcan (lambda (info)
-              (info-to-autoload-forms info
-                                      :include-lambda-list lambda-lists
-                                      :include-docstring docstrings
-                                      :export-from export-from))
+              (info-to-autoload-forms info process-arglist process-docstring
+                                      export-from))
             (mapcan #'extract-autoload-infos (system-autoloaded-systems
                                               (asdf:find-system system))))))
 
@@ -436,15 +495,23 @@
   PACKAGE, emit an IN-PACKAGE form with its name, and print the forms
   with *PACKAGE* bound to it."
   (let ((*package* (if package
-                       (find-package package)
+                       (find-package-or-error package)
                        *package*))
         (*print-pretty* t)
         (*print-case* :downcase))
     (when package
       (let ((*package* (find-package :keyword)))
         (format stream "~S~%~%"
-                `(in-package ,(package-name package)))))
+                `(in-package ,(safe-package-designator package)))))
     (format stream "~{~S~%~^~%~}" forms)))
+
+;;; This gets printed as :CL-USER, which works in many cases
+;;; regardless of readtable case especially when used in conjunction
+;;; with *PRINT-CASE* :DOWNCASE. Using uninterned symbols would break
+;;; CHECK-FUNCTION-AUTOLOAD, which uses EQUAL to compare autoload
+;;; forms.
+(defun safe-package-designator (package)
+  (intern (package-name package) :keyword))
 
 (defun extract-autoload-infos (system)
   (let* ((system (asdf:find-system system))
@@ -453,36 +520,39 @@
     (asdf:load-system system :force t)
     (reverse *recorded-autoload-infos*)))
 
-(defun info-to-autoload-forms (info &key include-lambda-list include-docstring
+(defun info-to-autoload-forms (info process-arglist process-docstring
                                export-from)
   (let ((asdf-system-name (first info))
         (definer (second info))
         (name (third info)))
     (append (ecase definer
               ((defun/autoloaded)
-               (destructuring-bind (lambda-list docstring) (cdddr info)
+               (destructuring-bind (arglist docstring) (cdddr info)
                  `((autoload ,name ,asdf-system-name
-                             ,@(when include-lambda-list
-                                 `(:lambda-list ',lambda-list))
-                             ,@(when include-docstring
+                             ,@(when process-arglist
+                                 `(:arglist ',arglist))
+                             ,@(when (and process-docstring docstring)
                                  `(:docstring ,docstring))))))
               ((defvar/autoloaded)
-               (destructuring-bind (docstring) (cdddr info)
-                 `((declaim (special ,name))
-                   ,@(when (and include-docstring docstring)
-                       `((setf (documentation ',name 'variable)
-                               ,docstring)))))))
+               (destructuring-bind (val-form valp docstring) (cdddr info)
+                 `((defvar/autoload ,name
+                       ,@(when (and valp (simple-constant-form-p val-form))
+                           `(:initial-value ,val-form))
+                     ,@(when (and process-docstring docstring)
+                         `(:docstring ,docstring)))))))
             (when export-from
               (let ((name (unpack-function-name name)))
                 (loop for pkg-designator in export-from
-                      for pkg = (find-package pkg-designator)
+                      for pkg = (find-package-or-error pkg-designator)
                       when (and pkg (external-symbol-p name pkg))
-                        collect `(export ',name ,(package-name pkg))))))))
+                        collect `(export ',name
+                                         ,(safe-package-designator pkg))))))))
 
-(defun record-autoloads (system output &key (lambda-lists t) (docstrings t)
-                         package export-from)
-  (write-autoloads (autoloads system :lambda-lists lambda-lists
-                              :docstrings docstrings :export-from export-from)
+(defun record-autoloads (system output &key (process-arglist t)
+                         (process-docstring t) package export-from)
+  (write-autoloads (autoloads system :process-arglist process-arglist
+                              :process-docstring process-docstring
+                              :export-from export-from)
                    output :package package))
 
 (defun record-system-autoloads (system)
@@ -490,7 +560,8 @@
   [:RECORD-AUTOLOADS][ SYSTEM-RECORD-AUTOLOADS], which may be a
   [pathname designator][pax:clhs] or a list of the form
 
-      (pathname &key (lambda-lists t) (docstrings t) package export-from)
+      (pathname &key (process-arglist t) (process-docstring t)
+                     package export-from)
 
   See [AUTOLOADS][pax:macro] and WRITE-AUTOLOADS for the description
   of these arguments. PATHNAME is relative to
@@ -503,7 +574,8 @@
                               :direction :output
                               :if-does-not-exist :create
                               :if-exists :supersede)
-        (let ((*print-case* :downcase))
+        (let ((*print-case* :downcase)
+              (*package* (find-package :keyword)))
           (format stream ";;;; This file was generated by~%~
                           ;;;;~%~
                           ;;;;   ~S~%~
@@ -515,25 +587,25 @@
 (defun system-record-autoloads* (system)
   (let ((args (uiop:ensure-list (system-record-autoloads system))))
     (handler-case
-        (destructuring-bind (pathname &key (lambda-lists t) (docstrings t)
-                             package export-from)
+        (destructuring-bind (pathname &key (process-arglist t)
+                             (process-docstring t) package export-from)
             args
           (check-type pathname (or string pathname))
-          (values pathname `(:lambda-lists ,lambda-lists
-                             :docstrings ,docstrings
+          (values pathname `(:process-arglist ,process-arglist
+                             :process-docstring ,process-docstring
                              :package ,package
                              :export-from ,(uiop:ensure-list export-from))))
       ((and error (not type-error)) ()
         (error "~@<~S, the ~S of ~S, is not of the form ~S.~:@>"
                args :record-autoloads (asdf:component-name system)
-               '(pathname &key (lambda-lists t) (docstrings t)
+               '(pathname &key (process-arglist t) (process-docstring t)
                  package export-from))))))
 
 (defun check-system-autoloads (system &key (errorp t))
   "In the AUTOLOAD-SYSTEM SYSTEM, check that there is a
   [:RECORD-AUTOLOADS][ system-record-autoloads] and the file generated
   by RECORD-SYSTEM-AUTOLOADS is up-to-date. If ERRORP, then signal an
-  error if it is not.
+  error if it is not or the file cannot be read.
 
   This compares the current AUTOLOADS to those in the file with EQUAL
   and is thus sensitive to the order of definitions.
@@ -544,7 +616,7 @@
     (check-type system autoload-system)
     (when (system-record-autoloads system)
       (multiple-value-bind (pathname args) (system-record-autoloads* system)
-        (destructuring-bind (&key (lambda-lists t) (docstrings t)
+        (destructuring-bind (&key (process-arglist t) (process-docstring t)
                              package export-from)
             args
           (flet ((fail (control &rest args)
@@ -554,18 +626,26 @@
                               control args)
                        (return-from check-system-autoloads nil))))
             (let ((pathname (asdf:system-relative-pathname system pathname)))
-              (unless (probe-file pathname)
+              (unless (uiop:file-exists-p pathname)
                 (fail "~A file ~S is missing." :record-autoloads pathname))
               (let ((recorded-forms
                       (let ((*package* (if package
-                                           (find-package package)
+                                           (find-package-or-error package)
                                            *package*)))
-                        (uiop:read-file-forms pathname)))
-                    (current-forms (autoloads system :lambda-lists lambda-lists
-                                              :docstrings docstrings
-                                              :export-from export-from)))
+                        (if errorp
+                            (uiop:read-file-forms pathname)
+                            (handler-case
+                                (uiop:read-file-forms pathname)
+                              (error (e)
+                                (fail "reading file ~S failed with ~A."
+                                      pathname e))))))
+                    (current-forms (autoloads
+                                    system :process-arglist process-arglist
+                                    :process-docstring process-docstring
+                                    :export-from export-from)))
                 (when package
-                  (let ((expected `(in-package ,(package-name package))))
+                  (let ((expected `(in-package
+                                    ,(safe-package-designator package))))
                     (unless (equal (pop recorded-forms) expected)
                       (fail "the expected ~S form is not found." expected))))
                 (loop for recorded-form in recorded-forms
