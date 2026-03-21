@@ -1,57 +1,5 @@
 (in-package :autoload)
 
-;;;; Cargo-culted from DREF::FDEFINITION*
-
-(defun fdefinition* (name)
-  (ignore-errors
-   #+abcl
-   (or (system::untraced-function name)
-       (fdefinition name))
-   #+clisp
-   (if (listp name)
-       (eval `(function ,name))
-       (or (system::get-traced-definition name)
-           (fdefinition name)))
-   #-(or abcl clisp)
-   (unencapsulated-function (fdefinition name))))
-
-(defun unencapsulated-function (function)
-  (or #+ccl (ccl::find-unencapsulated-definition function)
-      #+cmucl (loop for fn = function then (fwrappers:fwrapper-next fn)
-                    while (typep fn 'fwrappers:fwrapper)
-                    finally (return fn))
-      #+ecl (when (and (consp function)
-                       (eq (car function) 'si:macro))
-              function)
-      #+ecl (find-type-in-sexp (function-lambda-expression function) 'function)
-      #+ecl (find function si::*trace-list* :key #'second)
-      #+sbcl (maybe-find-encapsulated-function function)
-      function))
-
-#+ecl
-(defun find-type-in-sexp (form type)
-  (dolist (x form)
-    (cond ((listp x)
-           (let ((r (find-type-in-sexp x type)))
-             (when r
-               (return-from find-type-in-sexp r))))
-          ((typep x type)
-           (return-from find-type-in-sexp x))
-          (t
-           nil))))
-
-#+sbcl
-;;; Tracing typically encapsulates a function in a closure. The
-;;; function we need is at the end of the encapsulation chain.
-(defun maybe-find-encapsulated-function (function)
-  (declare (type function function))
-  (if (eq (sb-impl::%fun-name function) 'sb-impl::encapsulation)
-      (maybe-find-encapsulated-function
-       (sb-impl::encapsulation-info-definition
-        (sb-impl::encapsulation-info function)))
-      function))
-
-
 (defun external-symbol-p (symbol &optional (package (symbol-package symbol)))
   (and package
        (multiple-value-bind (symbol* status)
@@ -110,6 +58,64 @@
 (defun find-package-or-error (designator)
   (or (find-package designator)
       (error "~@<~S does not denote a package.~:@>" designator)))
+
+(defmacro with-file-superseded ((stream pathname) &body body)
+  `(with-open-file (,stream ,pathname :direction :output
+                            :if-does-not-exist :create
+                            :if-exists :supersede)
+     ,@body))
+
+
+;;;; Cargo-culted from DREF::FDEFINITION*
+
+(defun fdefinition* (name)
+  (ignore-errors
+   #+abcl
+   (or (system::untraced-function name)
+       (fdefinition name))
+   #+clisp
+   (if (listp name)
+       (eval `(function ,name))
+       (or (system::get-traced-definition name)
+           (fdefinition name)))
+   #-(or abcl clisp)
+   (unencapsulated-function (fdefinition name))))
+
+(defun unencapsulated-function (function)
+  (or #+ccl (ccl::find-unencapsulated-definition function)
+      #+cmucl (loop for fn = function then (fwrappers:fwrapper-next fn)
+                    while (typep fn 'fwrappers:fwrapper)
+                    finally (return fn))
+      #+ecl (when (and (consp function)
+                       (eq (car function) 'si:macro))
+              function)
+      #+ecl (find-type-in-sexp (function-lambda-expression function) 'function)
+      #+ecl (find function si::*trace-list* :key #'second)
+      #+sbcl (maybe-find-encapsulated-function function)
+      function))
+
+#+ecl
+(defun find-type-in-sexp (form type)
+  (dolist (x form)
+    (cond ((listp x)
+           (let ((r (find-type-in-sexp x type)))
+             (when r
+               (return-from find-type-in-sexp r))))
+          ((typep x type)
+           (return-from find-type-in-sexp x))
+          (t
+           nil))))
+
+#+sbcl
+;;; Tracing typically encapsulates a function in a closure. The
+;;; function we need is at the end of the encapsulation chain.
+(defun maybe-find-encapsulated-function (function)
+  (declare (type function function))
+  (if (eq (sb-impl::%fun-name function) 'sb-impl::encapsulation)
+      (maybe-find-encapsulated-function
+       (sb-impl::encapsulation-info-definition
+        (sb-impl::encapsulation-info function)))
+      function))
 
 
 ;;;; Global bindings of specials

@@ -5,3 +5,4 @@
 *.*fsl
 *.lib
 *.sse2f
+/test/data/autoloads.lisp

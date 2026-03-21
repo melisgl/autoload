@@ -14,4 +14,5 @@
                 :serial t
                 :components ((:file "package")
                              (:file "util")
-                             (:file "autoload")))))
+                             (:file "autoload"))))
+  :in-order-to ((asdf:test-op (asdf:test-op "autoload-test"))))
