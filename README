@@ -55,9 +55,13 @@ for the latest version.
     FUNCTION and NOTINLINE.
 
     - ARGLIST will be installed as the stub's arglist if specified and
-      it's supported on the platform (currently only SBCL). Arglists are
-      for interactive purposes only. For example, they are shown by
-      SLIME autodoc and returned by DREF:ARGLIST.
+      it's supported on the platform (currently only SBCL). If ARGLIST
+      is a string, then the effective value of ARGLIST is then read from
+      it. If the read fails, an AUTOLOAD-STYLE-WARNING is signalled and
+      processing continues as if ARGLIST had not been provided.
+
+        Arglists are for interactive purposes only. For example, they
+        are shown by SLIME autodoc and returned by DREF:ARGLIST.
 
     - DOCSTRING, if specified, will be the stub's docstring. If not
       specified, a generic docstring that says what system it autoloads
@@ -109,16 +113,20 @@ for the latest version.
 
 ### Variables
 
-- [macro] DEFVAR/AUTOLOAD VAR &KEY (INITIAL-VALUE NIL) DOCSTRING
+- [macro] DEFVAR/AUTOLOAD VAR &KEY (INIT NIL) DOCSTRING
 
-    Like DEFVAR, but mark VAR as VARIABLE-AUTOLOAD-P. Unlike DEFVAR,
-    this also allows for specifying a DOCSTRING even if INITIAL-VALUE is
-    not provided.
+    Define VAR with DEFVAR and mark it as VARIABLE-AUTOLOAD-P.
+
+    - Depending on whether INIT is specified, (DEFVAR <VAR>
+      <init>) or (DEFVAR <VAR>) is executed.
+
+    - If DOCSTRING is non-NIL, then the DOCUMENTATION of VAR as a
+      VARIABLE is set to it.
 
     Note that on accessing VAR, nothing is autoloaded. DEFVAR/AUTOLOAD
     is solely to allow DEFVAR/AUTOLOADED to perform some checking.
 
-- [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOCSTRING
+- [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOC
 
     Like DEFVAR, but works with the global binding on Lisps that
     support it (currently Allegro, CCL, ECL, SBCL). This is to
@@ -134,6 +142,15 @@ for the latest version.
         => 1
 
     DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P.
+
+### Package
+
+- [macro] DEFPACKAGE/AUTOLOADED NAME &REST OPTIONS
+
+    Like DEFPACKAGE, but additive. Instead of replacing the package
+    definition or signaling errors on redefinition, it expands into
+    individual package-altering operations such as SHADOW, USE-PACKAGE
+    and EXPORT. This allows the package state to be built incrementally.
 
 ## ASDF Integration
 
@@ -205,10 +222,15 @@ for the latest version.
 
 ### Generating Autoloads
 
-- [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) EXPORT-FROM
+- [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T)
 
     Return a list of forms that set up autoloading for definitions such
     as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM.
+
+    Note that this is an expensive operation, as it reloads the direct
+    dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
+    association with the system and the autoloaded definitions such as
+    DEFUN/AUTOLOADED.
 
     - For function definitions such as DEFUN/AUTOLOADED, an
       AUTOLOAD form is emitted.
@@ -221,35 +243,30 @@ for the latest version.
     - For DEFVAR/AUTOLOADED, a DEFVAR/AUTOLOAD is emitted.
 
     If the initial value form in DEFVAR/AUTOLOADED is detected as a
-       simple constant form, then it is passed as :INITIAL-VALUE to
+       simple constant form, then it is passed as INIT to
        DEFVAR/AUTOLOAD. Simple constant forms are strings, numbers,
        characters, keywords, constants in the CL package, and QUOTEd
        nested lists containing any of the previous or any symbol from
        the CL.
 
-    - If PROCESS-DOCSTRINGs, then the docstrings extracted from
+    - For DEFPACKAGE/AUTOLOADED, individual package-altering operations
+      are emitted.
+
+        As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
+        operations are additive. To handle circular dependencies, first
+        all autoloaded packages are created, then their state is
+        reconstructed in phases following DEFPACKAGE.
+
+    - If PROCESS-DOCSTRING, then the docstrings extracted from
       DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
       definition.
 
-    - EXPORT-FROM is a package designator or a list thereof. If a NAME
-      is involved in e.g. a DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED, then
-      an EXPORT form is added to the autoload forms for each package in
-      EXPORT-FROM from which NAME is exported. For SETF names, the
-      SECOND element is exported. EXPORT-FROM is not needed in the usual
-      case of a static DEFPACKAGE, but is a convenient way to foreshadow
-      the exports dynamically performed by an autoloaded system.
-
-    Note that if a function is not defined by DEFUN/AUTOLOADED or its
+    Note that if a function is not defined with DEFUN/AUTOLOADED or its
     kin in Basics, then AUTOLOADS will not detect it. For such
-    functions, AUTOLOADs must be written manually using the
-    MANUALP argument.
+    functions, AUTOLOADs must be written manually. Similar
+    considerations apply to variables and packages.
 
-    Also note that this is an expensive operation, as it reloads the direct
-    dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
-    association with the system and the autoloaded definitions such as
-    DEFUN/AUTOLOADED.
-
-- [function] WRITE-AUTOLOADS FORMS STREAM &KEY PACKAGE
+- [function] WRITE-AUTOLOADS FORMS STREAM
 
     Write the autoload FORMS to STREAM that can be LOADed. When
     PACKAGE, emit an IN-PACKAGE form with its name, and print the forms
@@ -261,11 +278,10 @@ for the latest version.
     :RECORD-AUTOLOADS, which may be a
     pathname designator or a list of the form
 
-        (pathname &key (process-arglist t) (process-docstring t)
-                       package export-from)
+        (pathname &key (process-arglist t) (process-docstring t))
 
-    See AUTOLOADS and WRITE-AUTOLOADS for the description
-    of these arguments. PATHNAME is relative to
+    See AUTOLOADS and WRITE-AUTOLOADS for the description of
+    these arguments. PATHNAME is relative to
     ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
     :SUPERSEDE.
 

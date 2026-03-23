@@ -8,6 +8,7 @@
 - [2 Basics][fa90]
     - [2.1 Functions][4b04]
     - [2.2 Variables][f490]
+    - [2.3 Package][643f]
 - [3 ASDF Integration][0c5c]
     - [3.1 Generating Autoloads][48d3]
 
@@ -69,9 +70,13 @@ for the latest version.
     `FUNCTION`([`0`][119e] [`1`][81f7]) and [`NOTINLINE`][9514].
     
     - `ARGLIST` will be installed as the stub's arglist if specified and
-      it's supported on the platform (currently only SBCL). Arglists are
-      for interactive purposes only. For example, they are shown by
-      [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
+      it's supported on the platform (currently only SBCL). If `ARGLIST`
+      is a string, then the effective value of `ARGLIST` is then read from
+      it. If the read fails, an `AUTOLOAD-STYLE-WARNING` is signalled and
+      processing continues as if `ARGLIST` had not been provided.
+    
+        Arglists are for interactive purposes only. For example, they
+        are shown by [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
     
     - `DOCSTRING`, if specified, will be the stub's docstring. If not
       specified, a generic docstring that says what system it autoloads
@@ -135,18 +140,22 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **DEFVAR/AUTOLOAD** *VAR &KEY (INITIAL-VALUE NIL) DOCSTRING*
+- [macro] **DEFVAR/AUTOLOAD** *VAR &KEY (INIT NIL) DOCSTRING*
 
-    Like [`DEFVAR`][7334], but mark `VAR` as `VARIABLE-AUTOLOAD-P`. Unlike `DEFVAR`,
-    this also allows for specifying a `DOCSTRING` even if `INITIAL-VALUE` is
-    not provided.
+    Define `VAR` with [`DEFVAR`][7334] and mark it as `VARIABLE-AUTOLOAD-P`.
+    
+    - Depending on whether `INIT` is specified, `(DEFVAR <VAR>
+      <init>)` or `(DEFVAR <VAR>)` is executed.
+    
+    - If `DOCSTRING` is non-`NIL`, then the [`DOCUMENTATION`][c5ae] of `VAR` as a
+      `VARIABLE` is set to it.
     
     Note that on accessing `VAR`, nothing is autoloaded. `DEFVAR/AUTOLOAD`
     is solely to allow [`DEFVAR/AUTOLOADED`][453a] to perform some checking.
 
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **DEFVAR/AUTOLOADED** *VAR &OPTIONAL (VAL NIL) DOCSTRING*
+- [macro] **DEFVAR/AUTOLOADED** *VAR &OPTIONAL (VAL NIL) DOC*
 
     Like [`DEFVAR`][7334], but works with the global binding on Lisps that
     support it (currently Allegro, CCL, ECL, SBCL). This is to
@@ -164,6 +173,19 @@ for the latest version.
     ```
     
     `DEFVAR/AUTOLOADED` warns if `VAR` has never been `VARIABLE-AUTOLOAD-P`.
+
+<a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
+
+### 2.3 Package
+
+<a id="x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
+
+- [macro] **DEFPACKAGE/AUTOLOADED** *NAME &REST OPTIONS*
+
+    Like [`DEFPACKAGE`][9b43], but additive. Instead of replacing the package
+    definition or signaling errors on redefinition, it expands into
+    individual package-altering operations such as [`SHADOW`][d0c4], [`USE-PACKAGE`][2264]
+    and [`EXPORT`][0c4f]. This allows the package state to be built incrementally.
 
 <a id="x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29"></a>
 
@@ -253,10 +275,15 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3AAUTOLOADS-20FUNCTION-29"></a>
 
-- [function] **AUTOLOADS** *SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) EXPORT-FROM*
+- [function] **AUTOLOADS** *SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T)*
 
     Return a list of forms that set up autoloading for definitions such
     as [`DEFUN/AUTOLOADED`][3b15] in [autoloaded direct dependencies][8429] of `SYSTEM`.
+    
+    Note that this is an expensive operation, as it reloads the direct
+    dependencies one by one with `ASDF:LOAD-SYSTEM` `:FORCE` and records the
+    association with the system and the autoloaded definitions such as
+    `DEFUN/AUTOLOADED`.
     
     - For function definitions such as `DEFUN/AUTOLOADED`, an
       [`AUTOLOAD`][7da0] form is emitted.
@@ -269,40 +296,35 @@ for the latest version.
     - For [`DEFVAR/AUTOLOADED`][453a], a [`DEFVAR/AUTOLOAD`][dfc4] is emitted.
     
     If the initial value form in `DEFVAR/AUTOLOADED` is detected as a
-       simple constant form, then it is passed as `:INITIAL-VALUE` to
+       simple constant form, then it is passed as `INIT` to
        `DEFVAR/AUTOLOAD`. Simple constant forms are strings, numbers,
        characters, keywords, constants in the CL package, and [`QUOTE`][f5d0]d
        nested lists containing any of the previous or any symbol from
        the CL.
     
-    - If `PROCESS-DOCSTRING`s, then the docstrings extracted from
+    - For [`DEFPACKAGE/AUTOLOADED`][990a], individual package-altering operations
+      are emitted.
+    
+        As in the expansion of `DEFPACKAGE/AUTOLOADED` itself, these
+        operations are additive. To handle circular dependencies, first
+        all autoloaded packages are created, then their state is
+        reconstructed in phases following [`DEFPACKAGE`][9b43].
+    
+    - If `PROCESS-DOCSTRING`, then the docstrings extracted from
       `DEFUN/AUTOLOADED` or `DEFVAR/AUTOLOADED` will be associated with the
       definition.
     
-    - `EXPORT-FROM` is a package designator or a list thereof. If a `NAME`
-      is involved in e.g. a `DEFUN/AUTOLOADED` or `DEFVAR/AUTOLOADED`, then
-      an [`EXPORT`][0c4f] form is added to the autoload forms for each package in
-      `EXPORT-FROM` from which `NAME` is exported. For [`SETF`][a138] names, the
-      [`SECOND`][771a] element is exported. `EXPORT-FROM` is not needed in the usual
-      case of a static [`DEFPACKAGE`][9b43], but is a convenient way to foreshadow
-      the exports dynamically performed by an autoloaded system.
-    
-    Note that if a function is not defined by `DEFUN/AUTOLOADED` or its
+    Note that if a function is not defined with `DEFUN/AUTOLOADED` or its
     kin in [Basics][fa90], then `AUTOLOADS` will not detect it. For such
-    functions, [`AUTOLOAD`][7da0]s must be written manually using the
-    MANUALP argument.
-    
-    Also note that this is an expensive operation, as it reloads the direct
-    dependencies one by one with `ASDF:LOAD-SYSTEM` `:FORCE` and records the
-    association with the system and the autoloaded definitions such as
-    `DEFUN/AUTOLOADED`.
+    functions, [`AUTOLOAD`][7da0]s must be written manually. Similar
+    considerations apply to variables and packages.
 
 <a id="x-28AUTOLOAD-3AWRITE-AUTOLOADS-20FUNCTION-29"></a>
 
-- [function] **WRITE-AUTOLOADS** *FORMS STREAM &KEY PACKAGE*
+- [function] **WRITE-AUTOLOADS** *FORMS STREAM*
 
     Write the autoload `FORMS` to `STREAM` that can be [`LOAD`][b5ec]ed. When
-    `PACKAGE`, emit an [`IN-PACKAGE`][125e] form with its name, and print the forms
+    [`PACKAGE`][1d5a], emit an [`IN-PACKAGE`][125e] form with its name, and print the forms
     with [`*PACKAGE*`][5ed1] bound to it.
 
 <a id="x-28AUTOLOAD-3ARECORD-SYSTEM-AUTOLOADS-20FUNCTION-29"></a>
@@ -313,11 +335,10 @@ for the latest version.
     [`:RECORD-AUTOLOADS`][f945], which may be a
     [pathname designator][3914] or a list of the form
     
-        (pathname &key (process-arglist t) (process-docstring t)
-                       package export-from)
+        (pathname &key (process-arglist t) (process-docstring t))
     
-    See [`AUTOLOADS`][7da0] and [`WRITE-AUTOLOADS`][3140] for the description
-    of these arguments. `PATHNAME`([`0`][0317] [`1`][6671]) is relative to
+    See [`AUTOLOADS`][1e20] and [`WRITE-AUTOLOADS`][3140] for the description of
+    these arguments. `PATHNAME`([`0`][0317] [`1`][6671]) is relative to
     `ASDF:SYSTEM-SOURCE-DIRECTORY` of `SYSTEM` and is [`OPEN`][6547]ed with `:IF-EXISTS`
     `:SUPERSEDE`.
 
@@ -342,7 +363,9 @@ for the latest version.
   [0c5c]: #x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29 "ASDF Integration"
   [119e]: http://www.lispworks.com/documentation/HyperSpec/Body/t_fn.htm "FUNCTION (MGL-PAX:CLHS CLASS)"
   [125e]: http://www.lispworks.com/documentation/HyperSpec/Body/m_in_pkg.htm "IN-PACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
+  [1d5a]: http://www.lispworks.com/documentation/HyperSpec/Body/t_pkg.htm "PACKAGE (MGL-PAX:CLHS CLASS)"
   [1e20]: #x-28AUTOLOAD-3AAUTOLOADS-20FUNCTION-29 "AUTOLOAD:AUTOLOADS FUNCTION"
+  [2264]: http://www.lispworks.com/documentation/HyperSpec/Body/f_use_pk.htm "USE-PACKAGE (MGL-PAX:CLHS FUNCTION)"
   [24b9]: #x-28AUTOLOAD-3ADEFINE-AUTOLOADED-FUNCTION-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFINE-AUTOLOADED-FUNCTION MGL-PAX:MACRO"
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [3140]: #x-28AUTOLOAD-3AWRITE-AUTOLOADS-20FUNCTION-29 "AUTOLOAD:WRITE-AUTOLOADS FUNCTION"
@@ -357,22 +380,25 @@ for the latest version.
   [57ad]: #x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29 "AUTOLOAD:FUNCTION-AUTOLOAD-P FUNCTION"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
   [5ed1]: http://www.lispworks.com/documentation/HyperSpec/Body/v_pkg.htm "*PACKAGE* (MGL-PAX:CLHS VARIABLE)"
+  [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Package"
   [6547]: http://www.lispworks.com/documentation/HyperSpec/Body/f_open.htm "OPEN (MGL-PAX:CLHS FUNCTION)"
   [6671]: http://www.lispworks.com/documentation/HyperSpec/Body/f_pn.htm "PATHNAME (MGL-PAX:CLHS FUNCTION)"
   [6caf]: #x-28AUTOLOAD-3A-40AUTOLOAD-MANUAL-20MGL-PAX-3ASECTION-29 "Autoload Manual"
   [7334]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpar.htm "DEFVAR (MGL-PAX:CLHS MGL-PAX:MACRO)"
-  [771a]: http://www.lispworks.com/documentation/HyperSpec/Body/f_firstc.htm "SECOND (MGL-PAX:CLHS FUNCTION)"
   [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
   [81f7]: http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm "FUNCTION (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [8429]: #x-28AUTOLOAD-3ASYSTEM-AUTOLOADED-SYSTEMS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTOLOADED-SYSTEMS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [8b6e]: #x-28AUTOLOAD-3ADEFGENERIC-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFGENERIC/AUTOLOADED MGL-PAX:MACRO"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
+  [990a]: #x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFPACKAGE/AUTOLOADED MGL-PAX:MACRO"
   [9b43]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpkg.htm "DEFPACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [a138]: http://www.lispworks.com/documentation/HyperSpec/Body/m_setf_.htm "SETF (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
+  [c5ae]: http://www.lispworks.com/documentation/HyperSpec/Body/f_docume.htm "DOCUMENTATION (MGL-PAX:CLHS GENERIC-FUNCTION)"
   [c7f7]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defgen.htm "DEFGENERIC (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
+  [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
   [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"
   [dceb]: #x-28AUTOLOAD-3ARECORD-SYSTEM-AUTOLOADS-20FUNCTION-29 "AUTOLOAD:RECORD-SYSTEM-AUTOLOADS FUNCTION"

@@ -15,7 +15,8 @@
 
 (pax:defsection @basics (:title "Basics" :export nil)
   (@functions pax:section)
-  (@variables pax:section))
+  (@variables pax:section)
+  (@packages pax:section))
 
 (pax:defsection @functions (:title "Functions" :export nil)
   (autoload pax:macro)
@@ -27,6 +28,9 @@
 (pax:defsection @variables (:title "Variables" :export nil)
   (defvar/autoload pax:macro)
   (defvar/autoloaded pax:macro))
+
+(pax:defsection @packages (:title "Package" :export nil)
+  (defpackage/autoloaded pax:macro))
 
 (pax:defsection @asdf-integration (:title "ASDF Integration" :export nil)
   (autoload-system class)

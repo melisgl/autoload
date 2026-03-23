@@ -1,12 +1,5 @@
 (in-package :autoload)
 
-(defun external-symbol-p (symbol &optional (package (symbol-package symbol)))
-  (and package
-       (multiple-value-bind (symbol* status)
-           (find-symbol (symbol-name symbol) package)
-         (and (eq status :external)
-              (eq symbol symbol*)))))
-
 ;;; KLUDGE: Hide any enclosing ASDF session. This allows a nested
 ;;; ASDF:OPERATE with :FORCE T operate to execute.
 (defmacro without-asdf-session (&body body)
