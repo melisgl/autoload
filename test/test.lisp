@@ -4,43 +4,50 @@
   `(unwind-protect
         (progn
           (load (asdf:system-relative-pathname
-                 "autoload-test" "test/data/%autoload-test.system"))
+                 "autoload-test" "test/simple-test/%simple-test.system"))
+          (load (asdf:system-relative-pathname
+                 "autoload-test" "test/package-test/%package-test.system"))
           ,@body)
-     (ignore-errors (delete-package :%autoload-test))
-     (asdf:clear-system "%autoload-test")
-     (asdf:clear-system "%autoload-test/full")))
+     (ignore-errors (uiop:delete-package* :%simple-test))
+     (ignore-errors (uiop:delete-package* :%package-test))
+     (ignore-errors (uiop:delete-package* :%aaa))
+     (ignore-errors (uiop:delete-package* :%3rd-party))
+     (asdf:clear-system "%simple-test")
+     (asdf:clear-system "%simple-test/full")
+     (asdf:clear-system "%package-test")
+     (asdf:clear-system "%package-test/full")))
 
 (define-symbol-macro foo
-    (read-from-string "%autoload-test::foo"))
+    (read-from-string "%simple-test::foo"))
 
 (define-symbol-macro *var/no-value*
-    (read-from-string "%autoload-test::*var/no-value*"))
+    (read-from-string "%simple-test::*var/no-value*"))
 
 (define-symbol-macro *var/simple-value*
-    (read-from-string "%autoload-test::*var/simple-value*"))
+    (read-from-string "%simple-test::*var/simple-value*"))
 
 (define-symbol-macro *var/complex-value*
-    (read-from-string "%autoload-test::*var/complex-value*"))
+    (read-from-string "%simple-test::*var/complex-value*"))
 
-(deftest test-lifecycle ()
+(deftest test-simple ()
   (autoload::without-asdf-session
-    (let ((data-dir (asdf:system-relative-pathname
-                     "autoload-test" "test/data/")))
-      (flet ((data-file (file)
-               (merge-pathnames file data-dir)))
+    (let ((dir (asdf:system-relative-pathname
+                "autoload-test" "test/simple-test/")))
+      (flet ((test-file (file)
+               (merge-pathnames file dir)))
         (with-test-systems
-          (uiop:delete-file-if-exists (data-file "autoloads.lisp"))
+          (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
           ;; This tests AUTOLOAD::*SUPPRESS-HAS-NOT-BEEN-DECLARED-WARNINGS*.
           (signals-not (warning)
-            (record-system-autoloads "%autoload-test"))
+            (record-system-autoloads "%simple-test"))
           (let ((*package* (find-package :autoload-test)))
             (is (equal (uiop:read-file-forms
-                        (data-file "autoloads.lisp"))
+                        (test-file "autoloads.lisp"))
                        (uiop:read-file-forms
-                        (data-file "expected-autoloads.lisp"))))))
+                        (test-file "expected-autoloads.lisp"))))))
         (with-test-systems
-          (asdf:load-system "%autoload-test" :force t)
-          (is (not (asdf:component-loaded-p "%autoload-test/full")))
+          (asdf:load-system "%simple-test" :force t)
+          (is (not (asdf:component-loaded-p "%simple-test/full")))
           ;; FOO
           (is (function-autoload-p foo))
           (is (equal (documentation foo 'function) "foo docstring"))
@@ -60,10 +67,35 @@
           (is (variable-autoload-p *var/complex-value*))
           (is (not (boundp *var/complex-value*)))
           (is (null (documentation *var/complex-value* 'variable))))))))
+
+(deftest test-package ()
+  (autoload::without-asdf-session
+    (let ((dir (asdf:system-relative-pathname "autoload-test"
+                                              "test/package-test/")))
+      (flet ((test-file (file)
+               (merge-pathnames file dir)))
+        (with-test-systems
+          (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
+          (signals-not (warning)
+            (record-system-autoloads "%package-test"))
+          (let ((*package* (find-package :autoload-test)))
+            (is (equal (uiop:read-file-forms
+                        (test-file "autoloads.lisp"))
+                       (uiop:read-file-forms
+                        (test-file "expected-autoloads.lisp")))))
+          (asdf:load-system "%package-test" :force t))
+        (with-test-systems
+          (asdf:load-system "%package-test" :force t)
+          (is (null (find-package :%3rd-party)))
+          (is (match-values (uiop:find-symbol* '#:plain-import-target
+                                               :%package-test)
+                (eq (symbol-package *) (find-package :%package-test))
+                (eq * :external))))))))
 
 
 (deftest test-all ()
-  (test-lifecycle))
+  (test-simple)
+  (test-package))
 
 (defun test (&key (debug nil) (print 'leaf) (describe *describe*))
   (with-compilation-unit (:override t)

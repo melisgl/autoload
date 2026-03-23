@@ -1,4 +1,4 @@
-(cl:in-package :%autoload-test)
+(cl:in-package :%simple-test)
 
 (defun/autoloaded foo (x)
   "foo docstring"
@@ -12,3 +12,8 @@
                    "*var/simple-value* docstring")
 
 (defvar/autoloaded *var/complex-value* (1+ 2))
+
+(defpackage :%3rd-party)
+
+(defun/autoloaded foo-with-unreadable-arglist (&optional (x '%3rd-party::z))
+  x)
