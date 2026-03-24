@@ -41,6 +41,10 @@ for the latest version.
 
 ## Basics
 
+- [condition] AUTOLOAD-WARNING SIMPLE-WARNING
+
+    FIXME
+
 ### Functions
 
 - [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL) (EXPLICITP T)
@@ -57,7 +61,7 @@ for the latest version.
     - ARGLIST will be installed as the stub's arglist if specified and
       it's supported on the platform (currently only SBCL). If ARGLIST
       is a string, then the effective value of ARGLIST is then read from
-      it. If the read fails, an AUTOLOAD-STYLE-WARNING is signalled and
+      it. If the read fails, an AUTOLOAD-WARNING is signalled and
       processing continues as if ARGLIST had not been provided.
 
         Arglists are for interactive purposes only. For example, they
@@ -78,12 +82,12 @@ for the latest version.
 
     - It is an error if NAME is not redefined at all.
 
-    - It is a warning if NAME is redefined with another
+    - It is an AUTOLOAD-WARNING if NAME is redefined with another
       AUTOLOAD.
 
-    - It is a warning if the promise of EXPLICITP is broken, as it
-      indicates confusion whether Generating Autoloads should be done
-      automatically or not.
+    - It is an AUTOLOAD-WARNING if the promise of EXPLICITP is broken,
+      as it indicates confusion whether Generating Autoloads should be
+      done automatically or not.
 
     Also, see SYSTEM-AUTOLOADED-SYSTEMS for further consistency
     checking.

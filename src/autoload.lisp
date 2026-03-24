@@ -54,7 +54,7 @@
   - ARGLIST will be installed as the stub's arglist if specified and
     it's supported on the platform (currently only SBCL). If ARGLIST
     is a string, then the effective value of ARGLIST is then read from
-    it. If the read fails, an AUTOLOAD-STYLE-WARNING is signalled and
+    it. If the read fails, an AUTOLOAD-WARNING is signalled and
     processing continues as if ARGLIST had not been provided.
 
       Arglists are for interactive purposes only. For example, they
@@ -75,12 +75,12 @@
 
   - It is an error if NAME is not redefined at all.
 
-  - It is a warning if NAME is redefined with another
+  - It is an AUTOLOAD-WARNING if NAME is redefined with another
     [AUTOLOAD][pax:macro].
 
-  - It is a warning if the promise of EXPLICITP is broken, as it
-    indicates confusion whether @GENERATING-AUTOLOADS should be done
-    automatically or not.
+  - It is an AUTOLOAD-WARNING if the promise of EXPLICITP is broken,
+    as it indicates confusion whether @GENERATING-AUTOLOADS should be
+    done automatically or not.
 
   Also, see SYSTEM-AUTOLOADED-SYSTEMS for further consistency
   checking."
@@ -138,19 +138,19 @@
                       (let ((*package* (find-package :cl)))
                         (read-from-string string))))
     (cond (error
-           (signal-autoload-style-warning
+           (signal-autoload-warning
             "~@<~S ~S ~S could not be read: ~_~A~:@>"
             definer definer-arg string error)
            (values nil nil))
           (t
            (values sexp t)))))
 
-(define-condition autoload-style-warning (style-warning simple-warning)
+(define-condition autoload-warning (simple-warning)
   ()
   (:documentation "FIXME"))
 
-(defun signal-autoload-style-warning (format-control &rest format-args)
-  (warn 'autoload-style-warning :format-control format-control
+(defun signal-autoload-warning (format-control &rest format-args)
+  (warn 'autoload-warning :format-control format-control
         :format-arguments format-args))
 
 ;;; Even though ASDF:SYSTEM names rarely contain special Markdown
@@ -181,13 +181,13 @@
            by the ~S ASDF:SYSTEM.~:@>"
            name asdf-system-name))
   (cond ((function-autoload-p name)
-         (signal-autoload-style-warning
+         (signal-autoload-warning
           "~@<Autoloaded function ~S was redefined ~
           with ~S in the ~S ASDF:SYSTEM.~:@>"
           name 'autoload asdf-system-name))
         ((functionp (state name :function))
          (when explicitp
-           (signal-autoload-style-warning
+           (signal-autoload-warning
             "~@<Autoloaded function ~S was redefined ~
             in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
             name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
@@ -195,7 +195,7 @@
         (t
          (assert (eq (state name :function) :resolved))
          (unless explicitp
-           (signal-autoload-style-warning
+           (signal-autoload-warning
             "~@<Autoloaded function ~S was declared with ~S ~S but was ~
             redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S or ~S.~:@>"
             name :explicitp nil asdf-system-name 'defun/autoloaded
@@ -237,7 +237,7 @@
 (defun before-autoloaded-function-definition (name)
   (unless (state name :function)
     (unless *suppress-has-not-been-declared-warnings*
-      (signal-autoload-style-warning
+      (signal-autoload-warning
        "~@<Defining ~S as an autoloaded function, ~
        but it has not been declared with ~S.~:@>"
        name 'autoload)))
@@ -310,7 +310,7 @@
 (defun before-autoloaded-variable-definition (name)
   (unless (state name :variable)
     (unless *suppress-has-not-been-declared-warnings*
-      (signal-autoload-style-warning
+      (signal-autoload-warning
        "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
        name 'defvar/autoloaded 'defvar/autoload))))
 
@@ -715,7 +715,7 @@
           (system-autoloaded-systems
             (system-autoloaded-systems *autoload-system*)))
       (unless (find asdf-system-name system-autoloaded-systems :test #'equal)
-        (signal-autoload-style-warning
+        (signal-autoload-warning
          "~@<~S, the system to be autoloaded for function ~S, is ~
          not among ~S, the ~S of ~S.~:@>"
          asdf-system-name name system-autoloaded-systems
