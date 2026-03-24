@@ -275,7 +275,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3AAUTOLOADS-20FUNCTION-29"></a>
 
-- [function] **AUTOLOADS** *SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T)*
+- [function] **AUTOLOADS** *SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES*
 
     Return a list of forms that set up autoloading for definitions such
     as [`DEFUN/AUTOLOADED`][3b15] in [autoloaded direct dependencies][8429] of `SYSTEM`.
@@ -302,13 +302,13 @@ for the latest version.
        nested lists containing any of the previous or any symbol from
        the CL.
     
-    - For [`DEFPACKAGE/AUTOLOADED`][990a], individual package-altering operations
-      are emitted.
+    - For [`DEFPACKAGE/AUTOLOADED`][990a] and the provided `PACKAGES`, individual
+      package-altering operations are emitted.
     
         As in the expansion of `DEFPACKAGE/AUTOLOADED` itself, these
         operations are additive. To handle circular dependencies, first
-        all autoloaded packages are created, then their state is
-        reconstructed in phases following [`DEFPACKAGE`][9b43].
+        all packages are created, then their state is reconstructed in
+        phases following [`DEFPACKAGE`][9b43].
     
     - If `PROCESS-DOCSTRING`, then the docstrings extracted from
       `DEFUN/AUTOLOADED` or `DEFVAR/AUTOLOADED` will be associated with the
@@ -335,7 +335,7 @@ for the latest version.
     [`:RECORD-AUTOLOADS`][f945], which may be a
     [pathname designator][3914] or a list of the form
     
-        (pathname &key (process-arglist t) (process-docstring t))
+        (pathname &key (process-arglist t) (process-docstring t) packages)
     
     See [`AUTOLOADS`][1e20] and [`WRITE-AUTOLOADS`][3140] for the description of
     these arguments. `PATHNAME`([`0`][0317] [`1`][6671]) is relative to

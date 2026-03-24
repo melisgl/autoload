@@ -2,6 +2,7 @@
   (:use #:common-lisp)
   (:export
    ;; Basics
+   #:autoload-style-warning
    ;;; Functions
    #:autoload #:function-autoload-p
    #:defun/autoloaded #:defgeneric/autoloaded #:define-autoloaded-function

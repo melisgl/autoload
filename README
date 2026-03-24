@@ -222,7 +222,7 @@ for the latest version.
 
 ### Generating Autoloads
 
-- [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T)
+- [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
 
     Return a list of forms that set up autoloading for definitions such
     as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM.
@@ -249,13 +249,13 @@ for the latest version.
        nested lists containing any of the previous or any symbol from
        the CL.
 
-    - For DEFPACKAGE/AUTOLOADED, individual package-altering operations
-      are emitted.
+    - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
+      package-altering operations are emitted.
 
         As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
         operations are additive. To handle circular dependencies, first
-        all autoloaded packages are created, then their state is
-        reconstructed in phases following DEFPACKAGE.
+        all packages are created, then their state is reconstructed in
+        phases following DEFPACKAGE.
 
     - If PROCESS-DOCSTRING, then the docstrings extracted from
       DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
@@ -278,7 +278,7 @@ for the latest version.
     :RECORD-AUTOLOADS, which may be a
     pathname designator or a list of the form
 
-        (pathname &key (process-arglist t) (process-docstring t))
+        (pathname &key (process-arglist t) (process-docstring t) packages)
 
     See AUTOLOADS and WRITE-AUTOLOADS for the description of
     these arguments. PATHNAME is relative to

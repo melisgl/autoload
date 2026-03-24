@@ -20,4 +20,4 @@
 
 (autoload:autoload %simple-test::foo-with-unreadable-arglist
                    "%simple-test/full" :arglist
-                   "(&optional (%simple-test::x (quote %3rd-party::z)))")
+                   "(&optional (%simple-test::x '%3rd-party::z))")

@@ -1,7 +1,8 @@
 ;;; Imagine that this is defined in a dependency of
 ;;; %package-test/full.
-(cl:defpackage :%3rd-party
-  (:export #:missing #:shadow-target #:plain-import-target))
+(mgl-pax:define-package :%3rd-party
+    (:export #:missing #:shadow-target #:plain-import-target)
+  (:use :cl))
 
 (autoload:defpackage/autoloaded :%package-test
   (:nicknames :%ptest :%ptest-alt)

@@ -134,11 +134,13 @@
 (defun read-from-string-or-warn (string definer definer-arg)
   (check-type string string)
   (multiple-value-bind (sexp error)
-      (ignore-errors (values (read-from-string string)))
+      (ignore-errors (values
+                      (let ((*package* (find-package :cl)))
+                        (read-from-string string))))
     (cond (error
-           (warn 'autoload-style-warning
-                 :format-control "~@<~S ~S ~S could not be read: ~_~A~:@>"
-                 :format-arguments (list definer definer-arg string error))
+           (signal-autoload-style-warning
+            "~@<~S ~S ~S could not be read: ~_~A~:@>"
+            definer definer-arg string error)
            (values nil nil))
           (t
            (values sexp t)))))
@@ -146,6 +148,10 @@
 (define-condition autoload-style-warning (style-warning simple-warning)
   ()
   (:documentation "FIXME"))
+
+(defun signal-autoload-style-warning (format-control &rest format-args)
+  (warn 'autoload-style-warning :format-control format-control
+        :format-arguments format-args))
 
 ;;; Even though ASDF:SYSTEM names rarely contain special Markdown
 ;;; characters, play nice with PAX and escape the names if
@@ -175,24 +181,25 @@
            by the ~S ASDF:SYSTEM.~:@>"
            name asdf-system-name))
   (cond ((function-autoload-p name)
-         ;; FIXME: Use AUTOLOAD-STYLE-WARNING?
-         (warn "~@<Autoloaded function ~S was redefined with ~S ~
-               in the ~S ASDF:SYSTEM.~:@>"
-               name 'autoload asdf-system-name))
+         (signal-autoload-style-warning
+          "~@<Autoloaded function ~S was redefined ~
+          with ~S in the ~S ASDF:SYSTEM.~:@>"
+          name 'autoload asdf-system-name))
         ((functionp (state name :function))
          (when explicitp
-           (warn "~@<Autoloaded function ~S was redefined ~
-                 in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
-                 name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
-                 'define-autoloaded-function)))
+           (signal-autoload-style-warning
+            "~@<Autoloaded function ~S was redefined ~
+            in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
+            name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
+            'define-autoloaded-function)))
         (t
          (assert (eq (state name :function) :resolved))
          (unless explicitp
-           (warn "~@<Autoloaded function ~S was declared with ~S ~S but was ~
-                 redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S ~
-                 or ~S.~:@>"
-                 name :explicitp nil asdf-system-name 'defun/autoloaded
-                 'defgeneric/autoloaded 'define-autoloaded-function)))))
+           (signal-autoload-style-warning
+            "~@<Autoloaded function ~S was declared with ~S ~S but was ~
+            redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S or ~S.~:@>"
+            name :explicitp nil asdf-system-name 'defun/autoloaded
+            'defgeneric/autoloaded 'define-autoloaded-function)))))
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function
@@ -230,8 +237,10 @@
 (defun before-autoloaded-function-definition (name)
   (unless (state name :function)
     (unless *suppress-has-not-been-declared-warnings*
-      (warn "~@<Defining ~S as an autoloaded function, ~
-            but it has not been declared with ~S.~:@>" name 'autoload)))
+      (signal-autoload-style-warning
+       "~@<Defining ~S as an autoloaded function, ~
+       but it has not been declared with ~S.~:@>"
+       name 'autoload)))
   ;; We don't want to FMAKUNBOUND a generic function and lose its
   ;; methods.
   (when (function-autoload-p name)
@@ -301,8 +310,9 @@
 (defun before-autoloaded-variable-definition (name)
   (unless (state name :variable)
     (unless *suppress-has-not-been-declared-warnings*
-      (warn "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
-            name 'defvar/autoloaded 'defvar/autoload))))
+      (signal-autoload-style-warning
+       "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
+       name 'defvar/autoloaded 'defvar/autoload))))
 
 (defun after-autoloaded-variable-definition (name val valp doc)
   (when valp
@@ -384,7 +394,9 @@
 
 (defun generate-package-autoloads (package-designators
                                    &key (process-docstring t))
-  (let ((packages (mapcar #'find-package-or-error package-designators))
+  (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
+                                                   package-designators))
+                        #'string< :key #'package-name))
         ;; MAKE-PACKAGE forms for all packages. We execute these
         ;; first, in case their :USEs are circular. The phases follow
         ;; the order specified in [DEFPACKAGE][pax:clhs].
@@ -434,12 +446,16 @@
         (flet ((-> (name)
                  (canonical-name name))
                (->s (names)
-                 (mapcar #'canonical-name names))
+                 (sort (mapcar #'canonical-name names) #'string<))
                (->s* (package-and-name-list)
-                 (mapcar (lambda (package-and-name)
-                           (cons (canonical-name (car package-and-name))
-                                 (canonical-name (cdr package-and-name))))
-                         package-and-name-list)))
+                 (sort (mapcar (lambda (package-and-name)
+                                 (cons (canonical-name (car package-and-name))
+                                       (canonical-name (cdr package-and-name))))
+                               package-and-name-list)
+                       (lambda (cons1 cons2)
+                         (or (string< (car cons1) (car cons2))
+                             (and (string= (car cons1) (car cons2))
+                                  (string< (cdr cons1) (cdr cons2))))))))
           (push `(ensure-package-names ,(-> pkg-name)
                                        ,(maybe-quote (->s nicknames)))
                 phase-1-create)
@@ -528,7 +544,7 @@
         (native-nicks (mapcar #'native-name nicknames)))
     (if (find-package native)
         (rename-package native native native-nicks)
-        (make-package native :nicknames native-nicks))))
+        (make-package native :nicknames native-nicks :use ()))))
 
 (defun shadow* (names package)
   (shadow (mapcar #'native-name names) (native-name package)))
@@ -699,11 +715,12 @@
           (system-autoloaded-systems
             (system-autoloaded-systems *autoload-system*)))
       (unless (find asdf-system-name system-autoloaded-systems :test #'equal)
-        (warn "~@<~S, the system to be autoloaded for function ~S, is ~
-              not among ~S, the ~S of ~S.~:@>"
-              asdf-system-name name system-autoloaded-systems
-              'system-autoloaded-systems
-              (asdf:component-name *autoload-system*))))))
+        (signal-autoload-style-warning
+         "~@<~S, the system to be autoloaded for function ~S, is ~
+         not among ~S, the ~S of ~S.~:@>"
+         asdf-system-name name system-autoloaded-systems
+         'system-autoloaded-systems
+         (asdf:component-name *autoload-system*))))))
 
 
 ;;;; @GENERATING-AUTOLOADS
@@ -721,7 +738,8 @@
     (pushnew (cons (asdf:component-name *autoload-system*) info)
              *recorded-autoload-infos* :test #'equal)))
 
-(defun autoloads (system &key (process-arglist t) (process-docstring t))
+(defun autoloads (system &key (process-arglist t) (process-docstring t)
+                  packages)
   "Return a list of forms that set up autoloading for definitions such
   as DEFUN/AUTOLOADED in [autoloaded direct dependencies][
   SYSTEM-AUTOLOADED-SYSTEMS] of SYSTEM.
@@ -748,13 +766,13 @@
      nested lists containing any of the previous or any symbol from
      the [CL][package].
 
-  - For DEFPACKAGE/AUTOLOADED, individual package-altering operations
-    are emitted.
+  - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
+    package-altering operations are emitted.
 
       As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
       operations are additive. To handle circular dependencies, first
-      all autoloaded packages are created, then their state is
-      reconstructed in phases following [DEFPACKAGE][pax:clhs].
+      all packages are created, then their state is reconstructed in
+      phases following [DEFPACKAGE][pax:clhs].
 
   - If PROCESS-DOCSTRING, then the docstrings extracted from
     DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
@@ -772,7 +790,8 @@
                                 :test-not #'eq :key #'second))
          (other-infos (remove 'defpackage/autoloaded infos
                               :test #'eq :key #'second)))
-    (append (generate-package-autoloads (mapcar #'third package-infos)
+    (append (generate-package-autoloads (union (mapcar #'third package-infos)
+                                               (uiop:ensure-list packages))
                                         :process-docstring process-docstring)
             (mapcan (lambda (info)
                       (info-to-autoload-forms info process-arglist
@@ -783,11 +802,11 @@
   "Write the autoload FORMS to STREAM that can be LOADed. When
   PACKAGE, emit an IN-PACKAGE form with its name, and print the forms
   with *PACKAGE* bound to it."
-  (let ((*package* (find-package :cl))
-        (*print-pretty* t)
-        (*print-case* :downcase))
-    (format stream "~S~%~%" `(in-package :cl))
-    (format stream "~{~S~%~^~%~}" forms)))
+  (uiop:with-safe-io-syntax (:package :cl)
+    (let ((*print-pretty* t)
+          (*print-case* :downcase))
+      (format stream "~S~%~%" `(in-package :cl))
+      (format stream "~{~S~%~^~%~}" forms))))
 
 (defun read-autoloads-file (pathname)
   (uiop:with-safe-io-syntax ()
@@ -830,14 +849,21 @@
                            `(:docstring ,docstring)))))))))))
 
 (defun prin1-to-string* (object)
+  ;; We need to print the same string on all Lisp implementations.
+  ;; *PRINT-PRETTY* NIL would be the easy way, but CLISP still prints
+  ;; (QUOTE X) as 'X.
   (uiop:with-safe-io-syntax (:package :cl)
-    (let ((*print-case* :downcase))
+    (let ((*print-pretty* t)
+          (*print-right-margin* most-positive-fixnum)
+          (*print-miser-width* nil)
+          (*print-case* :downcase))
       (prin1-to-string object))))
 
 (defun record-autoloads (system output &key (process-arglist t)
-                         (process-docstring t))
+                         (process-docstring t) packages)
   (write-autoloads (autoloads system :process-arglist process-arglist
-                              :process-docstring process-docstring)
+                              :process-docstring process-docstring
+                              :packages packages)
                    output))
 
 (defun record-system-autoloads (system)
@@ -845,7 +871,7 @@
   [:RECORD-AUTOLOADS][ SYSTEM-RECORD-AUTOLOADS], which may be a
   [pathname designator][pax:clhs] or a list of the form
 
-      (pathname &key (process-arglist t) (process-docstring t))
+      (pathname &key (process-arglist t) (process-docstring t) packages)
 
   See [AUTOLOADS][function] and WRITE-AUTOLOADS for the description of
   these arguments. PATHNAME is relative to
@@ -854,7 +880,8 @@
   (let ((system (asdf:find-system system)))
     (check-type system autoload-system)
     (multiple-value-bind (pathname args) (system-record-autoloads* system)
-      (let ((pathname (asdf:system-relative-pathname system pathname)))
+      (let ((pathname (asdf:system-relative-pathname system pathname))
+            #+clisp (custom:*reopen-open-file* nil))
         (with-file-superseded (stream pathname)
           (let ((*print-case* :downcase)
                 (*package* (find-package :cl)))
@@ -881,11 +908,12 @@
   (let ((args (uiop:ensure-list (system-record-autoloads system))))
     (handler-case
         (destructuring-bind (pathname &key (process-arglist t)
-                             (process-docstring t))
+                             (process-docstring t) packages)
             args
           (check-type pathname (or string pathname))
           (values pathname `(:process-arglist ,process-arglist
-                             :process-docstring ,process-docstring)))
+                             :process-docstring ,process-docstring
+                             :packages ,packages)))
       ((and error (not type-error)) ()
         (error "~@<~S, the ~S of ~S, is not of the form ~S.~:@>"
                args :record-autoloads (asdf:component-name system)
@@ -906,7 +934,8 @@
     (check-type system autoload-system)
     (when (system-record-autoloads system)
       (multiple-value-bind (pathname args) (system-record-autoloads* system)
-        (destructuring-bind (&key (process-arglist t) (process-docstring t))
+        (destructuring-bind (&key (process-arglist t) (process-docstring t)
+                             packages)
             args
           (flet ((fail (control &rest args)
                    (if errorp
@@ -927,7 +956,8 @@
                                     pathname e)))))
                     (current-forms (autoloads
                                     system :process-arglist process-arglist
-                                    :process-docstring process-docstring)))
+                                    :process-docstring process-docstring
+                                    :packages packages)))
                 (let ((expected '(in-package :cl)))
                   (unless (equal (pop recorded-forms) expected)
                     (fail "the expected ~S form is not found." expected)))
