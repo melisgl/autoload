@@ -38,7 +38,7 @@
         (with-test-systems
           (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
           ;; This tests AUTOLOAD::*SUPPRESS-HAS-NOT-BEEN-DECLARED-WARNINGS*.
-          (signals-not (warning)
+          (signals-not (autoload-style-warning)
             (record-system-autoloads "%simple-test"))
           (let ((*package* (find-package :autoload-test)))
             (is (equal (uiop:read-file-forms
@@ -76,7 +76,7 @@
                (merge-pathnames file dir)))
         (with-test-systems
           (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
-          (signals-not (warning)
+          (signals-not (autoload-style-warning :handler nil)
             (record-system-autoloads "%package-test"))
           (let ((*package* (find-package :autoload-test)))
             (is (equal (uiop:read-file-forms
@@ -85,10 +85,11 @@
                         (test-file "expected-autoloads.lisp")))))
           (asdf:load-system "%package-test" :force t))
         (with-test-systems
-          (asdf:load-system "%package-test" :force t)
+          #-cmucl (asdf:load-system "%package-test" :force t)
+          #+cmucl (load (test-file "autoloads.lisp"))
           (is (null (find-package :%3rd-party)))
           (is (match-values (uiop:find-symbol* '#:plain-import-target
-                                               :%package-test)
+                                               :%package-test nil)
                 (eq (symbol-package *) (find-package :%package-test))
                 (eq * :external))))))))
 
