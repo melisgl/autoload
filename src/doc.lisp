@@ -14,6 +14,7 @@
   ("autoload-doc" asdf:system))
 
 (pax:defsection @basics (:title "Basics" :export nil)
+  (autoload-warning condition)
   (@functions pax:section)
   (@variables pax:section)
   (@packages pax:section))
