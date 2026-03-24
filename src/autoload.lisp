@@ -655,20 +655,20 @@
           'autoload-cl-source-file)))
 
 ;;; ASDF:PERFORM is designed for side effects, and we can't just
-;;; return stuff normally. LIST-AUTOLOADS-OP gathers systems here.
+;;; return stuff normally. LIST-AUTOLOADED-OP gathers systems here.
 (defvar *listed-autoloaded-systems*)
 
-(defclass list-autoloads-op (asdf:sideway-operation)
+(defclass list-autoloaded-op (asdf:sideway-operation)
   ())
 
-(defmethod asdf:operation-done-p ((op list-autoloads-op) (c asdf:component))
+(defmethod asdf:operation-done-p ((op list-autoloaded-op) (c asdf:component))
   nil)
 
-(defmethod asdf:perform ((op list-autoloads-op) (system autoload-system))
+(defmethod asdf:perform ((op list-autoloaded-op) (system autoload-system))
   (dolist (s (system-autoloaded-systems system))
     (pushnew s *listed-autoloaded-systems* :test #'equal)))
 
-(defmethod asdf:perform ((op list-autoloads-op) (system asdf:system))
+(defmethod asdf:perform ((op list-autoloaded-op) (system asdf:system))
   nil)
 
 (defun autoloaded-systems (system &key (follow-autoloaded t) installer)
@@ -694,7 +694,7 @@
           (autoloaded-systems \"my-system\" :installer #'ql:quickload)"
   (let ((*listed-autoloaded-systems* ()))
     (without-asdf-session
-      (asdf:operate 'list-autoloads-op system :force t)
+      (asdf:operate 'list-autoloaded-op system :force t)
       (when follow-autoloaded
         (loop with processed = ()
               for pending = (set-difference *listed-autoloaded-systems*
@@ -705,7 +705,7 @@
                               installer)
                      (funcall installer s))
                    (when (asdf:find-system s nil)
-                     (asdf:operate 'list-autoloads-op s :force t)))
+                     (asdf:operate 'list-autoloaded-op s :force t)))
                  (setq processed (append pending processed)))))
     (reverse *listed-autoloaded-systems*)))
 
