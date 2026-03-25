@@ -200,7 +200,7 @@ for the latest version.
           :defsystem-depends-on ("autoload")
           :class "autoload:autoload-system"
           :autoloaded-systems ("dyndep")
-          :record-autoloads ("autoloads.lisp" :package #:my-pkg)
+          :record-autoloads "autoloads.lisp"
           :components ((:file "package")
                        (:file "autoloads")
                        ...))
@@ -215,6 +215,19 @@ for the latest version.
 
     - (``ASDF:TEST-SYSTEM "my-system") checks that autoload.lisp is up-to-date.
 
+    If the package definitions are also generated with
+    RECORD-SYSTEM-AUTOLOADS (e.g. because there is a
+    DEFPACKAGE/AUTOLOADED in dyndep or :RECORD-AUTOLOADS specifies
+    :PACKAGES), then we can do without the package.lisp file:
+
+        (asdf:defsystem "my-system"
+          :defsystem-depends-on ("autoload")
+          :class "autoload:autoload-system"
+          :autoloaded-systems ("dyndep")
+          :record-autoloads ("autoloads.lisp" :packages #:my-pkg)
+          :components ((:file "autoloads")
+                       ...))
+
 - [reader] SYSTEM-AUTOLOADED-SYSTEMS AUTOLOAD-SYSTEM (:AUTOLOADED-SYSTEMS = NIL)
 
     Return the list of the names of systems declared
@@ -227,6 +240,8 @@ for the latest version.
 
     This specifies where the automatically extracted
     autoload forms shall be written by RECORD-SYSTEM-AUTOLOADS.
+    Conditions signalled while ASDF is compiling or loading the file
+    given have a RECORD-SYSTEM-AUTOLOADS restart.
 
 - [reader] SYSTEM-TEST-AUTOLOADS AUTOLOAD-SYSTEM (:TEST-AUTOLOADS = T)
 
