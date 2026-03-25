@@ -7,3 +7,6 @@
 *.sse2f
 /test/simple-test/autoloads.lisp
 /test/package-test/autoloads.lisp
+/test/test-system/autoloads.lisp
+/test/test-system/manual-autoloads.lisp
+/test/test-system/full.lisp
