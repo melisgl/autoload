@@ -654,19 +654,48 @@
 ;;; loaded
 (defvar *autoload-system* nil)
 
+(defmacro with-autoload-system ((autoload-cl-source-file) &body body)
+  (let ((cl-file (gensym "CL-FILE"))
+        (autoloads-file-p (gensym "AUTOLOADS-FILE-P")))
+    `(let* ((,cl-file ,autoload-cl-source-file)
+            (*autoload-system* (asdf:component-system ,cl-file))
+            (,autoloads-file-p (autoloads-file-p ,cl-file)))
+       (loop
+         (restart-case
+             (return (progn ,@body))
+           (record-system-autoloads ()
+             :test (lambda (condition)
+                     (declare (ignore condition))
+                     ,autoloads-file-p)
+             :report (lambda (stream)
+                       (format stream "Record system autoloads."))
+             (record-system-autoloads *autoload-system*)))))))
+
+(defun autoloads-file-p (autoload-cl-source-file)
+  (declare (type autoload-cl-source-file autoload-cl-source-file))
+  (let* ((f autoload-cl-source-file)
+         (f-file (asdf:component-pathname f))
+         (system (asdf:component-system f))
+         (autoloads-file (ignore-errors (system-record-autoloads* system)))
+         (autoloads-file (when autoloads-file
+                           (asdf:system-relative-pathname system
+                                                          autoloads-file))))
+    (declare (type autoload-system system))
+    (uiop:pathname-equal f-file autoloads-file)))
+
 (defmethod asdf:perform :around ((op asdf:compile-op)
                                  (c autoload-cl-source-file))
-  (let ((*autoload-system* (asdf:component-system c)))
+  (with-autoload-system (c)
     (call-next-method)))
 
 (defmethod asdf:perform :around ((op asdf:load-op)
                                  (c autoload-cl-source-file))
-  (let ((*autoload-system* (asdf:component-system c)))
+  (with-autoload-system (c)
     (call-next-method)))
 
 (defmethod asdf:perform :around ((op asdf:load-source-op)
                                  (c autoload-cl-source-file))
-  (let ((*autoload-system* (asdf:component-system c)))
+  (with-autoload-system (c)
     (call-next-method)))
 
 
@@ -687,7 +716,9 @@
     :initarg :record-autoloads
     :reader system-record-autoloads
     :documentation "This specifies where the automatically extracted
-    autoload forms shall be written by RECORD-SYSTEM-AUTOLOADS.")
+    autoload forms shall be written by RECORD-SYSTEM-AUTOLOADS.
+    Conditions signalled while ASDF is compiling or loading the file
+    given have a RECORD-SYSTEM-AUTOLOADS restart.")
    (test-autoloads
     :initform t
     :initarg :test-autoloads
@@ -706,7 +737,7 @@
     :defsystem-depends-on (\"autoload\")
     :class \"autoload:autoload-system\"
     :autoloaded-systems (\"dyndep\")
-    :record-autoloads (\"autoloads.lisp\" :package #:my-pkg)
+    :record-autoloads \"autoloads.lisp\"
     :components ((:file \"package\")
                  (:file \"autoloads\")
                  ...))
@@ -721,7 +752,23 @@
     `autoloads.lisp`.
 
   - `(`ASDF:TEST-SYSTEM `\"my-system\")` [checks][
-    check-system-autoloads] that `autoload.lisp` is up-to-date."))
+    check-system-autoloads] that `autoload.lisp` is up-to-date.
+
+  If the package definitions are also generated with
+  RECORD-SYSTEM-AUTOLOADS (e.g. because there is a
+  DEFPACKAGE/AUTOLOADED in `dyndep` or :RECORD-AUTOLOADS specifies
+  :PACKAGES), then we can do without the `package.lisp` file:
+
+
+  ```
+  (asdf:defsystem \"my-system\"
+    :defsystem-depends-on (\"autoload\")
+    :class \"autoload:autoload-system\"
+    :autoloaded-systems (\"dyndep\")
+    :record-autoloads (\"autoloads.lisp\" :packages #:my-pkg)
+    :components ((:file \"autoloads\")
+                 ...))
+  ```"))
 
 (defmethod shared-initialize :after ((system autoload-system) slot-names
                                      &key &allow-other-keys)
@@ -1013,14 +1060,20 @@
           (flet ((fail (control &rest args)
                    (if errorp
                        (restart-case
-                           (error "~@<In system ~S, ~?.~:@>"
-                                  (asdf:component-name system)
-                                  control args)
+                           (cerror "Continue."
+                                   "~@<In system ~S, ~?.~:@>"
+                                   (asdf:component-name system)
+                                   control args)
                          (record-system-autoloads ()
+                           :test (lambda (condition)
+                                   (declare (ignore condition))
+                                   (system-record-autoloads system))
                            :report (lambda (stream)
                                      (format stream
                                              "Re-record system autoloads."))
-                           (record-system-autoloads system)))
+                           (record-system-autoloads system)
+                           (return-from check-system-autoloads
+                             (check-system-autoloads system :errorp errorp))))
                        (return-from check-system-autoloads nil))))
             (let ((pathname (asdf:system-relative-pathname system pathname)))
               (unless (uiop:file-exists-p pathname)
