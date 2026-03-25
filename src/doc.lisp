@@ -33,7 +33,8 @@
   (define-autoloaded-function macro))
 
 (defsection @variables (:title "Variables" :export nil)
-  (defvar/autoload macro)
+  (declare-variable-autoload macro)
+  (variable-autoload-p function)
   (defvar/autoloaded macro))
 
 (defsection @packages (:title "Package" :export nil)
@@ -45,10 +46,10 @@
   (system-record-autoloads (reader autoload-system))
   (system-test-autoloads (reader autoload-system))
   (autoloaded-systems function)
-  (@generating-autoloads section))
+  (@generating-autoloads section)
+  (autoload-cl-source-file class))
 
-(defsection @generating-autoloads
-    (:title "Generating Autoloads" :export nil)
+(defsection @generating-autoloads (:title "Generating Autoloads" :export nil)
   (autoloads function)
   (write-autoloads function)
   (record-system-autoloads function)
@@ -80,5 +81,5 @@
 #+nil
 (progn
   (asdf:load-system "autoload-doc")
-  (update-asdf-system-readmes @autoload-manual "autoload"
+  (pax:update-asdf-system-readmes @autoload-manual "autoload"
                                   :formats '(:plain :markdown)))

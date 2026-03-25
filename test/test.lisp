@@ -38,7 +38,7 @@
         (with-test-systems
           (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
           ;; This tests AUTOLOAD::*SUPPRESS-HAS-NOT-BEEN-DECLARED-WARNINGS*.
-          (signals-not (autoload-style-warning)
+          (signals-not (autoload-warning)
             (record-system-autoloads "%simple-test"))
           (let ((*package* (find-package :autoload-test)))
             (is (equal (uiop:read-file-forms
@@ -46,7 +46,13 @@
                        (uiop:read-file-forms
                         (test-file "expected-autoloads.lisp"))))))
         (with-test-systems
-          (asdf:load-system "%simple-test" :force t)
+          ;; KLUDGE: (ASDF:LOAD-SYSTEM "%SIMPLE-TEST" :FORCE T) does
+          ;; not seem to work on ECL.
+          (load (compile-file (test-file "package.lisp")))
+          ;; Warning is from
+          ;; %SIMPLE-TEST::FOO-WITH-UNREADABLE-ARGLIST.
+          (handler-bind ((autoload-warning #'muffle-warning))
+            (load (compile-file (test-file "autoloads.lisp"))))
           (is (not (asdf:component-loaded-p "%simple-test/full")))
           ;; FOO
           (is (function-autoload-p foo))
@@ -76,7 +82,7 @@
                (merge-pathnames file dir)))
         (with-test-systems
           (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
-          (signals-not (autoload-style-warning :handler nil)
+          (signals-not (autoload-warning :handler nil)
             (record-system-autoloads "%package-test"))
           (let ((*package* (find-package :autoload-test)))
             (is (equal (uiop:read-file-forms
@@ -85,8 +91,7 @@
                         (test-file "expected-autoloads.lisp")))))
           (asdf:load-system "%package-test" :force t))
         (with-test-systems
-          #-cmucl (asdf:load-system "%package-test" :force t)
-          #+cmucl (load (test-file "autoloads.lisp"))
+          (load (compile-file (test-file "autoloads.lisp")))
           (is (null (find-package :%3rd-party)))
           (is (match-values (uiop:find-symbol* '#:plain-import-target
                                                :%package-test nil)
