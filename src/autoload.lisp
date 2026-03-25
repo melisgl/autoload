@@ -196,7 +196,8 @@
   "See if NAME's function definition is an autoloader function
    established by [AUTOLOAD][macro]."
   ;; This detects redefinitions by DEFUN too.
-  (eq (state name :function) (fdefinition* name)))
+  (let ((fn (fdefinition* name)))
+    (and fn (eq (state name :function) fn))))
 
 (defmacro defun/autoloaded (name lambda-list &body body)
   "Like DEFUN, but mark the function for automatically

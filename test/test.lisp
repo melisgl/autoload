@@ -54,6 +54,7 @@
           (handler-bind ((autoload-warning #'muffle-warning))
             (load (compile-file (test-file "autoloads.lisp"))))
           (is (not (asdf:component-loaded-p "%simple-test/full")))
+          (is (not (function-autoload-p 'non-existent)))
           ;; FOO
           (is (function-autoload-p foo))
           (is (equal (documentation foo 'function) "foo docstring"))
