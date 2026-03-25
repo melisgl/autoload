@@ -7,7 +7,7 @@
    #:autoload #:function-autoload-p
    #:defun/autoloaded #:defgeneric/autoloaded #:define-autoloaded-function
    ;;; Variables
-   #:defvar/autoload #:variable-autoload-p #:defvar/autoloaded
+   #:declare-variable-autoload #:variable-autoload-p #:defvar/autoloaded
    ;;; Packages
    #:defpackage/autoloaded
    ;; ASDF integration

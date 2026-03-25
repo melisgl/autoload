@@ -43,7 +43,8 @@ for the latest version.
 
 - [condition] AUTOLOAD-WARNING SIMPLE-WARNING
 
-    FIXME
+    Signalled when inconsistencies are detected by e.g.
+    AUTOLOAD and DEFVAR/AUTOLOADED.
 
 ### Functions
 
@@ -51,12 +52,12 @@ for the latest version.
 
     Define a stub function with NAME to load
     ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
-    If NAME has a function definition and it is
-    not FUNCTION-AUTOLOAD-P, then do nothing and return NIL.
+    If NAME has a function definition and it is not
+    FUNCTION-AUTOLOAD-P, then do nothing and return NIL.
 
-    The stub is not defined at compile time, which matches
-    the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
-    FUNCTION and NOTINLINE.
+    The stub is not defined at compile time, which matches the
+    required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
+    and NOTINLINE.
 
     - ARGLIST will be installed as the stub's arglist if specified and
       it's supported on the platform (currently only SBCL). If ARGLIST
@@ -89,8 +90,8 @@ for the latest version.
       as it indicates confusion whether Generating Autoloads should be
       done automatically or not.
 
-    Also, see SYSTEM-AUTOLOADED-SYSTEMS for further consistency
-    checking.
+    Also, see SYSTEM-AUTOLOADED-SYSTEMS for
+    further consistency checking.
 
 - [function] FUNCTION-AUTOLOAD-P NAME
 
@@ -99,8 +100,9 @@ for the latest version.
 
 - [macro] DEFUN/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN, but silence redefinition warnings. Also, warn if NAME
-    has never been FUNCTION-AUTOLOAD-P.
+    Like DEFUN, but mark the function for automatically
+    Generating Autoloads and silence redefinition warnings. Also, warn
+    if NAME has never been FUNCTION-AUTOLOAD-P.
 
 - [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
@@ -117,7 +119,7 @@ for the latest version.
 
 ### Variables
 
-- [macro] DEFVAR/AUTOLOAD VAR &KEY (INIT NIL) DOCSTRING
+- [macro] DECLARE-VARIABLE-AUTOLOAD VAR &KEY (INIT NIL) DOCSTRING
 
     Define VAR with DEFVAR and mark it as VARIABLE-AUTOLOAD-P.
 
@@ -127,15 +129,24 @@ for the latest version.
     - If DOCSTRING is non-NIL, then the DOCUMENTATION of VAR as a
       VARIABLE is set to it.
 
-    Note that on accessing VAR, nothing is autoloaded. DEFVAR/AUTOLOAD
-    is solely to allow DEFVAR/AUTOLOADED to perform some checking.
+    Note that on accessing VAR, nothing is autoloaded.
+    DECLARE-VARIABLE-AUTOLOAD is solely to allow DEFVAR/AUTOLOADED to
+    perform some checking.
+
+- [function] VARIABLE-AUTOLOAD-P NAME
+
+    See if NAME has been declared with DECLARE-VARIABLE-AUTOLOAD and
+    not defined with DEFVAR/AUTOLOADED since.
 
 - [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOC
 
-    Like DEFVAR, but works with the global binding on Lisps that
-    support it (currently Allegro, CCL, ECL, SBCL). This is to
-    handle the case when a system that uses DEFVAR with a default value
-    is autoloaded while that variable is locally bound:
+    Like DEFVAR, but mark the variable for automatically
+    Generating Autoloads.
+
+    Also, this works with the global binding on Lisps that support
+    it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
+    when a system that uses DEFVAR with a default value is autoloaded
+    while that variable is locally bound:
 
         ;; Some base system only foreshadows *X*.
         (declaim (special *x*))
@@ -151,10 +162,31 @@ for the latest version.
 
 - [macro] DEFPACKAGE/AUTOLOADED NAME &REST OPTIONS
 
-    Like DEFPACKAGE, but additive. Instead of replacing the package
+    Like DEFPACKAGE, but mark the package for Generating Autoloads
+    automatically and extend the existing definition additively.
+
+    The additivity means that instead of replacing the package
     definition or signaling errors on redefinition, it expands into
     individual package-altering operations such as SHADOW, USE-PACKAGE
     and EXPORT. This allows the package state to be built incrementally.
+    DEFPACKAGE/AUTOLOADED may be used on the same package multiple
+    times.
+
+    In addition, DEFPACKAGE/AUTOLOADED deviates from DEFPACKAGE in the
+    following ways.
+
+    - The default :USE list is empty.
+
+    - :SIZE is not supported.
+
+    - Implementation-specific extensions such as :LOCAL-NICKNAMES are
+      not supported. Use ADD-PACKAGE-LOCAL-NICKNAMES after the
+      DEFPACKAGE/AUTOLOADED.
+
+    Alternatively, one may use, for example, DEFPACKAGE or
+    UIOP:DEFINE-PACKAGE and arrange for Generating Autoloads for the
+    package by listing it in :PACKAGES of
+    SYSTEM-RECORD-AUTOLOADS.
 
 ## ASDF Integration
 
@@ -188,8 +220,8 @@ for the latest version.
     Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
-    AUTOLOAD signals an error if the ASDF:SYSTEM to be
-    loaded is among those declared here.
+    AUTOLOAD signals an error if the ASDF:SYSTEM to be loaded
+    is among those declared here.
 
 - [reader] SYSTEM-RECORD-AUTOLOADS AUTOLOAD-SYSTEM (:RECORD-AUTOLOADS = NIL)
 
@@ -231,10 +263,10 @@ for the latest version.
     Return a list of forms that set up autoloading for definitions such
     as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM.
 
-    Note that this is an expensive operation, as it reloads the direct
-    dependencies one by one with ASDF:LOAD-SYSTEM :FORCE and records the
-    association with the system and the autoloaded definitions such as
-    DEFUN/AUTOLOADED.
+    Note that this is an expensive operation, as it loads or reloads the
+    direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
+    records the association with the system and the autoloaded
+    definitions such as DEFUN/AUTOLOADED.
 
     - For function definitions such as DEFUN/AUTOLOADED, an
       AUTOLOAD form is emitted.
@@ -244,14 +276,14 @@ for the latest version.
        AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
        AUTOLOAD.
 
-    - For DEFVAR/AUTOLOADED, a DEFVAR/AUTOLOAD is emitted.
+    - For DEFVAR/AUTOLOADED, a DECLARE-VARIABLE-AUTOLOAD is emitted.
 
     If the initial value form in DEFVAR/AUTOLOADED is detected as a
        simple constant form, then it is passed as INIT to
-       DEFVAR/AUTOLOAD. Simple constant forms are strings, numbers,
-       characters, keywords, constants in the CL package, and QUOTEd
-       nested lists containing any of the previous or any symbol from
-       the CL.
+       DECLARE-VARIABLE-AUTOLOAD. Simple constant forms are strings,
+       numbers, characters, keywords, constants in the CL package, and
+       QUOTEd nested lists containing any of the previous or any symbol
+       from the CL.
 
     - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
       package-altering operations are emitted.
@@ -272,15 +304,14 @@ for the latest version.
 
 - [function] WRITE-AUTOLOADS FORMS STREAM
 
-    Write the autoload FORMS to STREAM that can be LOADed. When
-    PACKAGE, emit an IN-PACKAGE form with its name, and print the forms
-    with *PACKAGE* bound to it.
+    Write the autoload FORMS to STREAM that can be LOADed or included
+    in an ASDF:DEFSYSTEM.
 
 - [function] RECORD-SYSTEM-AUTOLOADS SYSTEM
 
     Write the AUTOLOADS of SYSTEM to the file in its
-    :RECORD-AUTOLOADS, which may be a
-    pathname designator or a list of the form
+    :RECORD-AUTOLOADS, which may be a pathname designator or a
+    list of the form
 
         (pathname &key (process-arglist t) (process-docstring t) packages)
 
@@ -289,18 +320,37 @@ for the latest version.
     ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
     :SUPERSEDE.
 
+    As AUTOLOADS loads the direct autoloaded dependencies, compiler
+    warnings (e.g. about undefined specials and functions) may occur
+    that go away once the generated autoloads are in place. The easiest
+    way to trigger this is to call RECORD-SYSTEM-AUTOLOADS before these
+    dependencies have been loaded. In this case, temporarily emptying
+    the autoloads file and fixing these warnings is recommended.
+
 - [function] CHECK-SYSTEM-AUTOLOADS SYSTEM &KEY (ERRORP T)
 
     In the AUTOLOAD-SYSTEM SYSTEM, check that there is a
     :RECORD-AUTOLOADS and the file generated
-    by RECORD-SYSTEM-AUTOLOADS is up-to-date. If ERRORP, then signal an
-    error if it is not or the file cannot be read.
+    by RECORD-SYSTEM-AUTOLOADS is up-to-date.
+
+    If ERRORP, then signal an error if it is not or the file cannot be
+    read. RECORD-SYSTEM-AUTOLOADS restart is provided.
 
     This compares the current AUTOLOADS to those in the file with EQUAL
     and is thus sensitive to the order of definitions.
 
     This function is called automatically by ASDF:TEST-OP on a
     AUTOLOAD-SYSTEM method if SYSTEM-TEST-AUTOLOADS.
+
+- [class] AUTOLOAD-CL-SOURCE-FILE CL-SOURCE-FILE
+
+    The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
+    The SYSTEM-AUTOLOADED-SYSTEMS and
+    SYSTEM-RECORD-AUTOLOADS features rely
+    on source file belonging to this class. When combining autoload with
+    another ASDF extension that has own ASDF:CL-SOURCE-FILE subclass,
+    define a new class that inherits from both and use that as
+    :DEFAULT-COMPONENT-CLASS.
 
 * * *
 ###### \[generated by [MGL-PAX](https://github.com/melisgl/mgl-pax)\]

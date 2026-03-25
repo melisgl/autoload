@@ -6,20 +6,28 @@
 
 (in-package :cl)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (autoload::ensure-package-names "%aaa" nil)
-  (autoload::ensure-package-names "%package-test" '("%ptest" "%ptest-alt"))
-  (setf (documentation (find-package (autoload::native-name "%package-test"))
-                       t)
-          "%PACKAGE-TEST docstring")
-  (autoload::shadow* '("cons" "ghost-shadow") "%package-test")
-  (autoload::shadowing-import/existing '(("%3rd-party" . "shadow-target"))
-                                       "%package-test")
-  (autoload::use-package/existing '("%package-test" "common-lisp") "%aaa")
-  (autoload::use-package/existing '("%aaa" "autoload" "common-lisp")
-                                  "%package-test")
-  (autoload::import/existing '(("%3rd-party" . "missing")) "%aaa")
-  (autoload::import/existing '(("%3rd-party" . "plain-import-target"))
-                             "%package-test")
-  (autoload::intern-and-export '("aaa-foo" "missing") "%aaa")
-  (autoload::intern-and-export '("foo" "plain-import-target") "%package-test"))
+(autoload::ensure-package-names "%aaa" nil)
+
+(autoload::ensure-package-names "%package-test" '("%ptest" "%ptest-alt"))
+
+(setf (documentation (find-package (autoload::native-name "%package-test")) t)
+        "%PACKAGE-TEST docstring")
+
+(autoload::shadow* '("cons" "ghost-shadow") "%package-test")
+
+(autoload::shadowing-import/existing '(("%3rd-party" . "shadow-target"))
+                                     "%package-test")
+
+(autoload::use-package/existing '("%package-test" "common-lisp") "%aaa")
+
+(autoload::use-package/existing '("%aaa" "autoload" "common-lisp")
+                                "%package-test")
+
+(autoload::import/existing '(("%3rd-party" . "missing")) "%aaa")
+
+(autoload::import/existing '(("%3rd-party" . "plain-import-target"))
+                           "%package-test")
+
+(autoload::intern-and-export '("aaa-foo" "missing") "%aaa")
+
+(autoload::intern-and-export '("foo" "plain-import-target") "%package-test")

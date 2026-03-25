@@ -58,7 +58,7 @@ jobs:
           # interpreted as a github reference but is special cased.
           git clone --depth 1 https://github.com/slime/slime.git
 
-      - name: Run DRef tests
+      - name: Run tests
         env:
           LISP: ${{ matrix.lisp }}
         run: |
