@@ -5,12 +5,13 @@
 ## Table of Contents
 
 - [1 Links and Systems][d60b]
-- [2 Basics][fa90]
-    - [2.1 Functions][4b04]
-    - [2.2 Variables][f490]
-    - [2.3 Package][643f]
-- [3 ASDF Integration][0c5c]
-    - [3.1 Generating Autoloads][48d3]
+- [2 Introduction][471f]
+- [3 Basics][fa90]
+    - [3.1 Functions][4b04]
+    - [3.2 Variables][f490]
+    - [3.3 Package][643f]
+- [4 ASDF Integration][0c5c]
+    - [4.1 Generating Autoloads][48d3]
 
 ###### \[in package AUTOLOAD\]
 <a id="x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29"></a>
@@ -46,11 +47,112 @@ for the latest version.
         `mgl-pax/navigate` and
         `mgl-pax/document` depend on this system, which
         renders most of this an implementation detail.
-    - *Depends on:* [autoload][5968], mgl-pax
+    - *Depends on:* [autoload][5968], mgl-pax, named-readtables, pythonic-string-reader
+
+<a id="x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29"></a>
+
+## 2 Introduction
+
+Libraries often choose to limit dependencies, even if it means
+sacrificing features or duplicating code, to minimize
+
+- compilation time,
+
+- memory usage in deployment, and
+
+- the risk of breakage through dependencies.
+
+This library reduces the tension arising from the former two
+considerations by letting heavy dependencies be loaded on demand.
+The core idea is
+
+```
+(defmacro autoload (name asdf-system)
+  `(defun ,name (&rest args)
+     (asdf:load-system ,asdf-system)
+     (apply 'name args)))
+```
+
+Suppose we have a library called `my-lib` that autoloads `my-lib/full`.
+In `my-lib`, we could use [`AUTOLOAD`][7da0] as
+
+```
+(autoload foo "my-lib/full")
+```
+
+and have
+
+```
+(defun foo (x)
+  "doc"
+  (1+ x))
+```
+
+in `my-lib/full`.
+
+However, manually keeping the autoload declarations in sync with the
+definitions is fragile, so instead we mark autoloaded functions in
+the `my-lib/full` system:
+
+```
+(defun/autoloaded foo (x)
+  "doc"
+  (1+ x))
+```
+
+and [generate autoloads][48d3] through the
+[ASDF Integration][0c5c]:
+
+```
+(asdf:defsystem "my-lib"
+  :defsystem-depends-on ("autoload")
+  :class "autoload:autoload-system"
+  :autoloaded-systems ("my-lib/full")
+  :record-autoloads "autoloads.lisp"
+  :components ((:file "autoloads")
+               ...))
+```
+
+```
+(asdf:defsystem "my-lib/full"
+  :defsystem-depends-on ("autoload")
+  :class "autoload:autoload-system"
+  :components (...))
+```
+
+Then, the autoloaded definitions can be extracted:
+
+```
+(autoloads "my-lib")
+=> ((autoload foo :arglist "(x)" :docstring "doc"))
+```
+
+This is implemented by loading the `:AUTOLOADED-SYSTEMS` of `my-lib`
+and recording [`DEFUN/AUTOLOADED`][3b15]s. [`AUTOLOADS`][1e20] is a low-level utility
+used by [`RECORD-SYSTEM-AUTOLOADS`][dceb] that writes its results to the
+system's `:RECORD-AUTOLOADS`, `"autoloads.lisp"` in the above example.
+So, all we need to do is to call it regenarate the autoloads file:
+
+```
+(record-system-autoloads "my-lib")
+```
+
+To prevent the autoloads file from getting out of sync with the
+definitions, `ASDF:TEST-SYSTEM` calls [`CHECK-SYSTEM-AUTOLOADS`][4afe] by
+default.
+
+ASDF and by extension [Quicklisp][ae25] don't know about the declared
+`:AUTOLOADED-SYSTEMS`, so `(``QL:QUICKLOAD` `"my-lib")` does not install
+the autoloaded dependencies. This can be done with
+
+```
+(autoloaded-systems "my-lib" :installer #'ql:quickload)
+```
+
 
 <a id="x-28AUTOLOAD-3A-40BASICS-20MGL-PAX-3ASECTION-29"></a>
 
-## 2 Basics
+## 3 Basics
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29"></a>
 
@@ -61,7 +163,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29"></a>
 
-### 2.1 Functions
+### 3.1 Functions
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
@@ -144,7 +246,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3A-40VARIABLES-20MGL-PAX-3ASECTION-29"></a>
 
-### 2.2 Variables
+### 3.2 Variables
 
 <a id="x-28AUTOLOAD-3ADECLARE-VARIABLE-AUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
@@ -195,7 +297,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
 
-### 2.3 Package
+### 3.3 Package
 
 <a id="x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -229,7 +331,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29"></a>
 
-## 3 ASDF Integration
+## 4 ASDF Integration
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29"></a>
 
@@ -328,7 +430,7 @@ for the latest version.
 
 <a id="x-28AUTOLOAD-3A-40GENERATING-AUTOLOADS-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.1 Generating Autoloads
+### 4.1 Generating Autoloads
 
 <a id="x-28AUTOLOAD-3AAUTOLOADS-20FUNCTION-29"></a>
 
@@ -450,6 +552,7 @@ for the latest version.
   [3b15]: #x-28AUTOLOAD-3ADEFUN-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFUN/AUTOLOADED MGL-PAX:MACRO"
   [3fb5]: http://www.lispworks.com/documentation/HyperSpec/Body/f_equal.htm "EQUAL (MGL-PAX:CLHS FUNCTION)"
   [453a]: #x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFVAR/AUTOLOADED MGL-PAX:MACRO"
+  [471f]: #x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29 "Introduction"
   [48d3]: #x-28AUTOLOAD-3A-40GENERATING-AUTOLOADS-20MGL-PAX-3ASECTION-29 "Generating Autoloads"
   [4afe]: #x-28AUTOLOAD-3ACHECK-SYSTEM-AUTOLOADS-20FUNCTION-29 "AUTOLOAD:CHECK-SYSTEM-AUTOLOADS FUNCTION"
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"

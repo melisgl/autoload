@@ -1,5 +1,7 @@
 (in-package :autoload)
 
+(named-readtables:in-readtable pythonic-string-reader:pythonic-string-syntax)
+
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (import '(pax:clhs pax:macro pax:section pax:defsection pax:reader
             pax:define-glossary-term pax:make-github-source-uri-fn
@@ -8,6 +10,7 @@
 
 (defsection @autoload-manual (:title "Autoload Manual" :export nil)
   (@links-and-systems section)
+  (@introduction section)
   (@basics section)
   (@asdf-integration section))
 
@@ -18,6 +21,103 @@
   for the latest version."
   ("autoload" asdf:system)
   ("autoload-doc" asdf:system))
+
+(defsection @introduction (:title "Introduction" :export nil)
+  """Libraries often choose to limit dependencies, even if it means
+  sacrificing features or duplicating code, to minimize
+
+  - compilation time,
+
+  - memory usage in deployment, and
+
+  - the risk of breakage through dependencies.
+
+  This library reduces the tension arising from the former two
+  considerations by letting heavy dependencies be loaded on demand.
+  The core idea is
+
+  ```
+  (defmacro autoload (name asdf-system)
+    `(defun ,name (&rest args)
+       (asdf:load-system ,asdf-system)
+       (apply 'name args)))
+  ```
+
+  Suppose we have a library called `my-lib` that autoloads `my-lib/full`.
+  In `my-lib`, we could use [AUTOLOAD][macro] as
+
+  ```
+  (autoload foo "my-lib/full")
+  ```
+
+  and have
+
+  ```
+  (defun foo (x)
+    "doc"
+    (1+ x))
+  ```
+
+  in `my-lib/full`.
+
+  However, manually keeping the autoload declarations in sync with the
+  definitions is fragile, so instead we mark autoloaded functions in
+  the `my-lib/full` system:
+
+  ```
+  (defun/autoloaded foo (x)
+    "doc"
+    (1+ x))
+  ```
+
+  and [generate autoloads][ @generating-autoloads] through the
+  @ASDF-INTEGRATION:
+
+  ```
+  (asdf:defsystem "my-lib"
+    :defsystem-depends-on ("autoload")
+    :class "autoload:autoload-system"
+    :autoloaded-systems ("my-lib/full")
+    :record-autoloads "autoloads.lisp"
+    :components ((:file "autoloads")
+                 ...))
+  ```
+  ```
+  (asdf:defsystem "my-lib/full"
+    :defsystem-depends-on ("autoload")
+    :class "autoload:autoload-system"
+    :components (...))
+  ```
+
+  Then, the autoloaded definitions can be extracted:
+
+  ```
+  (autoloads "my-lib")
+  => ((autoload foo :arglist "(x)" :docstring "doc"))
+  ```
+
+  This is implemented by loading the :AUTOLOADED-SYSTEMS of `my-lib`
+  and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
+  used by RECORD-SYSTEM-AUTOLOADS that writes its results to the
+  system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above example.
+  So, all we need to do is to call it regenarate the autoloads file:
+
+  ```
+  (record-system-autoloads "my-lib")
+  ```
+
+  To prevent the autoloads file from getting out of sync with the
+  definitions, ASDF:TEST-SYSTEM calls CHECK-SYSTEM-AUTOLOADS by
+  default.
+
+  ASDF and by extension @QUICKLISP don't know about the declared
+  :AUTOLOADED-SYSTEMS, so `(`QL:QUICKLOAD `"my-lib")` does not install
+  the autoloaded dependencies. This can be done with
+
+  ```
+  (autoloaded-systems "my-lib" :installer #'ql:quickload)
+  ```
+  """)
 
 (defsection @basics (:title "Basics" :export nil)
   (autoload-warning condition)

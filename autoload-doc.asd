@@ -16,7 +16,8 @@
   [`mgl-pax/navigate`][asdf:system] and
   [`mgl-pax/document`][asdf:system] depend on this system, which
   renders most of this an implementation detail."
-  :depends-on ("autoload" "mgl-pax")
+  :depends-on ("autoload" "mgl-pax" "named-readtables"
+               "pythonic-string-reader")
   :components ((:module "src/"
                 :serial t
                 :components ((:file "doc")))))

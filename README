@@ -37,7 +37,87 @@ for the latest version.
     mgl-pax/document depend on this system, which
     renders most of this an implementation detail.
 
-    - Depends on: autoload, mgl-pax
+    - Depends on: autoload, mgl-pax, named-readtables, pythonic-string-reader
+
+## Introduction
+
+Libraries often choose to limit dependencies, even if it means
+sacrificing features or duplicating code, to minimize
+
+- compilation time,
+
+- memory usage in deployment, and
+
+- the risk of breakage through dependencies.
+
+This library reduces the tension arising from the former two
+considerations by letting heavy dependencies be loaded on demand.
+The core idea is
+
+    (defmacro autoload (name asdf-system)
+      `(defun ,name (&rest args)
+         (asdf:load-system ,asdf-system)
+         (apply 'name args)))
+
+Suppose we have a library called my-lib that autoloads my-lib/full.
+In my-lib, we could use AUTOLOAD as
+
+    (autoload foo "my-lib/full")
+
+and have
+
+    (defun foo (x)
+      "doc"
+      (1+ x))
+
+in my-lib/full.
+
+However, manually keeping the autoload declarations in sync with the
+definitions is fragile, so instead we mark autoloaded functions in
+the my-lib/full system:
+
+    (defun/autoloaded foo (x)
+      "doc"
+      (1+ x))
+
+and generate autoloads through the
+ASDF Integration:
+
+    (asdf:defsystem "my-lib"
+      :defsystem-depends-on ("autoload")
+      :class "autoload:autoload-system"
+      :autoloaded-systems ("my-lib/full")
+      :record-autoloads "autoloads.lisp"
+      :components ((:file "autoloads")
+                   ...))
+
+    (asdf:defsystem "my-lib/full"
+      :defsystem-depends-on ("autoload")
+      :class "autoload:autoload-system"
+      :components (...))
+
+Then, the autoloaded definitions can be extracted:
+
+    (autoloads "my-lib")
+    => ((autoload foo :arglist "(x)" :docstring "doc"))
+
+This is implemented by loading the :AUTOLOADED-SYSTEMS of my-lib
+and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
+used by RECORD-SYSTEM-AUTOLOADS that writes its results to the
+system's :RECORD-AUTOLOADS, "autoloads.lisp" in the above example.
+So, all we need to do is to call it regenarate the autoloads file:
+
+    (record-system-autoloads "my-lib")
+
+To prevent the autoloads file from getting out of sync with the
+definitions, ASDF:TEST-SYSTEM calls CHECK-SYSTEM-AUTOLOADS by
+default.
+
+ASDF and by extension Quicklisp don't know about the declared
+:AUTOLOADED-SYSTEMS, so (``QL:QUICKLOAD "my-lib") does not install
+the autoloaded dependencies. This can be done with
+
+    (autoloaded-systems "my-lib" :installer #'ql:quickload)
 
 ## Basics
 
