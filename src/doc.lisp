@@ -1,11 +1,17 @@
 (in-package :autoload)
 
-(pax:defsection @autoload-manual (:title "Autoload Manual" :export nil)
-  (@links-and-systems pax:section)
-  (@basics pax:section)
-  (@asdf-integration pax:section))
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (import '(pax:clhs pax:macro pax:section pax:defsection pax:reader
+            pax:define-glossary-term pax:make-github-source-uri-fn
+            pax:register-doc-in-pax-world)
+          :autoload))
 
-(pax:defsection @links-and-systems (:title "Links and Systems" :export nil)
+(defsection @autoload-manual (:title "Autoload Manual" :export nil)
+  (@links-and-systems section)
+  (@basics section)
+  (@asdf-integration section))
+
+(defsection @links-and-systems (:title "Links and Systems" :export nil)
   "Here is the [official
   repository](https://github.com/melisgl/autoload/) and the [HTML
   documentation](http://melisgl.github.io/mgl-pax-world/autoload.html)
@@ -13,46 +19,46 @@
   ("autoload" asdf:system)
   ("autoload-doc" asdf:system))
 
-(pax:defsection @basics (:title "Basics" :export nil)
+(defsection @basics (:title "Basics" :export nil)
   (autoload-warning condition)
-  (@functions pax:section)
-  (@variables pax:section)
-  (@packages pax:section))
+  (@functions section)
+  (@variables section)
+  (@packages section))
 
-(pax:defsection @functions (:title "Functions" :export nil)
-  (autoload pax:macro)
+(defsection @functions (:title "Functions" :export nil)
+  (autoload macro)
   (function-autoload-p function)
-  (defun/autoloaded pax:macro)
-  (defgeneric/autoloaded pax:macro)
-  (define-autoloaded-function pax:macro))
+  (defun/autoloaded macro)
+  (defgeneric/autoloaded macro)
+  (define-autoloaded-function macro))
 
-(pax:defsection @variables (:title "Variables" :export nil)
-  (defvar/autoload pax:macro)
-  (defvar/autoloaded pax:macro))
+(defsection @variables (:title "Variables" :export nil)
+  (defvar/autoload macro)
+  (defvar/autoloaded macro))
 
-(pax:defsection @packages (:title "Package" :export nil)
-  (defpackage/autoloaded pax:macro))
+(defsection @packages (:title "Package" :export nil)
+  (defpackage/autoloaded macro))
 
-(pax:defsection @asdf-integration (:title "ASDF Integration" :export nil)
+(defsection @asdf-integration (:title "ASDF Integration" :export nil)
   (autoload-system class)
-  (system-autoloaded-systems (pax:reader autoload-system))
-  (system-record-autoloads (pax:reader autoload-system))
-  (system-test-autoloads (pax:reader autoload-system))
+  (system-autoloaded-systems (reader autoload-system))
+  (system-record-autoloads (reader autoload-system))
+  (system-test-autoloads (reader autoload-system))
   (autoloaded-systems function)
-  (@generating-autoloads pax:section))
+  (@generating-autoloads section))
 
-(pax:defsection @generating-autoloads
+(defsection @generating-autoloads
     (:title "Generating Autoloads" :export nil)
   (autoloads function)
   (write-autoloads function)
   (record-system-autoloads function)
   (check-system-autoloads function))
 
-(pax:define-glossary-term @slime-autodoc
+(define-glossary-term @slime-autodoc
     (:title "SLIME autodoc"
      :url "https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode"))
 
-(pax:define-glossary-term @quicklisp
+(define-glossary-term @quicklisp
     (:title "Quicklisp"
      :url "https://www.quicklisp.org/"))
 
@@ -65,14 +71,14 @@
 (defun autoload-pages ()
   `((:objects
      (, @autoload-manual)
-     :source-uri-fn ,(pax:make-github-source-uri-fn
+     :source-uri-fn ,(make-github-source-uri-fn
                       "autoload" "https://github.com/melisgl/autoload"))))
 
-(pax:register-doc-in-pax-world :autoload (autoload-sections) (autoload-pages))
+(register-doc-in-pax-world :autoload (autoload-sections) (autoload-pages))
 
 
 #+nil
 (progn
   (asdf:load-system "autoload-doc")
-  (pax:update-asdf-system-readmes @autoload-manual "autoload"
+  (update-asdf-system-readmes @autoload-manual "autoload"
                                   :formats '(:plain :markdown)))

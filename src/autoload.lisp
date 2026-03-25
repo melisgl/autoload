@@ -1,8 +1,8 @@
 (in-package :autoload)
 
 ;;;; Machinery for associating autoload stubs with function names,
-;;;; including setf names, and for recording the state of variable
-;;;; definitions.
+;;;; including [setf function names][clhs], and for recording the
+;;;; state of variable definitions.
 
 (declaim (inline kind-to-indicator))
 
@@ -44,12 +44,12 @@
                     (docstring nil docstringp) (explicitp t))
   "Define a stub function with NAME to [load][asdf:load-system]
   ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
-  If NAME has a [function definition][fdefinition pax:clhs] and it is
-  not FUNCTION-AUTOLOAD-P, then do nothing and return NIL.
+  If NAME has a [function definition][fdefinition clhs] and it is not
+  FUNCTION-AUTOLOAD-P, then do nothing and return NIL.
 
-  The stub is not defined at [compile time][pax:clhs], which matches
-  the required semantics of DEFUN. NAME is DECLAIMed with FTYPE
-  FUNCTION and NOTINLINE.
+  The stub is not defined at [compile time][clhs], which matches the
+  required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
+  and NOTINLINE.
 
   - ARGLIST will be installed as the stub's arglist if specified and
     it's supported on the platform (currently only SBCL). If ARGLIST
@@ -76,7 +76,7 @@
   - It is an error if NAME is not redefined at all.
 
   - It is an AUTOLOAD-WARNING if NAME is redefined with another
-    [AUTOLOAD][pax:macro].
+    [AUTOLOAD][macro].
 
   - It is an AUTOLOAD-WARNING if the promise of EXPLICITP is broken,
     as it indicates confusion whether @GENERATING-AUTOLOADS should be
@@ -91,7 +91,7 @@
       ;; This is mainly to prevent undefined function compiler
       ;; warnings about NAME. A normal DEFUN takes care of this at
       ;; compile time, but the DEFUN below is not a [top level
-      ;; form][pax:clhs].
+      ;; form][clhs].
       ;;
       ;; Also, this works around a CMUCL bug that results in
       ;; "Function with declared result type NIL returned" errors
@@ -105,8 +105,8 @@
        (defun ,name (&rest args)
          ,(if docstringp
               docstring
-              (format nil "[AUTOLOADed][pax:macro] function in the ~
-                          ~A ASDF:SYSTEM."
+              (format nil "[AUTOLOADed][pax:macro] function in ~
+                          the ~A ASDF:SYSTEM."
                       (%escape-markdown asdf-system-name)))
          (load-system-and-check-redefinition ',asdf-system-name ',name
                                              ',explicitp)
@@ -203,7 +203,7 @@
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function
-   established by [AUTOLOAD][pax:macro]."
+   established by [AUTOLOAD][macro]."
   ;; This detects redefinitions by DEFUN too.
   (eq (state name :function) (fdefinition* name)))
 
@@ -399,7 +399,7 @@
                         #'string< :key #'package-name))
         ;; MAKE-PACKAGE forms for all packages. We execute these
         ;; first, in case their :USEs are circular. The phases follow
-        ;; the order specified in [DEFPACKAGE][pax:clhs].
+        ;; the order specified in [DEFPACKAGE][clhs].
         (phase-1-create nil)
         (phase-2-shadow nil)
         (phase-3-use nil)
@@ -424,17 +424,17 @@
                   (null (symbol-package sym)))
               (push (symbol-name sym) shadows)
               (push (package-and-symbol-name sym) shadowing-imports)))
-        ;; Do all [accessible][pax:clhs] symbols.
+        ;; Do all [accessible][clhs] symbols.
         (do-symbols (sym pkg)
           (multiple-value-bind (found-sym status)
               (find-symbol (symbol-name sym) pkg)
             (when (eq found-sym sym)
-              ;; [External symbol][pax:clhs]s are to be EXPORTed.
+              ;; [External symbol][clhs]s are to be EXPORTed.
               (when (eq status :external)
                 (push (symbol-name sym) exports))
               ;; Maybe add to IMPORTS
               (when (and
-                     ;; [Present][pax:clhs]
+                     ;; [Present][clhs]
                      (or (eq status :internal) (eq status :external))
                      ;; Not UNINTERNed
                      (symbol-package sym)
@@ -600,8 +600,8 @@
     :documentation "Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
-    [AUTOLOAD][pax:macro] signals an error if the ASDF:SYSTEM to be
-    loaded is among those declared here.")
+    [AUTOLOAD][macro] signals an error if the ASDF:SYSTEM to be loaded
+    is among those declared here.")
    (record-autoloads
     :initform nil
     :initarg :record-autoloads
@@ -634,7 +634,7 @@
 
   With the above,
 
-  - It is an error if an [AUTOLOAD][pax:macro] refers to a
+  - It is an error if an [AUTOLOAD][macro] refers to a
     system other than `dyndep`.
 
   - `(`RECORD-SYSTEM-AUTOLOADS `\"my-system\")` will update
@@ -750,7 +750,7 @@
   DEFUN/AUTOLOADED.
 
   - For function definitions such as DEFUN/AUTOLOADED, an
-    [AUTOLOAD][pax:macro] form is emitted.
+    [AUTOLOAD][macro] form is emitted.
 
      If PROCESS-ARGLIST is T, then the autoload forms will pass the
      ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
@@ -772,7 +772,7 @@
       As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
       operations are additive. To handle circular dependencies, first
       all packages are created, then their state is reconstructed in
-      phases following [DEFPACKAGE][pax:clhs].
+      phases following [DEFPACKAGE][clhs].
 
   - If PROCESS-DOCSTRING, then the docstrings extracted from
     DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
@@ -780,7 +780,7 @@
 
   Note that if a function is not defined with DEFUN/AUTOLOADED or its
   kin in @BASICS, then AUTOLOADS will not detect it. For such
-  functions, [AUTOLOAD][pax:macro]s must be written manually. Similar
+  functions, [AUTOLOAD][macro]s must be written manually. Similar
   considerations apply to variables and packages."
   (let* ((infos (without-asdf-session
                   (mapcan #'extract-autoload-infos
@@ -869,7 +869,7 @@
 (defun record-system-autoloads (system)
   "Write the AUTOLOADS of SYSTEM to the file in its
   [:RECORD-AUTOLOADS][ SYSTEM-RECORD-AUTOLOADS], which may be a
-  [pathname designator][pax:clhs] or a list of the form
+  [pathname designator][clhs] or a list of the form
 
       (pathname &key (process-arglist t) (process-docstring t) packages)
 
