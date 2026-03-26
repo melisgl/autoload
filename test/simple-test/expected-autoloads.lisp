@@ -9,15 +9,15 @@
 (autoload:autoload %simple-test::foo "%simple-test/full" :arglist
                    "(%simple-test::x)" :docstring "foo docstring")
 
+(autoload:autoload %simple-test::foo-with-unreadable-arglist
+                   "%simple-test/full" :arglist
+                   "(&optional (%simple-test::x '%3rd-party::z))")
+
+(autoload:declare-variable-autoload %simple-test::*var/complex-value*)
+
 (autoload:declare-variable-autoload %simple-test::*var/no-value* :docstring
                                     "*var/no-value* docstring")
 
 (autoload:declare-variable-autoload %simple-test::*var/simple-value* :init
                                     '("xxx" 7 :key nil t) :docstring
                                     "*var/simple-value* docstring")
-
-(autoload:declare-variable-autoload %simple-test::*var/complex-value*)
-
-(autoload:autoload %simple-test::foo-with-unreadable-arglist
-                   "%simple-test/full" :arglist
-                   "(&optional (%simple-test::x '%3rd-party::z))")
