@@ -3,12 +3,13 @@
 (defmacro with-test-systems (&body body)
   `(unwind-protect
         (autoload::without-asdf-session
-          (load (asdf:system-relative-pathname
-                 "autoload-test" "test/simple-test/%simple-test.system"))
-          (load (asdf:system-relative-pathname
-                 "autoload-test" "test/package-test/%package-test.system"))
-          (load (asdf:system-relative-pathname
-                 "autoload-test" "test/test-system/%test-system.system"))
+          (let ((asdf:*compile-file-warnings-behaviour* :ignore))
+            (load (asdf:system-relative-pathname
+                   "autoload-test" "test/simple-test/%simple-test.system"))
+            (load (asdf:system-relative-pathname
+                   "autoload-test" "test/package-test/%package-test.system"))
+            (load (asdf:system-relative-pathname
+                   "autoload-test" "test/test-system/%test-system.system")))
           ,@body)
      (ignore-errors (uiop:delete-package* :%simple-test))
      (ignore-errors (uiop:delete-package* :%package-test))
@@ -57,11 +58,7 @@
         ;; %SIMPLE-TEST::FOO-WITH-UNREADABLE-ARGLIST.
         (handler-bind ((autoload-warning #'muffle-warning))
           (load (compile-file (test-file "autoloads.lisp"))))
-        (is (not (asdf:component-loaded-p "%simple-test/full")))
         (is (not (function-autoload-p 'non-existent)))
-        ;; FOO
-        (is (function-autoload-p foo))
-        (is (equal (documentation foo 'function) "foo docstring"))
         ;; *VAR/NO-VALUE*
         (is (variable-autoload-p *var/no-value*))
         (is (not (boundp *var/no-value*)))
@@ -77,7 +74,14 @@
         ;; *VAR/COMPLEX-VALUE*
         (is (variable-autoload-p *var/complex-value*))
         (is (not (boundp *var/complex-value*)))
-        (is (null (documentation *var/complex-value* 'variable)))))))
+        (is (null (documentation *var/complex-value* 'variable)))
+        ;; FOO
+        (is (function-autoload-p foo))
+        (is (equal (documentation foo 'function) "foo docstring"))
+        (is (not (asdf:component-loaded-p "%simple-test/full")))
+        (is (equal (funcall foo 'secret) 'secret))
+        (is (asdf:component-loaded-p "%simple-test/full"))
+        (is (not (function-autoload-p foo)))))))
 
 (deftest test-package ()
   (let ((dir (asdf:system-relative-pathname "autoload-test"
@@ -123,7 +127,8 @@
                (write-line "(autoload:defvar/autoloaded %test-system::*foo*)"
                            stream))
              (when bar-p
-               (write-line "(cl:defun %test-system::bar ())" stream)))))
+               (format stream "(cl:fmakunbound '%test-system::bar)~%~
+                       (cl:defun %test-system::bar ())~%")))))
       (with-test ("sunshine")
         (with-test-systems
           (autoload::with-file-superseded
@@ -136,11 +141,14 @@
         (with-test-systems
           (write-manual nil)
           (write-full nil t nil)
-          ;; KLUDGE: ASDF uses FILE-WRITE-DATE to decide whether the
-          ;; fasl is stale. FILE-WRITE-DATE has a resolution of one
-          ;; second. Since we have compiled and overwritten full.lisp
-          ;; in quick succession, force loading.
-          (asdf:load-system "%test-system/full" :force t)
+          ;; Compile-time warnings are handled by the compiler on some
+          ;; Lisps.
+          (signals-not (autoload-warning)
+            ;; KLUDGE: ASDF uses FILE-WRITE-DATE to decide whether the
+            ;; fasl is stale. FILE-WRITE-DATE has a resolution of one
+            ;; second. Since we have compiled and overwritten
+            ;; full.lisp in quick succession, force loading.
+            (asdf:load-system "%test-system/full" :force t))
           ;; Test the CONTINUE restart.
           (signals (error :pred "differ" :handler #'continue)
             (is (not (check-system-autoloads "%test-system"))))
@@ -152,8 +160,11 @@
             (is (check-system-autoloads "%test-system")))))
       (with-test ("unresolved variable autoload")
         (with-test-systems
+          (write-manual nil)
           (write-full t nil nil)
-          (asdf:load-system "%test-system/full" :force t)
+          (signals (autoload-warning :pred "has not been declared"
+                    :handler #'muffle-warning)
+            (asdf:load-system "%test-system/full" :force t))
           ;; Test the CONTINUE restart.
           (signals (error :pred "differ" :handler #'continue)
             (is (not (check-system-autoloads "%test-system"))))
@@ -168,7 +179,9 @@
           (write-manual t)
           (write-full t t t)
           (asdf:load-system "%test-system" :force t)
-          (asdf:load-system "%test-system/full" :force t)
+          (signals (autoload-warning :pred "has not been declared"
+                    :handler #'muffle-warning)
+            (asdf:load-system "%test-system/full" :force t))
           (record-system-autoloads "%test-system")
           (is (check-system-autoloads "%test-system"))))
       (with-test ("unresolved manual function autoload")
