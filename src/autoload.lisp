@@ -85,10 +85,8 @@
   Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
   function NAME. After loading it, the following checks are made.
 
-  - It is an error if NAME is not redefined at all.
-
-  - It is an AUTOLOAD-WARNING if NAME is redefined with another
-    [AUTOLOAD][macro].
+  - It is an error if NAME is not redefined as a normal
+    function (that's not FUNCTION-AUTOLOAD-P).
 
   - It is an AUTOLOAD-WARNING if the promise of EXPLICITP is broken,
     as it indicates confusion whether @GENERATING-AUTOLOADS should be
@@ -160,22 +158,14 @@
     (error "~@<Could not ~S ASDF:SYSTEM ~S for function ~S. ~
            It may not be installed.~:@>"
            'autoload asdf-system-name function-name))
-  (let ((this-stub (fdefinition* function-name)))
-    (asdf:load-system asdf-system-name)
-    (check-function-redefinition this-stub function-name asdf-system-name
-                                 explicitp)))
+  (asdf:load-system asdf-system-name)
+  (check-function-redefinition function-name asdf-system-name explicitp))
 
-(defun check-function-redefinition (original-stub name asdf-system-name
-                                    explicitp)
-  (when (eq (fdefinition* name) original-stub)
-    (error "~@<Autoloaded function ~S was not redefined ~
-           by the ~S ASDF:SYSTEM.~:@>"
-           name asdf-system-name))
+(defun check-function-redefinition (name asdf-system-name explicitp)
   (cond ((function-autoload-p name)
-         (signal-autoload-warning
-          "~@<Autoloaded function ~S was redefined ~
-          with ~S in the ~S ASDF:SYSTEM.~:@>"
-          name 'autoload asdf-system-name))
+         (error "~@<Autoloaded function ~S is still ~S ~
+                after loading ~S ASDF:SYSTEM.~:@>"
+                name 'function-autoload-p asdf-system-name))
         ((functionp (state name :function))
          (when explicitp
            (signal-autoload-warning
@@ -194,7 +184,7 @@
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function
-   established by [AUTOLOAD][macro]."
+  established by [AUTOLOAD][macro]."
   ;; This detects redefinitions by DEFUN too.
   (let ((fn (fdefinition* name)))
     (and fn (eq (state name :function) fn))))
@@ -217,13 +207,22 @@
       (defmacro defun*/autoloaded (name lambda-list &body body)
         `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))"
   (maybe-record-autoload-info `(defun/autoloaded ,name ,lambda-list
-                                 ,(when (stringp (first body))
-                                    (first body))))
+                                 ,(find-docstring-in-body body)))
   `(progn
      (before-autoloaded-function-definition ',name)
      (,definer ,name ,lambda-list ,@body)
      (after-autoloaded-function-definition ',name)
      ',name))
+
+(defun find-docstring-in-body (body)
+  (if (stringp (first body))
+      (first body)
+      ;; DEFGENERIC syntax
+      (loop for form in body
+              thereis (and (consp form)
+                           (eq (car form) :documentation)
+                           (consp (cdr form))
+                           (second form)))))
 
 (defun defun/autoloaded-info-to-autoload-form
     (asdf-system-name info process-arglist process-docstring)
@@ -873,7 +872,9 @@
 (defmacro with-autoloads-file-syntax (&body body)
   `(uiop:with-safe-io-syntax (:package :cl)
      (let ((*print-pretty* t)
-           (*print-case* :downcase))
+           (*print-case* :downcase)
+           (*print-right-margin* 78)
+           (*print-miser-width* nil))
        ,@body)))
 
 (defun prin1-to-string* (object)

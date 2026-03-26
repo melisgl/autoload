@@ -17,3 +17,21 @@
 
 (defun/autoloaded foo-with-unreadable-arglist (&optional (x '%3rd-party::z))
   x)
+
+(defun/autoloaded (setf xxx) (x) x)
+
+;;; We will check that this method is not lost in
+;;; DEFGENERIC/AUTOLOADED.
+(eval-when (:compile-toplevel :load-toplevel :execute)
+  (fmakunbound 'foo-gf))
+
+;;; Prevent redefinition warnings from DEFGENERIC/AUTOLOADED below.
+(defgeneric foo-gf (x))
+
+(defmethod foo-gf ((x integer))
+  (1+ x))
+
+(defgeneric/autoloaded foo-gf (x)
+  (:method (x)
+    x)
+  (:documentation "foo-gf docstring"))
