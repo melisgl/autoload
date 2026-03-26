@@ -11,6 +11,7 @@
   :record-autoloads "autoloads.lisp"
   :serial t
   :components ((:file "package")
+               (:file "manual-autoloads")
                (:file "autoloads")))
 
 (asdf:defsystem "%simple-test/full"

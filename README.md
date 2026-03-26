@@ -200,10 +200,8 @@ the autoloaded dependencies. This can be done with
     Thus, the system `ASDF-SYSTEM-NAME` is expected to redefine the
     function `NAME`. After loading it, the following checks are made.
     
-    - It is an error if `NAME` is not redefined at all.
-    
-    - It is an `AUTOLOAD-WARNING` if `NAME` is redefined with another
-      [`AUTOLOAD`][7da0].
+    - It is an error if `NAME` is not redefined as a normal
+      function (that's not `FUNCTION-AUTOLOAD-P`).
     
     - It is an `AUTOLOAD-WARNING` if the promise of `EXPLICITP` is broken,
       as it indicates confusion whether [Generating Autoloads][48d3] should be
