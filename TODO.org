@@ -1,0 +1,31 @@
+#+STARTUP: overview
+#+SEQ_TODO: TODO(t@) NEXT(n@) STARTED(s@) WAITING(w@) | DONE(d@) OLD(o@) CANCELLED(c@)
+#+TODO: MAYBE(m@) FAILED(f@) LOG(l@) DEFERRED(e@) BUG(b@)
+* MAYBE make it possible to extend
+E.g. copy PAX:DEFSECTIONs.
+
+This should be easy to implement:
+
+- Expose MAYBE-RECORD-AUTOLOAD-INFO
+- Turn the ECASE in INFO-TO-AUTOLOAD-FORMS into a generic function call.
+** MAYBE with-copying-to-autoloads macro to copy? Package problems?
+* MAYBE support pass the baton
+... wherein an autoloaded system does not resolve and autoload
+declaration, but redefines it for another system. For this, we need to
+store the system to be loaded in STATE.
+* DEFERRED thread-safety
+There should be no autoloading in production, so we punt on this for now.
+* MAYBE standardize dynamic environment of AUTOLOAD-SYSTEM-FOR
+Currently, we try to control the IO and compiler settings, but for
+compile time evaluation, the current approach cannot work. However, we
+could start a new thread on platforms that support it, which will get
+a shiny new dynamic environment.
+* MAYBE implement transforming process-docstring and process-arglist
+* MAYBE check loaddefs whenever the system is (auto)loaded?
+An exhaustive check may not be possible (if there are multiple :auto-
+depends-on systems).
+* MAYBE defparameter/autoloaded?
+* MAYBE DEFPARAMETER/AUTOLOADED?
+* MAYBE DEFCLASS/AUTOLADED?
+Either via ENSURE-CLASS-USING-CLASS or we can forward declare the
+class and hook into CLASSS-SLOTS, CLASS-DIRECT-SLOTS, etc.
