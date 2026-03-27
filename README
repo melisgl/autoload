@@ -124,20 +124,19 @@ the autoloaded dependencies. This can be done with
 
 ### Functions
 
-- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)
+- [macro] AUTOLOAD NAME SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)
 
-    Define a stub function with NAME that loads ASDF-SYSTEM-NAME,
-    expecting it to redefine the function, and then calls the newly
-    loaded definition. Return NAME. The arguments are not evaluated. If
-    NAME has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
+    Define a stub function with NAME that loads SYSTEM-NAME, expecting
+    it to redefine the function, and then calls the newly loaded
+    definition. Return NAME. The arguments are not evaluated. If NAME
+    has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
     nothing and return NIL.
 
     The stub does the following.
 
-    1. It signals an AUTOLOAD-ERROR if ASDF-SYSTEM-NAME does not
-       exist.
+    1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
 
-    2. It loads ASDF-SYSTEM-NAME.
+    2. It loads SYSTEM-NAME.
 
     3. It checks that the function with NAME has been redefined as as a
        normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
@@ -163,8 +162,8 @@ the autoloaded dependencies. This can be done with
       will be used.
 
     When AUTOLOAD is macroexpanded during the compilation or load of an
-    AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if ASDF-SYSTEM-NAME
-    is not among those declared in :AUTOLOADED-SYSTEMS.
+    AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
+    not among those declared in :AUTOLOADED-SYSTEMS.
 
 - [function] FUNCTION-AUTOLOAD-P NAME
 
