@@ -70,7 +70,7 @@ The core idea is
 (defmacro autoload (name asdf-system)
   `(defun ,name (&rest args)
      (asdf:load-system ,asdf-system)
-     (apply 'name args)))
+     (apply ',name args)))
 ```
 
 Suppose we have a library called `my-lib` that autoloads `my-lib/full`.
@@ -142,7 +142,7 @@ definitions, `ASDF:TEST-SYSTEM` calls [`CHECK-SYSTEM-AUTOLOADS`][4afe] by
 default.
 
 ASDF and by extension [Quicklisp][ae25] don't know about the declared
-`:AUTOLOADED-SYSTEMS`, so `(``QL:QUICKLOAD` `"my-lib")` does not install
+`:AUTOLOADED-SYSTEMS`, so `(QL:QUICKLOAD "my-lib")` does not install
 the autoloaded dependencies. This can be done with
 
 ```
@@ -195,8 +195,9 @@ the autoloaded dependencies. This can be done with
     function `NAME`. It is an error if `NAME` is not redefined as a normal
     function (that's not `FUNCTION-AUTOLOAD-P`).
     
-    Also, see [`SYSTEM-AUTOLOADED-SYSTEMS`][8429] for
-    further consistency checking.
+    When `AUTOLOAD` is macroexpanded during the compilation or load of an
+    [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `ASDF-SYSTEM-NAME`
+    is not among those declared in [`:AUTOLOADED-SYSTEMS`][8429].
 
 <a id="x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29"></a>
 
@@ -346,7 +347,7 @@ the autoloaded dependencies. This can be done with
     - `(`[`RECORD-SYSTEM-AUTOLOADS`][dceb] `"my-system")` will update
       `autoloads.lisp`.
     
-    - `(``ASDF:TEST-SYSTEM` `"my-system")` [checks][4afe] that `autoload.lisp` is up-to-date.
+    - `(ASDF:TEST-SYSTEM "my-system")` [checks][4afe] that `autoload.lisp` is up-to-date.
     
     If the package definitions are also generated with
     `RECORD-SYSTEM-AUTOLOADS` (e.g. because there is a
@@ -369,9 +370,9 @@ the autoloaded dependencies. This can be done with
 
     Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
-    canonicalized with `ASDF:COERCE-NAME`. In [`AUTOLOAD-SYSTEM`][cd2d]s,
-    [`AUTOLOAD`][7da0] signals an error if the `ASDF:SYSTEM` to be loaded
-    is among those declared here.
+    canonicalized with `ASDF:COERCE-NAME`. This is used by [`AUTOLOADS`][1e20] and
+    affect the checks performed by the [`AUTOLOAD`][7da0] and
+    `AUTOLOADS`.
 
 <a id="x-28AUTOLOAD-3ASYSTEM-RECORD-AUTOLOADS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
 
@@ -423,7 +424,11 @@ the autoloaded dependencies. This can be done with
 - [function] **AUTOLOADS** *SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES*
 
     Return a list of forms that set up autoloading for definitions such
-    as [`DEFUN/AUTOLOADED`][3b15] in [autoloaded direct dependencies][8429] of `SYSTEM`.
+    as [`DEFUN/AUTOLOADED`][3b15] in [`:AUTOLOADED-SYSTEMS`][8429] of `SYSTEM`.
+    
+    There is rarely a need to call this function directly, as
+    [`RECORD-SYSTEM-AUTOLOADS`][dceb] and [`CHECK-SYSTEM-AUTOLOADS`][4afe] provide
+    [ASDF Integration][0c5c].
     
     Note that this is an expensive operation, as it loads or reloads the
     direct dependencies one by one with `ASDF:LOAD-SYSTEM` `:FORCE` `T` and

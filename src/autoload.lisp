@@ -80,8 +80,10 @@
   function NAME. It is an error if NAME is not redefined as a normal
   function (that's not FUNCTION-AUTOLOAD-P).
 
-  Also, see [SYSTEM-AUTOLOADED-SYSTEMS][ (reader autoload-system)] for
-  further consistency checking."
+  When AUTOLOAD is macroexpanded during the compilation or load of an
+  AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if ASDF-SYSTEM-NAME
+  is not among those declared in [:AUTOLOADED-SYSTEMS][
+  system-autoloaded-systems (reader autoload-system)]."
   (declare (ignorable arglist))
   (check-function-autoload name asdf-system-name)
   `(progn
@@ -142,8 +144,8 @@
 (defun load-system-and-check-redefinition (asdf-system-name function-name)
   (unless (asdf:find-system asdf-system-name nil)
     (error "~@<Could not ~S ASDF:SYSTEM ~S for function ~S. ~
-           It may not be installed.~:@>"
-           'autoload asdf-system-name function-name))
+           It may not be installed. See ~S.~:@>"
+           'autoload asdf-system-name function-name 'autoloaded-systems))
   (asdf:load-system asdf-system-name)
   (when (function-autoload-p function-name)
     (error "~@<Autoloaded function ~S is still ~S after loading ~
@@ -681,9 +683,9 @@
     :reader system-autoloaded-systems
     :documentation "Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
-    canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
-    [AUTOLOAD][macro] signals an error if the ASDF:SYSTEM to be loaded
-    is among those declared here.")
+    canonicalized with ASDF:COERCE-NAME. This is used by AUTOLOADS and
+    affect the checks performed by the [AUTOLOAD][macro] and
+    AUTOLOADS.")
    (record-autoloads
     :initform nil
     :initarg :record-autoloads
@@ -724,7 +726,7 @@
   - `(`RECORD-SYSTEM-AUTOLOADS `\"my-system\")` will update
     `autoloads.lisp`.
 
-  - `(`ASDF:TEST-SYSTEM `\"my-system\")` [checks][
+  - `(ASDF:TEST-SYSTEM \"my-system\")` [checks][
     check-system-autoloads] that `autoload.lisp` is up-to-date.
 
   If the package definitions are also generated with
@@ -868,8 +870,12 @@
 (defun autoloads (system &key (process-arglist t) (process-docstring t)
                   packages)
   "Return a list of forms that set up autoloading for definitions such
-  as DEFUN/AUTOLOADED in [autoloaded direct dependencies][
+  as DEFUN/AUTOLOADED in [:AUTOLOADED-SYSTEMS][
   SYSTEM-AUTOLOADED-SYSTEMS (reader autoload-system)] of SYSTEM.
+
+  There is rarely a need to call this function directly, as
+  RECORD-SYSTEM-AUTOLOADS and CHECK-SYSTEM-AUTOLOADS provide
+  @ASDF-INTEGRATION.
 
   Note that this is an expensive operation, as it loads or reloads the
   direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
