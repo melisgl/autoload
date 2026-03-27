@@ -48,7 +48,7 @@ function run_tests {
   num_passes=0
   ${test_suite} ${lisp} ros --lisp ${lisp} run -- "$@"
   if ((num_failures > 0)); then
-    if [ $stop_on_failure ]; then
+    if [ "$stop_on_failure" = "t" ]; then
       exit 1
     fi
   fi

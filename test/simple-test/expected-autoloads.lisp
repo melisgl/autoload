@@ -6,6 +6,9 @@
 
 (in-package :cl)
 
+(autoload:autoload %simple-test::custom "%simple-test/full" :arglist
+                   "(%simple-test::x)" :docstring "custom doc")
+
 (autoload:autoload %simple-test::foo "%simple-test/full" :arglist
                    "(%simple-test::x)" :docstring "foo docstring")
 
@@ -18,6 +21,8 @@
 
 (autoload:autoload (setf %simple-test::xxx) "%simple-test/full" :arglist
                    "(%simple-test::x)")
+
+(autoload:declare-variable-autoload %simple-test::*var/circular-value*)
 
 (autoload:declare-variable-autoload %simple-test::*var/complex-value*)
 

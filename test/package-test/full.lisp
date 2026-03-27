@@ -26,7 +26,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (use-package :autoload))
 
-(autoload:defpackage/autoloaded :%aaa
+(mgl-pax:define-package :%aaa
   (:use :cl)
   (:export #:aaa-foo))
 

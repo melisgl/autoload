@@ -13,6 +13,8 @@
 
 (defvar/autoloaded *var/complex-value* (1+ 2))
 
+(defvar/autoloaded *var/circular-value* '#1=(1+ #1#))
+
 (defpackage :%3rd-party)
 
 (defun/autoloaded foo-with-unreadable-arglist (&optional (x '%3rd-party::z))
@@ -35,3 +37,7 @@
   (:method (x)
     x)
   (:documentation "foo-gf docstring"))
+
+(define-autoloaded-function defun custom (x)
+  "custom doc"
+  x)
