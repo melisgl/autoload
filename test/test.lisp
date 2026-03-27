@@ -239,26 +239,20 @@
           (signals (error :pred "differ" :handler #'continue)
             (is (not (check-system-autoloads "%test-system"))))
           ;; Test the RECORD-SYSTEM-AUTOLOADS restart.
-          (signals (error :pred "differ"
-                          :handler (lambda (condition)
-                                     (declare (ignore condition))
-                                     (invoke-restart 'record-system-autoloads)))
+          (signals (error :pred "differ" :handler #'record-system-autoloads)
             (is (check-system-autoloads "%test-system")))))
       (with-test ("unresolved variable autoload")
         (with-test-systems
           (write-manual nil)
           (write-full t nil nil)
           (signals (autoload-warning :pred "has not been declared"
-                                     :handler #'muffle-warning)
+                    :handler #'muffle-warning)
             (asdf:load-system "%test-system/full" :force t))
           ;; Test the CONTINUE restart.
           (signals (error :pred "differ" :handler #'continue)
             (is (not (check-system-autoloads "%test-system"))))
           ;; Test the RECORD-SYSTEM-AUTOLOADS restart.
-          (signals (error :pred "differ"
-                          :handler (lambda (condition)
-                                     (declare (ignore condition))
-                                     (invoke-restart 'record-system-autoloads)))
+          (signals (error :pred "differ" :handler #'record-system-autoloads)
             (is (check-system-autoloads "%test-system")))))
       (with-test ("resolved manual function autoload")
         (with-test-systems
@@ -266,7 +260,7 @@
           (write-full t t t)
           (asdf:load-system "%test-system" :force t)
           (signals (autoload-warning :pred "has not been declared"
-                                     :handler #'muffle-warning)
+                    :handler #'muffle-warning)
             (asdf:load-system "%test-system/full" :force t))
           (record-system-autoloads "%test-system")
           (is (check-system-autoloads "%test-system"))))
@@ -286,11 +280,11 @@
               (asdf:test-system "%test-system")))
           ;; Test that there is no RECORD-SYSTEM-AUTOLOADS restart.
           (signals (error :pred "manual"
-                          :handler (lambda (condition)
-                                     (is (null (find-restart
-                                                'record-system-autoloads
-                                                condition)))
-                                     (continue condition)))
+                    :handler (lambda (condition)
+                               (is (null (find-restart
+                                          'record-system-autoloads
+                                          condition)))
+                               (continue condition)))
             (is (not (check-system-autoloads "%test-system"))))))
       (with-test ("compile error in autoloads")
         (with-test-systems
@@ -298,10 +292,7 @@
           (write-full t t t)
           (autoload::with-file-superseded (stream (test-file "autoloads.lisp"))
             (format stream "yyy:xxx"))
-          (signals (error
-                    :handler (lambda (condition)
-                               (declare (ignore condition))
-                               (invoke-restart 'record-system-autoloads)))
+          (signals (error :handler #'record-system-autoloads)
             (let ((*standard-output* (make-broadcast-stream))
                   (*error-output* (make-broadcast-stream)))
               (with-compilation-unit (:override t)
