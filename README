@@ -128,7 +128,7 @@ the autoloaded dependencies. This can be done with
 
 ### Functions
 
-- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL) (EXPLICITP T)
+- [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)
 
     Define a stub function with NAME to load
     ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
@@ -152,21 +152,9 @@ the autoloaded dependencies. This can be done with
       specified, a generic docstring that says what system it autoloads
       will be used.
 
-    - EXPLICITP T indicates that ASDF-SYSTEM-NAME will redefine NAME by
-      one of DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED or
-      DEFINE-AUTOLOADED-FUNCTION. EXPLICITP NIL indicates that the
-      redefinition will use another mechanism (e.g. a DEFUN, as a
-      DEFCLASS accessor, or even a (SETF FDEFINITION``)).
-
     Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
-    function NAME. After loading it, the following checks are made.
-
-    - It is an error if NAME is not redefined as a normal
-      function (that's not FUNCTION-AUTOLOAD-P).
-
-    - It is an AUTOLOAD-WARNING if the promise of EXPLICITP is broken,
-      as it indicates confusion whether Generating Autoloads should be
-      done automatically or not.
+    function NAME. It is an error if NAME is not redefined as a normal
+    function (that's not FUNCTION-AUTOLOAD-P).
 
     Also, see SYSTEM-AUTOLOADED-SYSTEMS for
     further consistency checking.

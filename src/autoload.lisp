@@ -53,7 +53,7 @@
 ;;;; @FUNCTIONS
 
 (defmacro autoload (name asdf-system-name &key (arglist nil arglistp)
-                    (docstring nil docstringp) (explicitp t))
+                    (docstring nil docstringp))
   "Define a stub function with NAME to [load][asdf:load-system]
   ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
   If NAME has a [function definition][fdefinition clhs] and it is not
@@ -76,21 +76,9 @@
     specified, a generic docstring that says what system it autoloads
     will be used.
 
-  - EXPLICITP T indicates that ASDF-SYSTEM-NAME will redefine NAME by
-    one of DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED or
-    DEFINE-AUTOLOADED-FUNCTION. EXPLICITP NIL indicates that the
-    redefinition will use another mechanism (e.g. a DEFUN, as a
-    DEFCLASS accessor, or even a `(`SETF FDEFINITION`)`).
-
   Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
-  function NAME. After loading it, the following checks are made.
-
-  - It is an error if NAME is not redefined as a normal
-    function (that's not FUNCTION-AUTOLOAD-P).
-
-  - It is an AUTOLOAD-WARNING if the promise of EXPLICITP is broken,
-    as it indicates confusion whether @GENERATING-AUTOLOADS should be
-    done automatically or not.
+  function NAME. It is an error if NAME is not redefined as a normal
+  function (that's not FUNCTION-AUTOLOAD-P).
 
   Also, see [SYSTEM-AUTOLOADED-SYSTEMS][ (reader autoload-system)] for
   further consistency checking."
@@ -118,8 +106,7 @@
               (format nil "[AUTOLOADed][pax:macro] function in ~
                           the ~A ASDF:SYSTEM."
                       (%escape-markdown asdf-system-name)))
-         (load-system-and-check-redefinition ',asdf-system-name ',name
-                                             ',explicitp)
+         (load-system-and-check-redefinition ',asdf-system-name ',name)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
          ;; is invoked and not this stub, which could be the case
          ;; without the FDEFINITION call.
@@ -152,35 +139,16 @@
           (t
            (values sexp t)))))
 
-(defun load-system-and-check-redefinition (asdf-system-name function-name
-                                           explicitp)
+(defun load-system-and-check-redefinition (asdf-system-name function-name)
   (unless (asdf:find-system asdf-system-name nil)
     (error "~@<Could not ~S ASDF:SYSTEM ~S for function ~S. ~
            It may not be installed.~:@>"
            'autoload asdf-system-name function-name))
   (asdf:load-system asdf-system-name)
-  (check-function-redefinition function-name asdf-system-name explicitp))
-
-(defun check-function-redefinition (name asdf-system-name explicitp)
-  (cond ((function-autoload-p name)
-         (error "~@<Autoloaded function ~S is still ~S ~
-                after loading ~S ASDF:SYSTEM.~:@>"
-                name 'function-autoload-p asdf-system-name))
-        ((functionp (state name :function))
-         (when explicitp
-           (signal-autoload-warning
-            "~@<Autoloaded function ~S was redefined ~
-            in the ~S ASDF:SYSTEM but not by ~S, ~S or ~S.~:@>"
-            name asdf-system-name 'defun/autoloaded 'defgeneric/autoloaded
-            'define-autoloaded-function)))
-        (t
-         (assert (eq (state name :function) :resolved))
-         (unless explicitp
-           (signal-autoload-warning
-            "~@<Autoloaded function ~S was declared with ~S ~S but was ~
-            redefined in the ~S ASDF:SYSTEM explicitly by ~S, ~S or ~S.~:@>"
-            name :explicitp nil asdf-system-name 'defun/autoloaded
-            'defgeneric/autoloaded 'define-autoloaded-function)))))
+  (when (function-autoload-p function-name)
+    (error "~@<Autoloaded function ~S is still ~S after loading ~
+           ~S ASDF:SYSTEM.~:@>"
+           function-name 'function-autoload-p asdf-system-name)))
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function
