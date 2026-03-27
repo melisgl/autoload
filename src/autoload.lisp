@@ -54,10 +54,22 @@
 
 (defmacro autoload (name asdf-system-name &key (arglist nil arglistp)
                     (docstring nil docstringp))
-  "Define a stub function with NAME to [load][asdf:load-system]
-  ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
-  If NAME has a [function definition][fdefinition clhs] and it is not
-  FUNCTION-AUTOLOAD-P, then do nothing and return NIL.
+  "Define a stub function with NAME that defers  ASDF-SYSTEM-NAME
+  and calls the function of the same NAME defined it. Return NAME. The
+  arguments are not evaluated. If NAME has a [function
+  definition][fdefinition clhs] and it is not FUNCTION-AUTOLOAD-P,
+  then do nothing and return NIL.
+
+  The stub does the following.
+
+  1. It first tries to load ASDF-SYSTEM-NAME. It is an AUTOLOAD-ERROR
+     if that fails.
+
+  2. It checks that the function with name has been redefined as as a
+     normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
+     an AUTOLOAD-ERROR.
+
+  3. It calls the function NAME passing on the stub's own arguments.
 
   The stub is not defined at [compile time][clhs], which matches the
   required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -75,10 +87,6 @@
   - DOCSTRING, if specified, will be the stub's docstring. If not
     specified, a generic docstring that says what system it autoloads
     will be used.
-
-  Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
-  function NAME. It is an error if NAME is not redefined as a normal
-  function (that's not FUNCTION-AUTOLOAD-P).
 
   When AUTOLOAD is macroexpanded during the compilation or load of an
   AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if ASDF-SYSTEM-NAME
@@ -108,13 +116,68 @@
               (format nil "[AUTOLOADed][pax:macro] function in ~
                           the ~A ASDF:SYSTEM."
                       (%escape-markdown asdf-system-name)))
-         (load-system-and-check-redefinition ',asdf-system-name ',name)
+         (autoload-system-for ',asdf-system-name ',name)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
          ;; is invoked and not this stub, which could be the case
          ;; without the FDEFINITION call.
          (apply (fdefinition ',name) args))
        (after-function-autoload-definition ',name ',arglistp ',arglist)
        ',name)))
+
+(define-condition autoload-error (error)
+  ((function-name
+    :initarg :function-name
+    :reader autoload-error-function-name)
+   (system-name
+    :initarg :system-name
+    :reader autoload-error-system-name)
+   (cause
+    :initarg :cause
+    :initform nil
+    :reader autoload-error-cause))
+  (:report (lambda (condition stream)
+             (let ((function-name (autoload-error-function-name condition))
+                   (system-name (autoload-error-system-name condition))
+                   (cause (autoload-error-cause condition)))
+               (cond
+                 ((eq cause :system-not-found)
+                  (format stream "~@<Could not find ASDF:SYSTEM ~S for ~
+                          autoloaded function ~S. It may not be installed. ~
+                          See ~S.~:@>"
+                          system-name function-name 'autoload-systems))
+                 ((eq cause :not-resolved)
+                  (format stream "~@<Autoloaded function ~S was not ~
+                          redefined by the ~S ASDF:SYSTEM.~:@>"
+                          function-name system-name))
+                 ((typep cause 'condition)
+                  (format stream "~@<Failed to load ASDF:SYSTEM ~S for ~
+                          autoloaded function ~S.~%~
+                          Underlying condition: ~A~:@>"
+                          system-name function-name cause))
+                 (t
+                  (format stream "~@<Autoload failure for function ~S in ~
+                          ASDF:SYSTEM ~S.~:@>"
+                          function-name system-name))))))
+  (:documentation "Signalled by the stub defined by [AUTOLOAD][macro]
+  if autoloading fails."))
+
+(defun autoload-system-for (asdf-system-name function-name)
+  (unless (asdf:find-system asdf-system-name nil)
+    (error 'autoload-error
+           :function-name function-name
+           :system-name asdf-system-name
+           :cause :system-not-found))
+  (handler-bind ((error (lambda (c)
+                          (error 'autoload-error
+                                 :function-name function-name
+                                 :system-name asdf-system-name
+                                 :cause c))))
+    (asdf:load-system asdf-system-name))
+  (when (function-autoload-p function-name)
+    (error 'autoload-error
+           :function-name function-name
+           :system-name asdf-system-name
+           :cause :not-resolved)))
 
 (defun after-function-autoload-definition (name arglistp arglist)
   (declare (ignorable arglistp arglist))
@@ -140,17 +203,6 @@
            (values nil nil))
           (t
            (values sexp t)))))
-
-(defun load-system-and-check-redefinition (asdf-system-name function-name)
-  (unless (asdf:find-system asdf-system-name nil)
-    (error "~@<Could not ~S ASDF:SYSTEM ~S for function ~S. ~
-           It may not be installed. See ~S.~:@>"
-           'autoload asdf-system-name function-name 'autoloaded-systems))
-  (asdf:load-system asdf-system-name)
-  (when (function-autoload-p function-name)
-    (error "~@<Autoloaded function ~S is still ~S after loading ~
-           ~S ASDF:SYSTEM.~:@>"
-           function-name 'function-autoload-p asdf-system-name)))
 
 (defun function-autoload-p (name)
   "See if NAME's function definition is an autoloader function

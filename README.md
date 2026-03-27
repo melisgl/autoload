@@ -9,7 +9,8 @@
 - [3 Basics][fa90]
     - [3.1 Functions][4b04]
     - [3.2 Variables][f490]
-    - [3.3 Package][643f]
+    - [3.3 Packages][643f]
+    - [3.4 Conditions][f43d]
 - [4 ASDF Integration][0c5c]
     - [4.1 Generating Autoloads][48d3]
 
@@ -154,13 +155,6 @@ the autoloaded dependencies. This can be done with
 
 ## 3 Basics
 
-<a id="x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29"></a>
-
-- [condition] **AUTOLOAD-WARNING** *[SIMPLE-WARNING][fc62]*
-
-    Signalled when inconsistencies are detected by e.g.
-    [`AUTOLOAD`][7da0] and [`DEFVAR/AUTOLOADED`][453a].
-
 <a id="x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29"></a>
 
 ### 3.1 Functions
@@ -169,10 +163,22 @@ the autoloaded dependencies. This can be done with
 
 - [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)*
 
-    Define a stub function with `NAME` to load
-    `ASDF-SYSTEM-NAME` and return `NAME`. The arguments are not evaluated.
-    If `NAME` has a [function definition][eea4] and it is not
-    [`FUNCTION-AUTOLOAD-P`][57ad], then do nothing and return `NIL`.
+    Define a stub function with `NAME` that defers  `ASDF-SYSTEM-NAME`
+    and calls the function of the same `NAME` defined it. Return `NAME`. The
+    arguments are not evaluated. If `NAME` has a [function
+    definition][eea4] and it is not [`FUNCTION-AUTOLOAD-P`][57ad],
+    then do nothing and return `NIL`.
+    
+    The stub does the following.
+    
+    1. It first tries to load `ASDF-SYSTEM-NAME`. It is an [`AUTOLOAD-ERROR`][a515]
+       if that fails.
+    
+    2. It checks that the function with name has been redefined as as a
+       normal function (that's not `FUNCTION-AUTOLOAD-P`), else it signals
+       an `AUTOLOAD-ERROR`.
+    
+    3. It calls the function `NAME` passing on the stub's own arguments.
     
     The stub is not defined at [compile time][27c6], which matches the
     required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1] `FUNCTION`([`0`][119e] [`1`][81f7])
@@ -190,10 +196,6 @@ the autoloaded dependencies. This can be done with
     - `DOCSTRING`, if specified, will be the stub's docstring. If not
       specified, a generic docstring that says what system it autoloads
       will be used.
-    
-    Thus, the system `ASDF-SYSTEM-NAME` is expected to redefine the
-    function `NAME`. It is an error if `NAME` is not redefined as a normal
-    function (that's not `FUNCTION-AUTOLOAD-P`).
     
     When `AUTOLOAD` is macroexpanded during the compilation or load of an
     [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `ASDF-SYSTEM-NAME`
@@ -284,7 +286,7 @@ the autoloaded dependencies. This can be done with
 
 <a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.3 Package
+### 3.3 Packages
 
 <a id="x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -315,6 +317,24 @@ the autoloaded dependencies. This can be done with
     `UIOP:DEFINE-PACKAGE` and arrange for [Generating Autoloads][48d3] for the
     package by listing it in `:PACKAGES` of
     [`SYSTEM-RECORD-AUTOLOADS`][f945].
+
+<a id="x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29"></a>
+
+### 3.4 Conditions
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-ERROR-20CONDITION-29"></a>
+
+- [condition] **AUTOLOAD-ERROR** *[ERROR][d162]*
+
+    Signalled by the stub defined by [`AUTOLOAD`][7da0]
+    if autoloading fails.
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29"></a>
+
+- [condition] **AUTOLOAD-WARNING** *[SIMPLE-WARNING][fc62]*
+
+    Signalled when inconsistencies are detected by e.g.
+    [`AUTOLOAD`][7da0] and [`DEFVAR/AUTOLOADED`][453a].
 
 <a id="x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29"></a>
 
@@ -566,7 +586,7 @@ the autoloaded dependencies. This can be done with
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"
   [57ad]: #x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29 "AUTOLOAD:FUNCTION-AUTOLOAD-P FUNCTION"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
-  [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Package"
+  [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Packages"
   [6547]: http://www.lispworks.com/documentation/HyperSpec/Body/f_open.htm "OPEN (MGL-PAX:CLHS FUNCTION)"
   [6671]: http://www.lispworks.com/documentation/HyperSpec/Body/f_pn.htm "PATHNAME (MGL-PAX:CLHS FUNCTION)"
   [6caf]: #x-28AUTOLOAD-3A-40AUTOLOAD-MANUAL-20MGL-PAX-3ASECTION-29 "Autoload Manual"
@@ -577,6 +597,7 @@ the autoloaded dependencies. This can be done with
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [990a]: #x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFPACKAGE/AUTOLOADED MGL-PAX:MACRO"
   [9b43]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpkg.htm "DEFPACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
+  [a515]: #x-28AUTOLOAD-3AAUTOLOAD-ERROR-20CONDITION-29 "AUTOLOAD:AUTOLOAD-ERROR CONDITION"
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c5ae]: http://www.lispworks.com/documentation/HyperSpec/Body/f_docume.htm "DOCUMENTATION (MGL-PAX:CLHS GENERIC-FUNCTION)"
@@ -584,6 +605,7 @@ the autoloaded dependencies. This can be done with
   [c7f7]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defgen.htm "DEFGENERIC (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
+  [d162]: http://www.lispworks.com/documentation/HyperSpec/Body/e_error.htm "ERROR (MGL-PAX:CLHS CONDITION)"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
   [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"
   [da95]: #x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29 "AUTOLOAD:AUTOLOAD-WARNING CONDITION"
@@ -591,6 +613,7 @@ the autoloaded dependencies. This can be done with
   [ea6a]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#condition_handler "\"condition handler\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [eea4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fdefin.htm "FDEFINITION (MGL-PAX:CLHS FUNCTION)"
+  [f43d]: #x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29 "Conditions"
   [f472]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defun.htm "DEFUN (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [f490]: #x-28AUTOLOAD-3A-40VARIABLES-20MGL-PAX-3ASECTION-29 "Variables"
   [f5d0]: http://www.lispworks.com/documentation/HyperSpec/Body/s_quote.htm "QUOTE (MGL-PAX:CLHS MGL-PAX:MACRO)"

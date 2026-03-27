@@ -120,10 +120,10 @@
   """)
 
 (defsection @basics (:title "Basics" :export nil)
-  (autoload-warning condition)
   (@functions section)
   (@variables section)
-  (@packages section))
+  (@packages section)
+  (@conditions section))
 
 (defsection @functions (:title "Functions" :export nil)
   (autoload macro)
@@ -137,8 +137,12 @@
   (variable-autoload-p function)
   (defvar/autoloaded macro))
 
-(defsection @packages (:title "Package" :export nil)
+(defsection @packages (:title "Packages" :export nil)
   (defpackage/autoloaded macro))
+
+(defsection @conditions (:title "Conditions" :export nil)
+  (autoload-error condition)
+  (autoload-warning condition))
 
 (defsection @asdf-integration (:title "ASDF Integration" :export nil)
   (autoload-system class)
