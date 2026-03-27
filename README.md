@@ -162,20 +162,19 @@ the autoloaded dependencies. This can be done with
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)*
+- [macro] **AUTOLOAD** *NAME SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)*
 
-    Define a stub function with `NAME` that loads `ASDF-SYSTEM-NAME`,
-    expecting it to redefine the function, and then calls the newly
-    loaded definition. Return `NAME`. The arguments are not evaluated. If
-    `NAME` has an [`FDEFINITION`][eea4] and it is not [`FUNCTION-AUTOLOAD-P`][57ad], then do
+    Define a stub function with `NAME` that loads `SYSTEM-NAME`, expecting
+    it to redefine the function, and then calls the newly loaded
+    definition. Return `NAME`. The arguments are not evaluated. If `NAME`
+    has an [`FDEFINITION`][eea4] and it is not [`FUNCTION-AUTOLOAD-P`][57ad], then do
     nothing and return `NIL`.
     
     The stub does the following.
     
-    1. It signals an [`AUTOLOAD-ERROR`][a515] if `ASDF-SYSTEM-NAME` does not
-       exist.
+    1. It signals an [`AUTOLOAD-ERROR`][a515] if `SYSTEM-NAME` does not exist.
     
-    2. It loads `ASDF-SYSTEM-NAME`.
+    2. It loads `SYSTEM-NAME`.
     
     3. It checks that the function with `NAME` has been redefined as as a
        normal function (that's not `FUNCTION-AUTOLOAD-P`), else it signals
@@ -201,8 +200,8 @@ the autoloaded dependencies. This can be done with
       will be used.
     
     When `AUTOLOAD` is macroexpanded during the compilation or load of an
-    [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `ASDF-SYSTEM-NAME`
-    is not among those declared in [`:AUTOLOADED-SYSTEMS`][8429].
+    [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `SYSTEM-NAME` is
+    not among those declared in [`:AUTOLOADED-SYSTEMS`][8429].
 
 <a id="x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29"></a>
 

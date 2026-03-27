@@ -52,20 +52,20 @@
 
 ;;;; @FUNCTIONS
 
-(defmacro autoload (name asdf-system-name &key (arglist nil arglistp)
+(defmacro autoload (name system-name &key (arglist nil arglistp)
                     (docstring nil docstringp))
-  "Define a stub function with NAME that loads ASDF-SYSTEM-NAME,
-  expecting it to redefine the function, and then calls the newly
-  loaded definition. Return NAME. The arguments are not evaluated. If
-  NAME has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
+  "Define a stub function with NAME that loads SYSTEM-NAME, expecting
+  it to redefine the function, and then calls the newly loaded
+  definition. Return NAME. The arguments are not evaluated. If NAME
+  has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
   nothing and return NIL.
 
   The stub does the following.
 
-  1. It signals an AUTOLOAD-ERROR if ASDF-SYSTEM-NAME does not
-     [exist][asdf:find-system].
+  1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
+     asdf:find-system].
 
-  2. It loads ASDF-SYSTEM-NAME.
+  2. It loads SYSTEM-NAME.
 
   3. It checks that the function with NAME has been redefined as as a
      normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
@@ -91,11 +91,11 @@
     will be used.
 
   When AUTOLOAD is macroexpanded during the compilation or load of an
-  AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if ASDF-SYSTEM-NAME
-  is not among those declared in [:AUTOLOADED-SYSTEMS][
+  AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
+  not among those declared in [:AUTOLOADED-SYSTEMS][
   system-autoloaded-systems (reader autoload-system)]."
   (declare (ignorable arglist))
-  (check-function-autoload name asdf-system-name)
+  (check-function-autoload name system-name)
   `(progn
      (declaim
       ;; This is mainly to prevent undefined function compiler
@@ -117,8 +117,8 @@
               docstring
               (format nil "[AUTOLOADed][pax:macro] function in ~
                           the ~A ASDF:SYSTEM."
-                      (%escape-markdown asdf-system-name)))
-         (autoload-system-for ',asdf-system-name ',name)
+                      (%escape-markdown system-name)))
+         (autoload-system-for ',system-name ',name)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
          ;; is invoked and not this stub, which could be the case
          ;; without the FDEFINITION call.
@@ -158,17 +158,17 @@
   (:documentation "Signalled by the stub defined by [AUTOLOAD][macro]
   if autoloading fails."))
 
-(defun autoload-system-for (asdf-system-name function-name)
-  (unless (asdf:find-system asdf-system-name nil)
+(defun autoload-system-for (system-name function-name)
+  (unless (asdf:find-system system-name nil)
     (error 'autoload-error
            :function-name function-name
-           :system-name asdf-system-name
+           :system-name system-name
            :cause :system-not-found))
-  (asdf:load-system asdf-system-name)
+  (asdf:load-system system-name)
   (when (function-autoload-p function-name)
     (error 'autoload-error
            :function-name function-name
-           :system-name asdf-system-name
+           :system-name system-name
            :cause :not-resolved)))
 
 (defun after-function-autoload-definition (name arglistp arglist)
@@ -239,9 +239,9 @@
                            (second form)))))
 
 (defun defun/autoloaded-info-to-autoload-form
-    (asdf-system-name info process-arglist process-docstring)
+    (system-name info process-arglist process-docstring)
   (destructuring-bind (name lambda-list docstring) info
-    `((autoload ,name ,asdf-system-name
+    `((autoload ,name ,system-name
                 ,@(when process-arglist
                     `(:arglist ,(prin1-to-string* lambda-list)))
                 ,@(let ((docstring
@@ -336,8 +336,8 @@
      ',var))
 
 (defun defvar/autoloaded-info-to-autoload-form
-    (asdf-system-name info process-arglist process-docstring)
-  (declare (ignore asdf-system-name process-arglist))
+    (system-name info process-arglist process-docstring)
+  (declare (ignore system-name process-arglist))
   (destructuring-bind (name val-form val-form-p docstring) info
     `((declare-variable-autoload ,name
           ,@(when (and val-form-p
@@ -855,16 +855,16 @@
                  (setq processed (append pending processed)))))
     (reverse *listed-autoloaded-systems*)))
 
-(defun check-function-autoload (name asdf-system-name)
+(defun check-function-autoload (name system-name)
   (when *autoload-system*
-    (let ((asdf-system-name (asdf:coerce-name asdf-system-name))
+    (let ((system-name (asdf:coerce-name system-name))
           (system-autoloaded-systems
             (system-autoloaded-systems *autoload-system*)))
-      (unless (find asdf-system-name system-autoloaded-systems :test #'equal)
+      (unless (find system-name system-autoloaded-systems :test #'equal)
         (signal-autoload-warning
          "~@<~S, the system to be autoloaded for function ~S, is ~
          not among ~S, the ~S of ~S.~:@>"
-         asdf-system-name name system-autoloaded-systems
+         system-name name system-autoloaded-systems
          'system-autoloaded-systems
          (asdf:component-name *autoload-system*))))
     (when (function-autoload-p name)
@@ -1001,14 +1001,14 @@
     (reverse *recorded-autoload-infos*)))
 
 (defun info-to-autoload-forms (info process-arglist process-docstring)
-  (let ((asdf-system-name (pop info))
+  (let ((system-name (pop info))
         (definer (pop info)))
     (ecase definer
       ((defun/autoloaded)
-       (defun/autoloaded-info-to-autoload-form asdf-system-name info
+       (defun/autoloaded-info-to-autoload-form system-name info
          process-arglist process-docstring))
       ((defvar/autoloaded)
-       (defvar/autoloaded-info-to-autoload-form asdf-system-name info
+       (defvar/autoloaded-info-to-autoload-form system-name info
          process-arglist process-docstring)))))
 
 (defun record-autoloads (system output &key (process-arglist t)
@@ -1052,7 +1052,7 @@
             #+clisp (custom:*reopen-open-file* nil))
         (with-file-superseded (stream pathname)
           (with-autoloads-file-syntax
-            (format stream ";;;; This file was emptied by
+            (format stream ";;;; This file was emptied by~%~
                             ;;;;~%~
                             ;;;;   ~S~%~
                             ;;;;~%~
