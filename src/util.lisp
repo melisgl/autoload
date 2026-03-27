@@ -99,15 +99,11 @@
 
 #+ecl
 (defun find-type-in-sexp (form type)
-  (dolist (x form)
-    (cond ((listp x)
-           (let ((r (find-type-in-sexp x type)))
-             (when r
-               (return-from find-type-in-sexp r))))
-          ((typep x type)
-           (return-from find-type-in-sexp x))
-          (t
-           nil))))
+  (cond ((typep form type) form)
+        ((consp form)
+         (or (find-type-in-sexp (car form) type)
+             (find-type-in-sexp (cdr form) type)))
+        (t nil)))
 
 #+sbcl
 ;;; Tracing typically encapsulates a function in a closure. The

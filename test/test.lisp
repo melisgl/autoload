@@ -46,13 +46,13 @@
     (read-from-string "(cl:setf %simple-test::xxx)"))
 
 (define-symbol-macro foo-gf
-    (read-from-string "%simple-test::foo-gf)"))
+    (read-from-string "%simple-test::foo-gf"))
 
 (define-symbol-macro missing-fn
-    (read-from-string "%simple-test::missing-fn)"))
+    (read-from-string "%simple-test::missing-fn"))
 
 (define-symbol-macro missing-system
-    (read-from-string "%simple-test::missing-system)"))
+    (read-from-string "%simple-test::missing-system"))
 
 (deftest test-simple ()
   (let ((dir (asdf:system-relative-pathname
