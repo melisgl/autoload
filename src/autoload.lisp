@@ -220,8 +220,8 @@
 
       (defmacro defun*/autoloaded (name lambda-list &body body)
         `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))"
-  (maybe-record-autoload-info `(defun/autoloaded ,name ,lambda-list
-                                 ,(find-docstring-in-body body)))
+  (maybe-record-autoload-info 'defun/autoloaded name lambda-list
+                              (find-docstring-in-body body))
   `(progn
      (before-autoloaded-function-definition ',name)
      (,definer ,name ,lambda-list ,@body)
@@ -328,7 +328,7 @@
   ```
 
   DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P."
-  (maybe-record-autoload-info `(defvar/autoloaded ,var ,val ,valp ,doc))
+  (maybe-record-autoload-info 'defvar/autoloaded var val valp doc)
   `(progn
      (before-autoloaded-variable-definition ',var)
      (defvar ,var)
@@ -409,7 +409,7 @@
         (exports (filter-options :export options :append))
         (doc (filter-options :documentation options :single))
         (pkg-name (string name)))
-    (maybe-record-autoload-info `(defpackage/autoloaded ,pkg-name))
+    (maybe-record-autoload-info 'defpackage/autoloaded pkg-name)
     `(eval-when (:compile-toplevel :load-toplevel :execute)
        (ensure-package-names ,pkg-name ',(mapcar #'string nicknames))
        ,@(when shadows
@@ -901,15 +901,19 @@
           (*print-miser-width* nil))
       (prin1-to-string object))))
 
-(defun maybe-record-autoload-info (info)
+(defun maybe-record-autoload-info (definer name &rest rest)
   ;; Do not record definitions from dependencies of autoloaded
   ;; systems.
   (when (and *recording-from-system*
              (eq *recording-from-system* *autoload-system*))
     ;; This is called from a macro, and macros are allowed to be
     ;; expanded multiple times.
-    (pushnew (cons (asdf:component-name *autoload-system*) info)
-             *recorded-autoload-infos* :test #'equal)))
+    (pushnew (list* (asdf:component-name *autoload-system*) definer name rest)
+             *recorded-autoload-infos*
+             :test (lambda (new entry)
+                     (declare (ignore new))
+                     (and (eq (second entry) definer)
+                          (equal (third entry) name))))))
 
 (defun autoloads (system &key (process-arglist t) (process-docstring t)
                   packages)
