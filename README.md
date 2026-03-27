@@ -131,8 +131,9 @@ Then, the autoloaded definitions can be extracted:
 This is implemented by loading the `:AUTOLOADED-SYSTEMS` of `my-lib`
 and recording [`DEFUN/AUTOLOADED`][3b15]s. [`AUTOLOADS`][1e20] is a low-level utility
 used by [`RECORD-SYSTEM-AUTOLOADS`][dceb] that writes its results
-to the system's `:RECORD-AUTOLOADS`, `"autoloads.lisp"` in the above example.
-So, all we need to do is to call it regenarate the autoloads file:
+to the system's `:RECORD-AUTOLOADS`, `"autoloads.lisp"` in the above
+example. So, all we need to do is to call it regenerate the
+autoloads file:
 
 ```
 (record-system-autoloads "my-lib")
@@ -163,18 +164,18 @@ the autoloaded dependencies. This can be done with
 
 - [macro] **AUTOLOAD** *NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)*
 
-    Define a stub function with `NAME` that defers  `ASDF-SYSTEM-NAME`
-    and calls the function of the same `NAME` defined it. Return `NAME`. The
-    arguments are not evaluated. If `NAME` has a [function
-    definition][eea4] and it is not [`FUNCTION-AUTOLOAD-P`][57ad],
-    then do nothing and return `NIL`.
+    Define a stub function with `NAME` that loads `ASDF-SYSTEM-NAME`,
+    expecting it to redefine the function, and then calls the newly
+    loaded definition. Return `NAME`. The arguments are not evaluated. If
+    `NAME` has an [`FDEFINITION`][eea4] and it is not [`FUNCTION-AUTOLOAD-P`][57ad], then do
+    nothing and return `NIL`.
     
     The stub does the following.
     
     1. It first tries to load `ASDF-SYSTEM-NAME`. It is an [`AUTOLOAD-ERROR`][a515]
        if that fails.
     
-    2. It checks that the function with name has been redefined as as a
+    2. It checks that the function with `NAME` has been redefined as as a
        normal function (that's not `FUNCTION-AUTOLOAD-P`), else it signals
        an `AUTOLOAD-ERROR`.
     

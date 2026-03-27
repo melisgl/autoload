@@ -54,18 +54,18 @@
 
 (defmacro autoload (name asdf-system-name &key (arglist nil arglistp)
                     (docstring nil docstringp))
-  "Define a stub function with NAME that defers  ASDF-SYSTEM-NAME
-  and calls the function of the same NAME defined it. Return NAME. The
-  arguments are not evaluated. If NAME has a [function
-  definition][fdefinition clhs] and it is not FUNCTION-AUTOLOAD-P,
-  then do nothing and return NIL.
+  "Define a stub function with NAME that loads ASDF-SYSTEM-NAME,
+  expecting it to redefine the function, and then calls the newly
+  loaded definition. Return NAME. The arguments are not evaluated. If
+  NAME has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
+  nothing and return NIL.
 
   The stub does the following.
 
   1. It first tries to load ASDF-SYSTEM-NAME. It is an AUTOLOAD-ERROR
      if that fails.
 
-  2. It checks that the function with name has been redefined as as a
+  2. It checks that the function with NAME has been redefined as as a
      normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
      an AUTOLOAD-ERROR.
 
@@ -144,7 +144,7 @@
                   (format stream "~@<Could not find ASDF:SYSTEM ~S for ~
                           autoloaded function ~S. It may not be installed. ~
                           See ~S.~:@>"
-                          system-name function-name 'autoload-systems))
+                          system-name function-name 'autoloaded-systems))
                  ((eq cause :not-resolved)
                   (format stream "~@<Autoloaded function ~S was not ~
                           redefined by the ~S ASDF:SYSTEM.~:@>"

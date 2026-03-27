@@ -99,8 +99,9 @@
   This is implemented by loading the :AUTOLOADED-SYSTEMS of `my-lib`
   and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
   used by [RECORD-SYSTEM-AUTOLOADS][ function] that writes its results
-  to the system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above example.
-  So, all we need to do is to call it regenarate the autoloads file:
+  to the system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above
+  example. So, all we need to do is to call it regenerate the
+  autoloads file:
 
   ```
   (record-system-autoloads "my-lib")
