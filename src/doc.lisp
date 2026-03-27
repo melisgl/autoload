@@ -5,7 +5,7 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (import '(pax:clhs pax:macro pax:section pax:defsection pax:reader
             pax:define-glossary-term pax:make-github-source-uri-fn
-            pax:register-doc-in-pax-world)
+            pax:register-doc-in-pax-world dref:define-restart)
           :autoload))
 
 (defsection @autoload-manual (:title "Autoload Manual" :export nil)
@@ -98,8 +98,8 @@
 
   This is implemented by loading the :AUTOLOADED-SYSTEMS of `my-lib`
   and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
-  used by RECORD-SYSTEM-AUTOLOADS that writes its results to the
-  system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above example.
+  used by [RECORD-SYSTEM-AUTOLOADS][ function] that writes its results
+  to the system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above example.
   So, all we need to do is to call it regenarate the autoloads file:
 
   ```
@@ -153,7 +153,15 @@
   (autoloads function)
   (write-autoloads function)
   (record-system-autoloads function)
-  (check-system-autoloads function))
+  (check-system-autoloads function)
+  (record-system-autoloads restart))
+
+(define-restart record-system-autoloads ()
+  "Provided by CHECK-SYSTEM-AUTOLOADS and also when the compilation of
+  the autoloads file declared in [:RECORD-AUTOLOADS][
+  system-record-autoloads (reader autoload-system)] fails. The
+  function RECORD-SYSTEM-AUTOLOADS can be used as a condition handler
+  to invoke this restart.")
 
 (define-glossary-term @slime-autodoc
     (:title "SLIME autodoc"
