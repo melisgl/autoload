@@ -57,7 +57,7 @@ The core idea is
     (defmacro autoload (name asdf-system)
       `(defun ,name (&rest args)
          (asdf:load-system ,asdf-system)
-         (apply 'name args)))
+         (apply ',name args)))
 
 Suppose we have a library called my-lib that autoloads my-lib/full.
 In my-lib, we could use AUTOLOAD as
@@ -114,7 +114,7 @@ definitions, ASDF:TEST-SYSTEM calls CHECK-SYSTEM-AUTOLOADS by
 default.
 
 ASDF and by extension Quicklisp don't know about the declared
-:AUTOLOADED-SYSTEMS, so (``QL:QUICKLOAD "my-lib") does not install
+:AUTOLOADED-SYSTEMS, so (QL:QUICKLOAD "my-lib") does not install
 the autoloaded dependencies. This can be done with
 
     (autoloaded-systems "my-lib" :installer #'ql:quickload)
@@ -156,8 +156,9 @@ the autoloaded dependencies. This can be done with
     function NAME. It is an error if NAME is not redefined as a normal
     function (that's not FUNCTION-AUTOLOAD-P).
 
-    Also, see SYSTEM-AUTOLOADED-SYSTEMS for
-    further consistency checking.
+    When AUTOLOAD is macroexpanded during the compilation or load of an
+    AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if ASDF-SYSTEM-NAME
+    is not among those declared in :AUTOLOADED-SYSTEMS.
 
 - [function] FUNCTION-AUTOLOAD-P NAME
 
@@ -279,7 +280,7 @@ the autoloaded dependencies. This can be done with
     - (RECORD-SYSTEM-AUTOLOADS "my-system") will update
       autoloads.lisp.
 
-    - (``ASDF:TEST-SYSTEM "my-system") checks that autoload.lisp is up-to-date.
+    - (ASDF:TEST-SYSTEM "my-system") checks that autoload.lisp is up-to-date.
 
     If the package definitions are also generated with
     RECORD-SYSTEM-AUTOLOADS (e.g. because there is a
@@ -298,9 +299,9 @@ the autoloaded dependencies. This can be done with
 
     Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
-    canonicalized with ASDF:COERCE-NAME. In AUTOLOAD-SYSTEMs,
-    AUTOLOAD signals an error if the ASDF:SYSTEM to be loaded
-    is among those declared here.
+    canonicalized with ASDF:COERCE-NAME. This is used by AUTOLOADS and
+    affect the checks performed by the AUTOLOAD and
+    AUTOLOADS.
 
 - [reader] SYSTEM-RECORD-AUTOLOADS AUTOLOAD-SYSTEM (:RECORD-AUTOLOADS = NIL)
 
@@ -342,7 +343,11 @@ the autoloaded dependencies. This can be done with
 - [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
 
     Return a list of forms that set up autoloading for definitions such
-    as DEFUN/AUTOLOADED in autoloaded direct dependencies of SYSTEM.
+    as DEFUN/AUTOLOADED in :AUTOLOADED-SYSTEMS of SYSTEM.
+
+    There is rarely a need to call this function directly, as
+    RECORD-SYSTEM-AUTOLOADS and CHECK-SYSTEM-AUTOLOADS provide
+    ASDF Integration.
 
     Note that this is an expensive operation, as it loads or reloads the
     direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and

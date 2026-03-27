@@ -40,7 +40,7 @@
   (defmacro autoload (name asdf-system)
     `(defun ,name (&rest args)
        (asdf:load-system ,asdf-system)
-       (apply 'name args)))
+       (apply ',name args)))
   ```
 
   Suppose we have a library called `my-lib` that autoloads `my-lib/full`.
@@ -111,7 +111,7 @@
   default.
 
   ASDF and by extension @QUICKLISP don't know about the declared
-  :AUTOLOADED-SYSTEMS, so `(`QL:QUICKLOAD `"my-lib")` does not install
+  :AUTOLOADED-SYSTEMS, so `(QL:QUICKLOAD "my-lib")` does not install
   the autoloaded dependencies. This can be done with
 
   ```
