@@ -121,19 +121,26 @@ the autoloaded dependencies. This can be done with
 
 ## Basics
 
-- [condition] AUTOLOAD-WARNING SIMPLE-WARNING
-
-    Signalled when inconsistencies are detected by e.g.
-    AUTOLOAD and DEFVAR/AUTOLOADED.
-
 ### Functions
 
 - [macro] AUTOLOAD NAME ASDF-SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)
 
-    Define a stub function with NAME to load
-    ASDF-SYSTEM-NAME and return NAME. The arguments are not evaluated.
-    If NAME has a function definition and it is not
-    FUNCTION-AUTOLOAD-P, then do nothing and return NIL.
+    Define a stub function with NAME that defers  ASDF-SYSTEM-NAME
+    and calls the function of the same NAME defined it. Return NAME. The
+    arguments are not evaluated. If NAME has a function
+    definition and it is not FUNCTION-AUTOLOAD-P,
+    then do nothing and return NIL.
+
+    The stub does the following.
+
+    1. It first tries to load ASDF-SYSTEM-NAME. It is an AUTOLOAD-ERROR
+       if that fails.
+
+    2. It checks that the function with name has been redefined as as a
+       normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
+       an AUTOLOAD-ERROR.
+
+    3. It calls the function NAME passing on the stub's own arguments.
 
     The stub is not defined at compile time, which matches the
     required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -151,10 +158,6 @@ the autoloaded dependencies. This can be done with
     - DOCSTRING, if specified, will be the stub's docstring. If not
       specified, a generic docstring that says what system it autoloads
       will be used.
-
-    Thus, the system ASDF-SYSTEM-NAME is expected to redefine the
-    function NAME. It is an error if NAME is not redefined as a normal
-    function (that's not FUNCTION-AUTOLOAD-P).
 
     When AUTOLOAD is macroexpanded during the compilation or load of an
     AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if ASDF-SYSTEM-NAME
@@ -225,7 +228,7 @@ the autoloaded dependencies. This can be done with
 
     DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P.
 
-### Package
+### Packages
 
 - [macro] DEFPACKAGE/AUTOLOADED NAME &REST OPTIONS
 
@@ -254,6 +257,18 @@ the autoloaded dependencies. This can be done with
     UIOP:DEFINE-PACKAGE and arrange for Generating Autoloads for the
     package by listing it in :PACKAGES of
     SYSTEM-RECORD-AUTOLOADS.
+
+### Conditions
+
+- [condition] AUTOLOAD-ERROR ERROR
+
+    Signalled by the stub defined by AUTOLOAD
+    if autoloading fails.
+
+- [condition] AUTOLOAD-WARNING SIMPLE-WARNING
+
+    Signalled when inconsistencies are detected by e.g.
+    AUTOLOAD and DEFVAR/AUTOLOADED.
 
 ## ASDF Integration
 

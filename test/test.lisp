@@ -74,11 +74,11 @@
                  (asdf:load-system "%simple-test" :force t)))
              (load-simple-test (&optional empty-autoloads-file-p)
                (signals-not (autoload-warning :pred #'unexpected-condition-p
-                                              :handler #'muffle-warning)
+                             :handler #'muffle-warning)
                  ;; CCC [handle][clhs]s warnings in COMPILE-FILE.
                  #-ccl
                  (signals (autoload-warning :pred #'missing-system-condition-p
-                                            :handler #'muffle-warning)
+                           :handler #'muffle-warning)
                    (if empty-autoloads-file-p
                        (%load-simple-test)
                        ;; Some Lisps let compile-time warnings through
@@ -157,7 +157,10 @@
           (load-simple-test)
           (is (not (asdf:component-loaded-p "%simple-test/full")))
           (is (function-autoload-p missing-system))
-          (signals (error :pred "may not be installed")
+          (signals (autoload-error
+                    :pred (lambda (c)
+                            (eq (autoload::autoload-error-cause c)
+                                :system-not-found)))
             (funcall missing-system))
           (is (function-autoload-p missing-system))))
       (with-test ("AUTOLOAD not redefined")
@@ -165,7 +168,10 @@
           (load-simple-test)
           (is (not (asdf:component-loaded-p "%simple-test/full")))
           (is (function-autoload-p missing-fn))
-          (signals (error :pred "is still")
+          (signals (autoload-error
+                    :pred (lambda (c)
+                            (eq (autoload::autoload-error-cause c)
+                                :not-resolved)))
             (funcall missing-fn))
           (is (asdf:component-loaded-p "%simple-test/full"))
           (is (function-autoload-p missing-fn)))))))

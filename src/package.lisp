@@ -2,7 +2,6 @@
   (:use #:common-lisp)
   (:export
    ;; Basics
-   #:autoload-warning
    ;;; Functions
    #:autoload #:function-autoload-p
    #:defun/autoloaded #:defgeneric/autoloaded #:define-autoloaded-function
@@ -10,6 +9,8 @@
    #:declare-variable-autoload #:variable-autoload-p #:defvar/autoloaded
    ;;; Packages
    #:defpackage/autoloaded
+   ;;; Conditions
+   #:autoload-error #:autoload-warning
    ;; ASDF integration
    #:autoload-system #:system-autoloaded-systems #:system-record-autoloads
    #:autoloaded-systems
