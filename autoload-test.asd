@@ -1,14 +1,10 @@
 ;;;; -*- mode: Lisp -*-
 
+;;; This is in a separate .asd file help OS-level packaging by making
+;;; the dependency graph of .asd files (as opposed to just ASDF
+;;; systems) acyclic. See https://github.com/melisgl/try/issues/5.
 (asdf:defsystem "autoload-test"
-  :licence "MIT, see COPYING."
-  :author "Gábor Melis"
-  :mailto "mega@retes.hu"
-  :homepage ""
-  :bug-tracker ""
-  :source-control ""
   :description "Test system for AUTOLOAD."
-  :long-description ""
   :depends-on ("autoload" "try")
   :components ((:module "test"
                 :serial t
