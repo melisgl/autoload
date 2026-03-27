@@ -136,7 +136,10 @@ the autoloaded dependencies. This can be done with
 
     1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
 
-    2. It loads SYSTEM-NAME.
+    2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
+       WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
+       non-portable measures may be taken to standardize the dynamic
+       environment.
 
     3. It checks that the function with NAME has been redefined as as a
        normal function (that's not FUNCTION-AUTOLOAD-P), else it signals

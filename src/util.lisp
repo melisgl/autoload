@@ -1,24 +1,27 @@
 (in-package :autoload)
 
-;;; KLUDGE: Hide any enclosing ASDF session. This allows a nested
-;;; ASDF:OPERATE with :FORCE T operate to execute.
-(defmacro without-asdf-session (&body body)
-  ;; Bind ASDF/SESSION:*ASDF-SESSION* to NIL. Since ASDF/SESSION is an
-  ;; implementation package, we cannot be sure that *ASDF-SESSION*
-  ;; will remain there. Assuming that the SYMBOL-NAME remains the
-  ;; same, we search for the first ASDF package that has a symbol
-  ;; named *ASDF-SESSION*.
+;;;Since ASDF/SESSION is an implementation package, we cannot be sure
+;;; that *ASDF-SESSION* will remain there. Assuming that the
+;;; SYMBOL-NAME remains the same, we search for the first ASDF package
+;;; that has a symbol named *ASDF-SESSION*.
+(defvar *asdf-session-symbol*
   (flet ((asdf-package-name-p (name)
            (or (string= name (string '#:asdf))
                (eql (search (string '#:asdf/) name) 0))))
-    (let* ((asdf-packages (remove-if-not #'asdf-package-name-p
-                                         (list-all-packages)
-                                         :key #'package-name))
-           (sym (loop for package in asdf-packages
-                        thereis (uiop:find-symbol* '#:*asdf-session* package
-                                                   nil))))
-      `(let (,@(when sym `((,sym nil))))
-         ,@body))))
+    (let ((asdf-packages (remove-if-not #'asdf-package-name-p
+                                        (list-all-packages)
+                                        :key #'package-name)))
+      (loop for package in asdf-packages
+              thereis (uiop:find-symbol* '#:*asdf-session* package
+                                         nil)))))
+
+;;; KLUDGE: Hide any enclosing ASDF session. This allows a nested
+;;; ASDF:OPERATE with :FORCE T operate to execute.
+(defmacro without-asdf-session (&body body)
+  ;; Bind ASDF/SESSION:*ASDF-SESSION* to NIL.
+  `(let (,@(when *asdf-session-symbol*
+             `((,*asdf-session-symbol* nil))))
+     ,@body))
 
 ;;; Detect some common constant forms that are print-read consistent
 ;;; given only the existence of the standard packages :CL and

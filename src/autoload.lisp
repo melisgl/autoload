@@ -65,7 +65,10 @@
   1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
      asdf:find-system].
 
-  2. It loads SYSTEM-NAME.
+  2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
+     WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
+     non-portable measures may be taken to standardize the dynamic
+     environment.
 
   3. It checks that the function with NAME has been redefined as as a
      normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
@@ -164,7 +167,14 @@
            :function-name function-name
            :system-name system-name
            :cause :system-not-found))
-  (asdf:load-system system-name)
+  (with-compilation-unit
+    ;; Combined with :OVERRIDE T, this switches to the default policy.
+    #+sbcl (:override t :policy '(optimize))
+    #-sbcl (:override t)
+    (with-standard-io-syntax
+      (let ((*print-readably* nil))
+        (without-asdf-session
+          (asdf:load-system system-name)))))
   (when (function-autoload-p function-name)
     (error 'autoload-error
            :function-name function-name
