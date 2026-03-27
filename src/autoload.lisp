@@ -62,14 +62,16 @@
 
   The stub does the following.
 
-  1. It first tries to load ASDF-SYSTEM-NAME. It is an AUTOLOAD-ERROR
-     if that fails.
+  1. It signals an AUTOLOAD-ERROR if ASDF-SYSTEM-NAME does not
+     [exist][asdf:find-system].
 
-  2. It checks that the function with NAME has been redefined as as a
+  2. It loads ASDF-SYSTEM-NAME.
+
+  3. It checks that the function with NAME has been redefined as as a
      normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
      an AUTOLOAD-ERROR.
 
-  3. It calls the function NAME passing on the stub's own arguments.
+  4. It calls the function NAME passing on the stub's own arguments.
 
   The stub is not defined at [compile time][clhs], which matches the
   required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -149,11 +151,6 @@
                   (format stream "~@<Autoloaded function ~S was not ~
                           redefined by the ~S ASDF:SYSTEM.~:@>"
                           function-name system-name))
-                 ((typep cause 'condition)
-                  (format stream "~@<Failed to load ASDF:SYSTEM ~S for ~
-                          autoloaded function ~S.~%~
-                          Underlying condition: ~A~:@>"
-                          system-name function-name cause))
                  (t
                   (format stream "~@<Autoload failure for function ~S in ~
                           ASDF:SYSTEM ~S.~:@>"
@@ -167,12 +164,7 @@
            :function-name function-name
            :system-name asdf-system-name
            :cause :system-not-found))
-  (handler-bind ((error (lambda (c)
-                          (error 'autoload-error
-                                 :function-name function-name
-                                 :system-name asdf-system-name
-                                 :cause c))))
-    (asdf:load-system asdf-system-name))
+  (asdf:load-system asdf-system-name)
   (when (function-autoload-p function-name)
     (error 'autoload-error
            :function-name function-name

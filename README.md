@@ -172,14 +172,16 @@ the autoloaded dependencies. This can be done with
     
     The stub does the following.
     
-    1. It first tries to load `ASDF-SYSTEM-NAME`. It is an [`AUTOLOAD-ERROR`][a515]
-       if that fails.
+    1. It signals an [`AUTOLOAD-ERROR`][a515] if `ASDF-SYSTEM-NAME` does not
+       exist.
     
-    2. It checks that the function with `NAME` has been redefined as as a
+    2. It loads `ASDF-SYSTEM-NAME`.
+    
+    3. It checks that the function with `NAME` has been redefined as as a
        normal function (that's not `FUNCTION-AUTOLOAD-P`), else it signals
        an `AUTOLOAD-ERROR`.
     
-    3. It calls the function `NAME` passing on the stub's own arguments.
+    4. It calls the function `NAME` passing on the stub's own arguments.
     
     The stub is not defined at [compile time][27c6], which matches the
     required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1] `FUNCTION`([`0`][119e] [`1`][81f7])
