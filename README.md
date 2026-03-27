@@ -30,7 +30,7 @@ for the latest version.
 
 - [system] **"autoload"**
 
-    - _Version:_ 0.0.1
+    - _Version:_ 0.1.0
     - _Description:_ An ASDF autoloading facility. See
         [Autoload Manual][6caf].
     - _Licence:_ MIT, see COPYING.

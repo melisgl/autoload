@@ -11,7 +11,7 @@ for the latest version.
 
 - [system] "autoload"
 
-    - Version: 0.0.1
+    - Version: 0.1.0
 
     - Description: An ASDF autoloading facility. See
     Autoload Manual.
