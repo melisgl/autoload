@@ -8,7 +8,7 @@
   :defsystem-depends-on ("autoload")
   :class "autoload:autoload-system"
   :autoloaded-systems ("%package-test/full")
-  :record-autoloads ("autoloads.lisp")
+  :record-autoloads ("autoloads.lisp" :packages #:%aaa)
   :serial t
   :components ((:file "autoloads")))
 
