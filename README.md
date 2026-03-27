@@ -174,7 +174,10 @@ the autoloaded dependencies. This can be done with
     
     1. It signals an [`AUTOLOAD-ERROR`][a515] if `SYSTEM-NAME` does not exist.
     
-    2. It loads `SYSTEM-NAME`.
+    2. It loads `SYSTEM-NAME` under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
+       [`WITH-STANDARD-IO-SYNTAX`][39df] but with [`*PRINT-READABLY*`][8aca] `NIL`. Other
+       non-portable measures may be taken to standardize the dynamic
+       environment.
     
     3. It checks that the function with `NAME` has been redefined as as a
        normal function (that's not `FUNCTION-AUTOLOAD-P`), else it signals
@@ -578,6 +581,7 @@ the autoloaded dependencies. This can be done with
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [3140]: #x-28AUTOLOAD-3AWRITE-AUTOLOADS-20FUNCTION-29 "AUTOLOAD:WRITE-AUTOLOADS FUNCTION"
   [3914]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_p.htm#pathname_designator "\"pathname designator\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
+  [39df]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_std_.htm "WITH-STANDARD-IO-SYNTAX (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [3ab0]: #x-28AUTOLOAD-3ASYSTEM-TEST-AUTOLOADS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-TEST-AUTOLOADS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [3b15]: #x-28AUTOLOAD-3ADEFUN-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFUN/AUTOLOADED MGL-PAX:MACRO"
   [4453]: #x-28AUTOLOAD-3ARECORD-SYSTEM-AUTOLOADS-20RESTART-29 "AUTOLOAD:RECORD-SYSTEM-AUTOLOADS RESTART"
@@ -588,6 +592,7 @@ the autoloaded dependencies. This can be done with
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"
   [57ad]: #x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29 "AUTOLOAD:FUNCTION-AUTOLOAD-P FUNCTION"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
+  [6166]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_comp.htm "WITH-COMPILATION-UNIT (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Packages"
   [6547]: http://www.lispworks.com/documentation/HyperSpec/Body/f_open.htm "OPEN (MGL-PAX:CLHS FUNCTION)"
   [6671]: http://www.lispworks.com/documentation/HyperSpec/Body/f_pn.htm "PATHNAME (MGL-PAX:CLHS FUNCTION)"
@@ -596,6 +601,7 @@ the autoloaded dependencies. This can be done with
   [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
   [81f7]: http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm "FUNCTION (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [8429]: #x-28AUTOLOAD-3ASYSTEM-AUTOLOADED-SYSTEMS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTOLOADED-SYSTEMS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
+  [8aca]: http://www.lispworks.com/documentation/HyperSpec/Body/v_pr_rda.htm "*PRINT-READABLY* (MGL-PAX:CLHS VARIABLE)"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [990a]: #x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFPACKAGE/AUTOLOADED MGL-PAX:MACRO"
   [9b43]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpkg.htm "DEFPACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
