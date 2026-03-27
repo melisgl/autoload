@@ -5,7 +5,7 @@
   :version "0.0.1"
   :author "Gábor Melis"
   :mailto "mega@retes.hu"
-  :homepage "http://github.com/melisgl/autoload"
+  :homepage "https://github.com/melisgl/autoload"
   :bug-tracker "https://github.com/melisgl/autoload/issues"
   :source-control (:git "https://github.com/melisgl/autoload.git")
   :description "An ASDF autoloading facility. See

@@ -34,7 +34,7 @@ for the latest version.
     - _Licence:_ MIT, see COPYING.
     - _Author:_ Gábor Melis
     - _Mailto:_ [mega@retes.hu](mailto:mega@retes.hu)
-    - _Homepage:_ [http://github.com/melisgl/autoload](http://github.com/melisgl/autoload)
+    - _Homepage:_ [https://github.com/melisgl/autoload](https://github.com/melisgl/autoload)
     - _Bug tracker:_ [https://github.com/melisgl/autoload/issues](https://github.com/melisgl/autoload/issues)
     - _Source control:_ [GIT](https://github.com/melisgl/autoload.git)
 
@@ -43,9 +43,9 @@ for the latest version.
 - [system] **"autoload-doc"**
 
     - _Description:_ Parts of [`autoload`][5968] that depend on
-        `mgl-pax`. This is a separate system because
-        `mgl-pax-bootstrap` depends on [`autoload`][7da0]. Note that
-        `mgl-pax/navigate` and
+        `mgl-pax`. Since `mgl-pax` depends on
+        [`autoload`][7da0], these parts get a separate system to break the
+        circularity. Note that `mgl-pax/navigate` and
         `mgl-pax/document` depend on this system, which
         renders most of this an implementation detail.
     - *Depends on:* [autoload][5968], mgl-pax, named-readtables, pythonic-string-reader
@@ -130,9 +130,9 @@ Then, the autoloaded definitions can be extracted:
 
 This is implemented by loading the `:AUTOLOADED-SYSTEMS` of `my-lib`
 and recording [`DEFUN/AUTOLOADED`][3b15]s. [`AUTOLOADS`][1e20] is a low-level utility
-used by [`RECORD-SYSTEM-AUTOLOADS`][dceb] that writes its results
-to the system's `:RECORD-AUTOLOADS`, `"autoloads.lisp"` in the above
-example. So, all we need to do is to call it regenerate the
+used by [`RECORD-SYSTEM-AUTOLOADS`][dceb], which writes its
+results to the system's `:RECORD-AUTOLOADS`, `"autoloads.lisp"` in the above
+example. So, all we need to do is call it to regenerate the
 autoloads file:
 
 ```
@@ -143,7 +143,7 @@ To prevent the autoloads file from getting out of sync with the
 definitions, `ASDF:TEST-SYSTEM` calls [`CHECK-SYSTEM-AUTOLOADS`][4afe] by
 default.
 
-ASDF and by extension [Quicklisp][ae25] don't know about the declared
+ASDF, and by extension [Quicklisp][ae25], don't know about the declared
 `:AUTOLOADED-SYSTEMS`, so `(QL:QUICKLOAD "my-lib")` does not install
 the autoloaded dependencies. This can be done with
 
@@ -179,7 +179,7 @@ the autoloaded dependencies. This can be done with
        non-portable measures may be taken to standardize the dynamic
        environment.
     
-    3. It checks that the function with `NAME` has been redefined as as a
+    3. It checks that the function with `NAME` has been redefined as a
        normal function (that's not `FUNCTION-AUTOLOAD-P`), else it signals
        an `AUTOLOAD-ERROR`.
     
@@ -191,9 +191,9 @@ the autoloaded dependencies. This can be done with
     
     - `ARGLIST` will be installed as the stub's arglist if specified and
       it's supported on the platform (currently only SBCL). If `ARGLIST`
-      is a string, then the effective value of `ARGLIST` is then read from
-      it. If the read fails, an [`AUTOLOAD-WARNING`][da95] is signalled and
-      processing continues as if `ARGLIST` had not been provided.
+      is a string, the effective value of `ARGLIST` is read from it. If
+      the read fails, an [`AUTOLOAD-WARNING`][da95] is signalled and processing
+      continues as if `ARGLIST` had not been provided.
     
         Arglists are for interactive purposes only. For example, they
         are shown by [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
@@ -202,8 +202,8 @@ the autoloaded dependencies. This can be done with
       specified, a generic docstring that says what system it autoloads
       will be used.
     
-    When `AUTOLOAD` is macroexpanded during the compilation or load of an
-    [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `SYSTEM-NAME` is
+    When `AUTOLOAD` is macroexpanded during the compilation or loading of
+    an [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `SYSTEM-NAME` is
     not among those declared in [`:AUTOLOADED-SYSTEMS`][8429].
 
 <a id="x-28AUTOLOAD-3AFUNCTION-AUTOLOAD-P-20FUNCTION-29"></a>
@@ -263,7 +263,7 @@ the autoloaded dependencies. This can be done with
 - [function] **VARIABLE-AUTOLOAD-P** *NAME*
 
     See if `NAME` has been declared with [`DECLARE-VARIABLE-AUTOLOAD`][c5d0] and
-    not defined with [`DEFVAR/AUTOLOADED`][453a] since.
+    has not been defined with [`DEFVAR/AUTOLOADED`][453a] since.
 
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -396,8 +396,7 @@ the autoloaded dependencies. This can be done with
     Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with `ASDF:COERCE-NAME`. This is used by [`AUTOLOADS`][1e20] and
-    affect the checks performed by the [`AUTOLOAD`][7da0] and
-    `AUTOLOADS`.
+    affects the checks performed by the [`AUTOLOAD`][7da0] macro and `AUTOLOADS`.
 
 <a id="x-28AUTOLOAD-3ASYSTEM-RECORD-AUTOLOADS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
 
@@ -428,13 +427,13 @@ the autoloaded dependencies. This can be done with
       found. If an autoloaded system is not installed (i.e.
       `ASDF:FIND-SYSTEM` fails), then that system is not followed.
     
-    - If `INSTALLER` is non-`NIL`, it is called when a system encounteres a
-      system that is not installed. This is an autoloaded system if
-      normal ASDF dependencies are installed as is the case with e.g.
-      [Quicklisp][ae25]. `INSTALLER` is passed a single argument, the name of the
-      system to be installed, and it may or may not install the system.
+    - If `INSTALLER` is non-`NIL`, it is called when an uninstalled system
+      is encountered. This is an autoloaded system if normal ASDF
+      dependencies are installed, as is the case with e.g. [Quicklisp][ae25].
+      `INSTALLER` is passed a single argument, the name of the system to
+      be installed, and it may or may not install the system.
     
-        The following example, makes sure that all normal and autoloaded
+        The following example makes sure that all normal and autoloaded
         dependencies (direct or indirect) of `my-system` are installed:
     
             (autoloaded-systems "my-system" :installer #'ql:quickload)
@@ -474,7 +473,7 @@ the autoloaded dependencies. This can be done with
        `DECLARE-VARIABLE-AUTOLOAD`. Simple constant forms are strings,
        numbers, characters, keywords, constants in the CL package, and
        [`QUOTE`][f5d0]d nested lists containing any of the previous or any symbol
-       from the CL.
+       from the `CL` package.
     
     - For [`DEFPACKAGE/AUTOLOADED`][990a] and the provided `PACKAGES`, individual
       package-altering operations are emitted.
@@ -490,15 +489,15 @@ the autoloaded dependencies. This can be done with
     
     Note that if a function is not defined with `DEFUN/AUTOLOADED` or its
     kin in [Basics][fa90], then `AUTOLOADS` will not detect it. For such
-    functions, [`AUTOLOAD`][7da0]s must be written manually. Similar
+    functions, [`AUTOLOAD`][7da0] forms must be written manually. Similar
     considerations apply to variables and packages.
 
 <a id="x-28AUTOLOAD-3AWRITE-AUTOLOADS-20FUNCTION-29"></a>
 
 - [function] **WRITE-AUTOLOADS** *FORMS STREAM*
 
-    Write the autoload `FORMS` to `STREAM` that can be [`LOAD`][b5ec]ed or included
-    in an `ASDF:DEFSYSTEM`.
+    Write the autoload `FORMS` to `STREAM` so they can be [`LOAD`][b5ec]ed or
+    included in an `ASDF:DEFSYSTEM`.
 
 <a id="x-28AUTOLOAD-3ARECORD-SYSTEM-AUTOLOADS-20FUNCTION-29"></a>
 
@@ -565,9 +564,9 @@ the autoloaded dependencies. This can be done with
     The `:DEFAULT-COMPONENT-CLASS` of [`AUTOLOAD-SYSTEM`][cd2d].
     The [`SYSTEM-AUTOLOADED-SYSTEMS`][8429] and
     [`SYSTEM-RECORD-AUTOLOADS`][f945] features rely
-    on source file belonging to this class. When combining autoload with
-    another ASDF extension that has own `ASDF:CL-SOURCE-FILE` subclass,
-    define a new class that inherits from both and use that as
+    on source files belonging to this class. When combining autoload
+    with another ASDF extension that has its own `ASDF:CL-SOURCE-FILE`
+    subclass, define a new class that inherits from both and use that as
     `:DEFAULT-COMPONENT-CLASS`.
 
   [0317]: http://www.lispworks.com/documentation/HyperSpec/Body/t_pn.htm "PATHNAME (MGL-PAX:CLHS CLASS)"

@@ -70,7 +70,7 @@
      non-portable measures may be taken to standardize the dynamic
      environment.
 
-  3. It checks that the function with NAME has been redefined as as a
+  3. It checks that the function with NAME has been redefined as a
      normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
      an AUTOLOAD-ERROR.
 
@@ -82,9 +82,9 @@
 
   - ARGLIST will be installed as the stub's arglist if specified and
     it's supported on the platform (currently only SBCL). If ARGLIST
-    is a string, then the effective value of ARGLIST is then read from
-    it. If the read fails, an AUTOLOAD-WARNING is signalled and
-    processing continues as if ARGLIST had not been provided.
+    is a string, the effective value of ARGLIST is read from it. If
+    the read fails, an AUTOLOAD-WARNING is signalled and processing
+    continues as if ARGLIST had not been provided.
 
       Arglists are for interactive purposes only. For example, they
       are shown by @SLIME-AUTODOC and returned by DREF:ARGLIST.
@@ -93,8 +93,8 @@
     specified, a generic docstring that says what system it autoloads
     will be used.
 
-  When AUTOLOAD is macroexpanded during the compilation or load of an
-  AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
+  When AUTOLOAD is macroexpanded during the compilation or loading of
+  an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
   not among those declared in [:AUTOLOADED-SYSTEMS][
   system-autoloaded-systems (reader autoload-system)]."
   (declare (ignorable arglist))
@@ -315,7 +315,7 @@
 
 (defun variable-autoload-p (name)
   "See if NAME has been declared with DECLARE-VARIABLE-AUTOLOAD and
-  not defined with DEFVAR/AUTOLOADED since."
+  has not been defined with DEFVAR/AUTOLOADED since."
   (eq (state name :variable) :declared))
 
 (defmacro defvar/autoloaded (var &optional (val nil valp) doc)
@@ -674,9 +674,9 @@
   (:documentation "The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
   The [SYSTEM-AUTOLOADED-SYSTEMS][ (reader autoload-system)] and
   [SYSTEM-RECORD-AUTOLOADS][ (reader autoload-system)] features rely
-  on source file belonging to this class. When combining autoload with
-  another ASDF extension that has own ASDF:CL-SOURCE-FILE subclass,
-  define a new class that inherits from both and use that as
+  on source files belonging to this class. When combining autoload
+  with another ASDF extension that has its own ASDF:CL-SOURCE-FILE
+  subclass, define a new class that inherits from both and use that as
   :DEFAULT-COMPONENT-CLASS."))
 
 ;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
@@ -738,8 +738,7 @@
     :documentation "Return the list of the names of systems declared
     to be autoloaded directly by this system. The names are
     canonicalized with ASDF:COERCE-NAME. This is used by AUTOLOADS and
-    affect the checks performed by the [AUTOLOAD][macro] and
-    AUTOLOADS.")
+    affects the checks performed by the AUTOLOAD macro and AUTOLOADS.")
    (record-autoloads
     :initform nil
     :initarg :record-autoloads
@@ -838,13 +837,13 @@
     found. If an autoloaded system is not installed (i.e.
     ASDF:FIND-SYSTEM fails), then that system is not followed.
 
-  - If INSTALLER is non-NIL, it is called when a system encounteres a
-    system that is not installed. This is an autoloaded system if
-    normal ASDF dependencies are installed as is the case with e.g.
-    @QUICKLISP. INSTALLER is passed a single argument, the name of the
-    system to be installed, and it may or may not install the system.
+  - If INSTALLER is non-NIL, it is called when an uninstalled system
+    is encountered. This is an autoloaded system if normal ASDF
+    dependencies are installed, as is the case with e.g. @QUICKLISP.
+    INSTALLER is passed a single argument, the name of the system to
+    be installed, and it may or may not install the system.
 
-      The following example, makes sure that all normal and autoloaded
+      The following example makes sure that all normal and autoloaded
       dependencies (direct or indirect) of `my-system` are installed:
 
           (autoloaded-systems \"my-system\" :installer #'ql:quickload)"
@@ -955,7 +954,7 @@
      DECLARE-VARIABLE-AUTOLOAD. Simple constant forms are strings,
      numbers, characters, keywords, constants in the CL package, and
      QUOTEd nested lists containing any of the previous or any symbol
-     from the [CL][package].
+     from the `CL` package.
 
   - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
     package-altering operations are emitted.
@@ -971,7 +970,7 @@
 
   Note that if a function is not defined with DEFUN/AUTOLOADED or its
   kin in @BASICS, then AUTOLOADS will not detect it. For such
-  functions, [AUTOLOAD][macro]s must be written manually. Similar
+  functions, [AUTOLOAD][macro] forms must be written manually. Similar
   considerations apply to variables and packages."
   (let* ((infos (without-asdf-session
                   (mapcan #'extract-autoload-infos
@@ -996,8 +995,8 @@
   (sort (copy-seq autoloads) #'string< :key #'prin1-to-string*))
 
 (defun write-autoloads (forms stream)
-  "Write the autoload FORMS to STREAM that can be LOADed or included
-  in an ASDF:DEFSYSTEM."
+  "Write the autoload FORMS to STREAM so they can be LOADed or
+  included in an ASDF:DEFSYSTEM."
   (with-autoloads-file-syntax
     (format stream "~S~%~%" `(in-package :cl))
     (format stream "~{~S~%~^~%~}" forms)))

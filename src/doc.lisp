@@ -98,9 +98,9 @@
 
   This is implemented by loading the :AUTOLOADED-SYSTEMS of `my-lib`
   and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
-  used by [RECORD-SYSTEM-AUTOLOADS][ function] that writes its results
-  to the system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above
-  example. So, all we need to do is to call it regenerate the
+  used by [RECORD-SYSTEM-AUTOLOADS][ function], which writes its
+  results to the system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above
+  example. So, all we need to do is call it to regenerate the
   autoloads file:
 
   ```
@@ -111,7 +111,7 @@
   definitions, ASDF:TEST-SYSTEM calls CHECK-SYSTEM-AUTOLOADS by
   default.
 
-  ASDF and by extension @QUICKLISP don't know about the declared
+  ASDF, and by extension @QUICKLISP, don't know about the declared
   :AUTOLOADED-SYSTEMS, so `(QL:QUICKLOAD "my-lib")` does not install
   the autoloaded dependencies. This can be done with
 
