@@ -3,8 +3,8 @@
 (named-readtables:in-readtable pythonic-string-reader:pythonic-string-syntax)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (import '(pax:clhs pax:macro pax:section pax:defsection pax:reader
-            pax:define-glossary-term pax:make-github-source-uri-fn
+  (import '(pax:clhs pax:macro pax:section pax:defsection pax:note
+            pax:reader pax:define-glossary-term pax:make-github-source-uri-fn
             pax:register-doc-in-pax-world dref:define-restart)
           :autoload))
 
@@ -43,8 +43,8 @@
        (apply ',name args)))
   ```
 
-  Suppose we have a library called `my-lib` that autoloads `my-lib/full`.
-  In `my-lib`, we could use [AUTOLOAD][macro] as
+  Suppose we have a library called `my-lib` that autoloads
+  `my-lib/full`. In `my-lib`, we could use AUTOLOAD as
 
   ```
   (autoload foo "my-lib/full")
@@ -60,9 +60,9 @@
 
   in `my-lib/full`.
 
-  However, manually keeping the autoload declarations in sync with the
-  definitions is fragile, so instead we mark autoloaded functions in
-  the `my-lib/full` system:
+  However, manually keeping the loaddefs (e.g. the AUTOLOAD form
+  above) in sync with the definitions is fragile, so instead we mark
+  autoloaded functions in the `my-lib/full` system:
 
   ```
   (defun/autoloaded foo (x)
@@ -70,16 +70,16 @@
     (1+ x))
   ```
 
-  and [generate autoloads][ @generating-autoloads] through the
+  and [generate loaddefs][ @automatic-loaddefs] through the
   @ASDF-INTEGRATION:
 
   ```
   (asdf:defsystem "my-lib"
     :defsystem-depends-on ("autoload")
     :class "autoload:autoload-system"
-    :autoloaded-systems ("my-lib/full")
-    :record-autoloads "autoloads.lisp"
-    :components ((:file "autoloads")
+    :auto-depends-on ("my-lib/full")
+    :auto-loaddefs "loaddefs.lisp"
+    :components ((:file "loaddefs")
                  ...))
   ```
   ```
@@ -89,34 +89,40 @@
     :components (...))
   ```
 
-  Then, the autoloaded definitions can be extracted:
+  Then, the loaddefs can be extracted:
 
   ```
-  (autoloads "my-lib")
-  => ((autoload foo :arglist "(x)" :docstring "doc"))
+  (extract-loaddefs "my-lib")
+  => ((autoload foo "my-lib/full" :arglist "(x)" :docstring "doc"))
   ```
 
-  This is implemented by loading the :AUTOLOADED-SYSTEMS of `my-lib`
-  and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
-  used by [RECORD-SYSTEM-AUTOLOADS][ function], which writes its
-  results to the system's :RECORD-AUTOLOADS, `"autoloads.lisp"` in the above
-  example. So, all we need to do is call it to regenerate the
-  autoloads file:
+  This is implemented by loading the :AUTO-DEPENDS-ON of `my-lib` and
+  recording DEFUN/AUTOLOADEDs. EXTRACT-LOADDEFS is a low-level utility
+  used by [RECORD-LOADDEFS][ function], which writes its results to
+  the system's @AUTO-LOADDEFS, `"loaddefs.lisp"` in the above example.
+  So, all we need to do is call it to regenerate the loaddefs file:
 
   ```
-  (record-system-autoloads "my-lib")
+  (record-loaddefs "my-lib")
   ```
 
-  To prevent the autoloads file from getting out of sync with the
-  definitions, ASDF:TEST-SYSTEM calls CHECK-SYSTEM-AUTOLOADS by
-  default.
+  To prevent the loaddefs file from getting out of sync with the
+  definitions, ASDF:TEST-SYSTEM calls CHECK-LOADDEFS by default.
 
   ASDF, and by extension @QUICKLISP, don't know about the declared
-  :AUTOLOADED-SYSTEMS, so `(QL:QUICKLOAD "my-lib")` does not install
-  the autoloaded dependencies. This can be done with
+  @AUTO-DEPENDS-ON, so `(QL:QUICKLOAD "my-lib")` does not install the
+  autoloaded dependencies. This can be done with
 
   ```
-  (autoloaded-systems "my-lib" :installer #'ql:quickload)
+  (autodeps "my-lib" :installer #'ql:quickload)
+  ```
+
+  If all the autoloaded dependencies are installed, one can eagerly
+  load them to ensure that autoloading is not triggered later (e.g.
+  in deployment):
+
+  ```
+  (mapcar #'asdf:load-system (autodeps "my-lib"))
   ```
   """)
 
@@ -128,14 +134,12 @@
 
 (defsection @functions (:title "Functions" :export nil)
   (autoload macro)
-  (function-autoload-p function)
+  (autoload-fbound-p function)
   (defun/autoloaded macro)
   (defgeneric/autoloaded macro)
   (define-autoloaded-function macro))
 
 (defsection @variables (:title "Variables" :export nil)
-  (declare-variable-autoload macro)
-  (variable-autoload-p function)
   (defvar/autoloaded macro))
 
 (defsection @packages (:title "Packages" :export nil)
@@ -147,26 +151,25 @@
 
 (defsection @asdf-integration (:title "ASDF Integration" :export nil)
   (autoload-system class)
-  (system-autoloaded-systems (reader autoload-system))
-  (system-record-autoloads (reader autoload-system))
-  (system-test-autoloads (reader autoload-system))
-  (autoloaded-systems function)
-  (@generating-autoloads section)
-  (autoload-cl-source-file class))
+  (autoload-cl-source-file class)
+  (system-auto-depends-on (reader autoload-system))
+  (system-auto-loaddefs (reader autoload-system))
+  (autodeps function)
+  (@automatic-loaddefs section))
 
-(defsection @generating-autoloads (:title "Generating Autoloads" :export nil)
-  (autoloads function)
-  (write-autoloads function)
-  (record-system-autoloads function)
-  (check-system-autoloads function)
-  (record-system-autoloads restart))
+(defsection @automatic-loaddefs
+    (:title "Automatically Generating Loaddefs" :export nil)
+  (extract-loaddefs function)
+  (write-loaddefs function)
+  (record-loaddefs function)
+  (check-loaddefs function)
+  (record-loaddefs restart))
 
-(define-restart record-system-autoloads ()
-  "Provided by CHECK-SYSTEM-AUTOLOADS and also when the compilation of
-  the autoloads file declared in [:RECORD-AUTOLOADS][
-  system-record-autoloads (reader autoload-system)] fails. The
-  function RECORD-SYSTEM-AUTOLOADS can be used as a condition handler
-  to invoke this restart.")
+(define-restart record-loaddefs ()
+  "Provided by CHECK-LOADDEFS and also when the compilation of the
+  loaddefs file declared in @AUTO-LOADDEFS fails. The function
+  RECORD-LOADDEFS can be used as a condition handler to invoke this
+  restart.")
 
 (define-glossary-term @slime-autodoc
     (:title "SLIME autodoc"
@@ -175,6 +178,12 @@
 (define-glossary-term @quicklisp
     (:title "Quicklisp"
      :url "https://www.quicklisp.org/"))
+
+(note @auto-depends-on
+  "[:AUTO-DEPENDS-ON][ system-auto-depends-on (reader autoload-system)]")
+
+(note @auto-loaddefs
+  "[:AUTO-LOADDEFS][ system-auto-loaddefs (reader autoload-system)]")
 
 
 ;;;; Register in PAX World

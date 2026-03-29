@@ -7,12 +7,12 @@
   :depends-on ("autoload")
   :defsystem-depends-on ("autoload")
   :class "autoload:autoload-system"
-  :autoloaded-systems ("%test-system/full")
-  :record-autoloads "autoloads.lisp"
+  :auto-depends-on ("%test-system/full")
+  :auto-loaddefs "loaddefs.lisp"
   :serial t
   :components ((:file "package")
-               (:file "manual-autoloads")
-               (:file "autoloads")))
+               (:file "manual-loaddefs")
+               (:file "loaddefs")))
 
 (asdf:defsystem "%test-system/full"
   :depends-on ("autoload" "%test-system")

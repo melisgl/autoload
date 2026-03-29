@@ -11,7 +11,7 @@
 (defun kind-to-indicator (kind)
   (ecase kind
     ((:function) 'autoload-function)
-    ((:variable) 'autoload-variable)))
+    ((:defvar) 'autoload-variable)))
 
 (defun state (name kind)
   (multiple-value-bind (name setf*) (unpack-function-name name)
@@ -43,7 +43,7 @@
 (define-condition autoload-warning (simple-warning)
   ()
   (:documentation "Signalled when inconsistencies are detected by e.g.
-  [AUTOLOAD][macro] and DEFVAR/AUTOLOADED."))
+  AUTOLOAD and DEFVAR/AUTOLOADED."))
 
 (defun signal-autoload-warning (format-control &rest format-args)
   (warn 'autoload-warning :format-control format-control
@@ -57,7 +57,7 @@
   "Define a stub function with NAME that loads SYSTEM-NAME, expecting
   it to redefine the function, and then calls the newly loaded
   definition. Return NAME. The arguments are not evaluated. If NAME
-  has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
+  has an FDEFINITION and it is not AUTOLOAD-FBOUND-P, then do
   nothing and return NIL.
 
   The stub does the following.
@@ -71,7 +71,7 @@
      environment.
 
   3. It checks that the function with NAME has been redefined as a
-     normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
+     normal function (that's not AUTOLOAD-FBOUND-P), else it signals
      an AUTOLOAD-ERROR.
 
   4. It calls the function NAME passing on the stub's own arguments.
@@ -95,8 +95,7 @@
 
   When AUTOLOAD is macroexpanded during the compilation or loading of
   an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
-  not among those declared in [:AUTOLOADED-SYSTEMS][
-  system-autoloaded-systems (reader autoload-system)]."
+  not among those declared in @AUTO-DEPENDS-ON."
   (declare (ignorable arglist))
   (check-function-autoload name system-name)
   `(progn
@@ -106,15 +105,15 @@
       ;; compile time, but the DEFUN below is not a [top level
       ;; form][clhs].
       ;;
-      ;; Also, this works around a CMUCL bug that results in
-      ;; "Function with declared result type NIL returned" errors
-      ;; when the real function definition returns.
+      ;; Also, this works around a CMUCL bug that results in "Function
+      ;; with declared result type NIL returned" errors when the real
+      ;; function definition returns.
       (ftype function ,name)
       ;; And this is needed because we are actively redefining the
       ;; function.
       (notinline ,name))
      (when (or (null (fdefinition* ',name))
-               (function-autoload-p ',name))
+               (autoload-fbound-p ',name))
        (defun ,name (&rest args)
          ,(if docstringp
               docstring
@@ -149,7 +148,7 @@
                   (format stream "~@<Could not find ASDF:SYSTEM ~S for ~
                           autoloaded function ~S. It may not be installed. ~
                           See ~S.~:@>"
-                          system-name function-name 'autoloaded-systems))
+                          system-name function-name 'autodeps))
                  ((eq cause :not-resolved)
                   (format stream "~@<Autoloaded function ~S was not ~
                           redefined by the ~S ASDF:SYSTEM.~:@>"
@@ -158,8 +157,8 @@
                   (format stream "~@<Autoload failure for function ~S in ~
                           ASDF:SYSTEM ~S.~:@>"
                           function-name system-name))))))
-  (:documentation "Signalled by the stub defined by [AUTOLOAD][macro]
-  if autoloading fails."))
+  (:documentation "Signalled by the stub defined by AUTOLOAD if
+  autoloading fails."))
 
 (defun autoload-system-for (system-name function-name)
   (unless (asdf:find-system system-name nil)
@@ -175,7 +174,7 @@
       (let ((*print-readably* nil))
         (without-asdf-session
           (asdf:load-system system-name)))))
-  (when (function-autoload-p function-name)
+  (when (autoload-fbound-p function-name)
     (error 'autoload-error
            :function-name function-name
            :system-name system-name
@@ -206,17 +205,28 @@
           (t
            (values sexp t)))))
 
-(defun function-autoload-p (name)
+(defun autoload-fbound-p (name)
   "See if NAME's function definition is an autoloader function
-  established by [AUTOLOAD][macro]."
+  established by AUTOLOAD."
+  (check-type name (or symbol list))
   ;; This detects redefinitions by DEFUN too.
   (let ((fn (fdefinition* name)))
     (and fn (eq (state name :function) fn))))
 
+;;; Even though ASDF:SYSTEM names rarely contain special Markdown
+;;; characters, play nice with PAX and escape the names if
+;;; MGL-PAX:ESCAPE-MARKDOWN is loaded.
+(defun %escape-markdown (string)
+  (let ((symbol (uiop:find-symbol* '#:escape-markdown '#:mgl-pax nil)))
+    (if (and symbol (not (autoload-fbound-p symbol))
+             (fdefinition* symbol))
+        (funcall symbol string)
+        string)))
+
 (defmacro defun/autoloaded (name lambda-list &body body)
-  "Like DEFUN, but mark the function for automatically
-  @GENERATING-AUTOLOADS and silence redefinition warnings. Also, warn
-  if NAME has never been FUNCTION-AUTOLOAD-P."
+  "Like DEFUN, but mark the function for @AUTOMATIC-LOADDEFS and
+  silence redefinition warnings. Also, warn if NAME has never been
+  AUTOLOAD-FBOUND-P."
   `(define-autoloaded-function defun ,name ,lambda-list ,@body))
 
 (defmacro defgeneric/autoloaded (name lambda-list &body body)
@@ -233,9 +243,9 @@
   (maybe-record-autoload-info 'defun/autoloaded name lambda-list
                               (find-docstring-in-body body))
   `(progn
-     (before-autoloaded-function-definition ',name)
+     (before-define-autoloaded-function ',name)
      (,definer ,name ,lambda-list ,@body)
-     (after-autoloaded-function-definition ',name)
+     (after-define-autoloaded-function ',name)
      ',name))
 
 (defun find-docstring-in-body (body)
@@ -248,7 +258,7 @@
                            (consp (cdr form))
                            (second form)))))
 
-(defun defun/autoloaded-info-to-autoload-form
+(defun defun/autoloaded-info-to-loaddefs
     (system-name info process-arglist process-docstring)
   (destructuring-bind (name lambda-list docstring) info
     `((autoload ,name ,system-name
@@ -263,7 +273,7 @@
 
 (defvar *suppress-has-not-been-declared-warnings* nil)
 
-(defun before-autoloaded-function-definition (name)
+(defun before-define-autoloaded-function (name)
   (unless (state name :function)
     (unless *suppress-has-not-been-declared-warnings*
       (signal-autoload-warning
@@ -272,15 +282,15 @@
        name 'autoload)))
   ;; We don't want to FMAKUNBOUND a generic function and lose its
   ;; methods.
-  (when (function-autoload-p name)
+  (when (autoload-fbound-p name)
     ;; This prevents redefinition warnings and allows DEFINER to be a
     ;; DEFGENERIC without running into an error when trying to
     ;; redefine a DEFUN (the autoload stub).
     (fmakunbound name)))
 
-(defun after-autoloaded-function-definition (name)
+(defun after-define-autoloaded-function (name)
   ;; Leave the property around so that
-  ;; BEFORE-AUTOLOADED-FUNCTION-DEFINITION knows not to warn when, for
+  ;; BEFORE-DEFINE-AUTOLOADED-FUNCTION knows not to warn when, for
   ;; example, a DEFUN/AUTOLOADED is evaluated multiple times (e.g.
   ;; during interactive development).
   (setf (state name :function) :resolved))
@@ -288,39 +298,28 @@
 
 ;;;; @VARIABLES
 
-(defmacro declare-variable-autoload (var &key (init nil initp) docstring)
-  "Define VAR with DEFVAR and mark it as VARIABLE-AUTOLOAD-P.
-
-  - Depending on whether INIT is specified, `(DEFVAR <VAR>
-    <init>)` or `(DEFVAR <VAR>)` is executed.
-
-  - If DOCSTRING is non-NIL, then the DOCUMENTATION of VAR as a
-    VARIABLE is set to it.
-
-  Note that on accessing VAR, nothing is autoloaded.
-  DECLARE-VARIABLE-AUTOLOAD is solely to allow DEFVAR/AUTOLOADED to
-  perform some checking."
-  (check-variable-autoload var)
+;;; Be wary of changing this: although not exported, it is a loaddef.
+(defmacro foreshadow-defvar (var &key (init nil initp) docstring)
+  (check-foreshadow-defvar var)
   `(progn
      (defvar ,var
        ,@(when initp
            `(,init)))
      ,@(when docstring
          `((setf (documentation ',var 'variable) ,docstring)))
-     (setf (state ',var :variable) :declared)))
+     (setf (state ',var :defvar) :declared)))
 
-(defun check-variable-autoload (name)
-  (when (variable-autoload-p name)
-    (maybe-gather-unresolved-autoload :variable name)))
+(defun check-foreshadow-defvar (name)
+  (when (foreshadowed-defvar-p name)
+    (maybe-gather-unresolved-loaddef :defvar name)))
 
-(defun variable-autoload-p (name)
-  "See if NAME has been declared with DECLARE-VARIABLE-AUTOLOAD and
-  has not been defined with DEFVAR/AUTOLOADED since."
-  (eq (state name :variable) :declared))
+;;; See if NAME has been declared with FORESHADOW-DEFVAR and has not
+;;; been defined with DEFVAR/AUTOLOADED since.
+(defun foreshadowed-defvar-p (name)
+  (eq (state name :defvar) :declared))
 
 (defmacro defvar/autoloaded (var &optional (val nil valp) doc)
-  "Like DEFVAR, but mark the variable for automatically
-  @GENERATING-AUTOLOADS.
+  "Like DEFVAR, but mark the variable for @AUTOMATIC-LOADDEFS.
 
   Also, this works with the _global_ binding on Lisps that support
   it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
@@ -337,55 +336,55 @@
   => 1
   ```
 
-  DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P."
+  DEFVAR/AUTOLOADED warns if VAR does not have a loaddef in
+  @AUTO-LOADDEFS."
   (maybe-record-autoload-info 'defvar/autoloaded var val valp doc)
   `(progn
-     (before-autoloaded-variable-definition ',var)
+     (before-defvar/autoloaded ',var)
      (defvar ,var)
-     (after-autoloaded-variable-definition ',var ,val ,valp ,doc)
+     (after-defvar/autoloaded ',var ,val ,valp ,doc)
      ',var))
 
-(defun defvar/autoloaded-info-to-autoload-form
+(defun defvar/autoloaded-info-to-loaddefs
     (system-name info process-arglist process-docstring)
   (declare (ignore system-name process-arglist))
   (destructuring-bind (name val-form val-form-p docstring) info
-    `((declare-variable-autoload ,name
-          ,@(when (and val-form-p
-                       ;; If VAL-FORM has no dependencies, then
-                       ;; initialize early. Alternatively, we could
-                       ;; save VAL-FORM as a string and have
-                       ;; DECLARE-VARIABLE-AUTOLOAD try to read and
-                       ;; execute it, giving up on any error, but that
-                       ;; could compute the wrong value.
-                       (simple-constant-form-p val-form))
-              `(:init ,val-form))
-        ,@(let ((docstring
-                  (or (documentation name 'variable)
-                      docstring)))
-            (when (and process-docstring docstring)
-              `(:docstring ,docstring)))))))
+    `((foreshadow-defvar
+       ,name
+       ,@(when (and val-form-p
+                    ;; If VAL-FORM has no dependencies, then
+                    ;; initialize early. Alternatively, we could save
+                    ;; VAL-FORM as a string and have FORESHADOW-DEFVAR
+                    ;; try to read and execute it, giving up on any
+                    ;; error, but that could compute the wrong value.
+                    (simple-constant-form-p val-form))
+           `(:init ,val-form))
+       ,@(let ((docstring
+                 (or (documentation name 'variable)
+                     docstring)))
+           (when (and process-docstring docstring)
+             `(:docstring ,docstring)))))))
 
-(defun before-autoloaded-variable-definition (name)
-  (unless (state name :variable)
-    (unless *suppress-has-not-been-declared-warnings*
-      (signal-autoload-warning
-       "~@<Defining ~S with ~S, but it has not been declared with ~S.~:@>"
-       name 'defvar/autoloaded 'declare-variable-autoload))))
+(defun before-defvar/autoloaded (name)
+  (when (and (null (state name :defvar))
+             (not *suppress-has-not-been-declared-warnings*))
+    (signal-autoload-warning "~@<Missing loaddef for ~S ~S.~:@>"
+                             'defvar/autoloaded name)))
 
-(defun after-autoloaded-variable-definition (name val valp doc)
+(defun after-defvar/autoloaded (name val valp doc)
   (when valp
     (unless (symbol-globally-boundp name)
       (setf (symbol-global-value name) val)))
   (when doc
     (setf (documentation name 'function) doc))
-  (setf (state name :variable) :resolved))
+  (setf (state name :defvar) :resolved))
 
 
 ;;;; @PACKAGES
 
 (defmacro defpackage/autoloaded (name &rest options)
-  "Like DEFPACKAGE, but mark the package for @GENERATING-AUTOLOADS
-  automatically and extend the existing definition additively.
+  "Like DEFPACKAGE, but mark the package for @AUTOMATIC-LOADDEFS and
+  extend the existing definition additively.
 
   The additivity means that instead of replacing the package
   definition or signaling errors on redefinition, it expands into
@@ -406,9 +405,8 @@
     DEFPACKAGE/AUTOLOADED.
 
   Alternatively, one may use, for example, DEFPACKAGE or
-  UIOP:DEFINE-PACKAGE and arrange for @GENERATING-AUTOLOADS for the
-  package by listing it in :PACKAGES of
-  [SYSTEM-RECORD-AUTOLOADS][ (reader autoload-system)]."
+  UIOP:DEFINE-PACKAGE and arrange for @AUTOMATIC-LOADDEFS for the
+  package by listing it in :PACKAGES of @AUTO-LOADDEFS."
   (let ((nicknames (filter-options :nicknames options :append))
         (shadows (filter-options :shadow options :append))
         (shadowing-imports (filter-options :shadowing-import-from options
@@ -471,7 +469,7 @@
                 symbol))
             symbol-names)))
 
-(defun generate-package-autoloads (package-designators
+(defun generate-package-loaddefs (package-designators
                                    &key (process-docstring t))
   (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
                                                    package-designators))
@@ -641,7 +639,7 @@
                     names)
             package)))
 
-;;; These are not exported, but GENERATE-PACKAGE-AUTOLOADS outputs
+;;; These are not exported, but GENERATE-PACKAGE-LOADDEFS outputs
 ;;; them, so treat them as public.
 
 (defmacro ensure-package-names (name nicknames)
@@ -672,12 +670,10 @@
 (defclass autoload-cl-source-file (asdf:cl-source-file)
   ()
   (:documentation "The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
-  The [SYSTEM-AUTOLOADED-SYSTEMS][ (reader autoload-system)] and
-  [SYSTEM-RECORD-AUTOLOADS][ (reader autoload-system)] features rely
-  on source files belonging to this class. When combining autoload
-  with another ASDF extension that has its own ASDF:CL-SOURCE-FILE
-  subclass, define a new class that inherits from both and use that as
-  :DEFAULT-COMPONENT-CLASS."))
+@ASDF-INTEGRATION relies on source files belonging to this class. When
+combining autoload with another ASDF extension that has its own
+ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
+both, and use that as :DEFAULT-COMPONENT-CLASS."))
 
 ;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
 ;;; loaded
@@ -685,32 +681,32 @@
 
 (defmacro with-autoload-system ((autoload-cl-source-file) &body body)
   (let ((cl-file (gensym "CL-FILE"))
-        (autoloads-file-p (gensym "AUTOLOADS-FILE-P")))
+        (loaddefs-file-p (gensym "LOADDEFS-FILE-P")))
     `(let* ((,cl-file ,autoload-cl-source-file)
             (*autoload-system* (asdf:component-system ,cl-file))
-            (,autoloads-file-p (autoloads-file-p ,cl-file)))
+            (,loaddefs-file-p (loaddefs-file-p ,cl-file)))
        (loop
          (restart-case
              (return (progn ,@body))
-           (record-system-autoloads ()
+           (record-loaddefs ()
              :test (lambda (condition)
                      (declare (ignore condition))
-                     ,autoloads-file-p)
+                     ,loaddefs-file-p)
              :report (lambda (stream)
-                       (format stream "Record system autoloads."))
-             (record-system-autoloads *autoload-system*)))))))
+                       (format stream "Record system loaddefs."))
+             (record-loaddefs *autoload-system*)))))))
 
-(defun autoloads-file-p (autoload-cl-source-file)
+(defun loaddefs-file-p (autoload-cl-source-file)
   (declare (type autoload-cl-source-file autoload-cl-source-file))
   (let* ((f autoload-cl-source-file)
          (f-file (asdf:component-pathname f))
          (system (asdf:component-system f))
-         (autoloads-file (ignore-errors (system-record-autoloads* system)))
-         (autoloads-file (when autoloads-file
+         (loaddefs-file (ignore-errors (split-system-auto-loaddefs system)))
+         (loaddefs-file (when loaddefs-file
                            (asdf:system-relative-pathname system
-                                                          autoloads-file))))
+                                                          loaddefs-file))))
     (declare (type autoload-system system))
-    (uiop:pathname-equal f-file autoloads-file)))
+    (uiop:pathname-equal f-file loaddefs-file)))
 
 (defmethod asdf:perform :around ((op asdf:compile-op)
                                  (c autoload-cl-source-file))
@@ -731,28 +727,38 @@
 ;;;; @ASDF-INTEGRATION
 
 (defclass autoload-system (asdf:system)
-  ((system-autoloaded-systems
-    :initarg :autoloaded-systems
+  ((auto-depends-on
+    :initarg :auto-depends-on
     :initform nil
-    :reader system-autoloaded-systems
-    :documentation "Return the list of the names of systems declared
-    to be autoloaded directly by this system. The names are
-    canonicalized with ASDF:COERCE-NAME. This is used by AUTOLOADS and
-    affects the checks performed by the AUTOLOAD macro and AUTOLOADS.")
-   (record-autoloads
+    :reader system-auto-depends-on
+    :documentation "This is the list of the names of systems that this
+     system may autoload. The names are canonicalized with
+     ASDF:COERCE-NAME. This is used by EXTRACT-LOADDEFS and affects
+     the checks performed by the AUTOLOAD macro.")
+   (auto-loaddefs
     :initform nil
-    :initarg :record-autoloads
-    :reader system-record-autoloads
-    :documentation "This specifies where the automatically extracted
-    autoload forms shall be written by [RECORD-SYSTEM-AUTOLOADS][
-    function]. Conditions signalled while ASDF is compiling or loading
-    the file given have a RECORD-SYSTEM-AUTOLOADS restart.")
-   (test-autoloads
-    :initform t
-    :initarg :test-autoloads
-    :reader system-test-autoloads
-    :documentation "Specifies whether CHECK-SYSTEM-AUTOLOADS shall be
-    invoked on ASDF:TEST-OP.")
+    :initarg :auto-loaddefs
+    :reader system-auto-loaddefs
+    :documentation "When non-NIL, this specifies parameters for
+    [RECORD-LOADDEFS][ function] and whether CHECK-LOADDEFS shall be
+    run by ASDF:TEST-SYSTEM. It may be a single pathname designator or
+    a list of the form
+
+        (loaddefs-file &key (process-arglist t) (process-docstring t)
+                       packages test)
+
+    - LOADDEFS-FILE designates the pathname where RECORD-LOADDEFS
+      writes the [extracted loaddefs][ extract-loaddefs]. The pathname
+      is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is
+      OPENed with :IF-EXISTS :SUPERSEDE.
+
+    - PROCESS-ARGLIST, PROCESS-DOCSTRING and PACKAGES are passed on by
+      RECORD-LOADDEFS to EXTRACT-LOADDEFS.
+
+    - If TEST, then CHECK-LOADDEFS is run by ASDF:TEST-SYSTEM.
+
+    Conditions signalled while ASDF is compiling or loading the file
+    given have a RECORD-LOADDEFS restart.")
    ;; KLUDGE: (:DEFAULT-INITARGS :DEFAULT-COMPONENT-CLASS
    ;; 'AUTOLOAD-CL-SOURCE-FILE) doesn't work, so do it directly.
    (asdf::default-component-class :initform 'autoload-cl-source-file))
@@ -764,46 +770,44 @@
   (asdf:defsystem \"my-system\"
     :defsystem-depends-on (\"autoload\")
     :class \"autoload:autoload-system\"
-    :autoloaded-systems (\"dyndep\")
-    :record-autoloads \"autoloads.lisp\"
+    :auto-depends-on (\"dyndep\")
+    :auto-loaddefs \"loaddefs.lisp\"
     :components ((:file \"package\")
-                 (:file \"autoloads\")
+                 (:file \"loaddefs\")
                  ...))
   ```
 
   With the above,
 
-  - It is an error if an [AUTOLOAD][macro] refers to a
-    system other than `dyndep`.
+  - It is an error if an AUTOLOAD refers to a system other than
+    `dyndep`.
 
-  - `(`[RECORD-SYSTEM-AUTOLOADS][function] `\"my-system\")` will
-    update `autoloads.lisp`.
+  - `(`[RECORD-LOADDEFS][function] `\"my-system\")` will update
+    `loaddefs.lisp`.
 
-  - `(ASDF:TEST-SYSTEM \"my-system\")` [checks][
-    check-system-autoloads] that `autoload.lisp` is up-to-date.
+  - `(ASDF:TEST-SYSTEM \"my-system\")` [checks][ check-loaddefs] that
+    `loaddefs.lisp` is up-to-date.
 
   If the package definitions are also generated with
-  [RECORD-SYSTEM-AUTOLOADS][function] (e.g. because there is a
-  DEFPACKAGE/AUTOLOADED in `dyndep` or :RECORD-AUTOLOADS specifies
+  [RECORD-LOADDEFS][ function] (e.g. because there is a
+  DEFPACKAGE/AUTOLOADED in `dyndep` or :AUTO-LOADDEFS specifies
   :PACKAGES), then we can do without the `package.lisp` file:
-
 
   ```
   (asdf:defsystem \"my-system\"
     :defsystem-depends-on (\"autoload\")
     :class \"autoload:autoload-system\"
-    :autoloaded-systems (\"dyndep\")
-    :record-autoloads (\"autoloads.lisp\" :packages #:my-pkg)
-    :components ((:file \"autoloads\")
+    :auto-depends-on (\"dyndep\")
+    :auto-loaddefs (\"loaddefs.lisp\" :packages #:my-pkg)
+    :components ((:file \"loaddefs\")
                  ...))
   ```"))
 
 (defmethod shared-initialize :after ((system autoload-system) slot-names
                                      &key &allow-other-keys)
   (declare (ignore slot-names))
-  (setf (slot-value system 'system-autoloaded-systems)
-        (mapcar #'asdf:coerce-name
-                (slot-value system 'system-autoloaded-systems)))
+  (setf (slot-value system 'auto-depends-on)
+        (mapcar #'asdf:coerce-name (slot-value system 'auto-depends-on)))
   #+(or clisp ecl)
   (unless (slot-value system 'asdf::default-component-class)
     (setf (slot-value system 'asdf::default-component-class)
@@ -811,7 +815,7 @@
 
 ;;; ASDF:PERFORM is designed for side effects, and we can't just
 ;;; return stuff normally. LIST-AUTOLOADED-OP gathers systems here.
-(defvar *listed-autoloaded-systems*)
+(defvar *listed-autodeps*)
 
 (defclass list-autoloaded-op (asdf:sideway-operation)
   ())
@@ -820,13 +824,13 @@
   nil)
 
 (defmethod asdf:perform ((op list-autoloaded-op) (system autoload-system))
-  (dolist (s (system-autoloaded-systems system))
-    (pushnew s *listed-autoloaded-systems* :test #'equal)))
+  (dolist (s (system-auto-depends-on system))
+    (pushnew s *listed-autodeps* :test #'equal)))
 
 (defmethod asdf:perform ((op list-autoloaded-op) (system asdf:system))
   nil)
 
-(defun autoloaded-systems (system &key (follow-autoloaded t) installer)
+(defun autodeps (system &key (follow-autoloaded t) installer)
   "Return the list of the names of systems that may be autoloaded by
   SYSTEM or any of its normal dependencies (the transitive closure of
   its :DEPENDS-ON). This works even if SYSTEM is not an
@@ -843,16 +847,17 @@
     INSTALLER is passed a single argument, the name of the system to
     be installed, and it may or may not install the system.
 
-      The following example makes sure that all normal and autoloaded
-      dependencies (direct or indirect) of `my-system` are installed:
+  The following example makes sure that all normal and autoloaded
+  dependencies (direct or indirect) of `my-system` are installed:
 
-          (autoloaded-systems \"my-system\" :installer #'ql:quickload)"
-  (let ((*listed-autoloaded-systems* ()))
+      (autodeps \"my-system\" :installer #'ql:quickload)"
+  (let ((*listed-autodeps* ()))
     (without-asdf-session
+      ;; This will visit all systems in the dependency tree of SYSTEM.
       (asdf:operate 'list-autoloaded-op system :force t)
       (when follow-autoloaded
         (loop with processed = ()
-              for pending = (set-difference *listed-autoloaded-systems*
+              for pending = (set-difference *listed-autodeps*
                                             processed :test #'equal)
               while pending
               do (dolist (s pending)
@@ -862,37 +867,35 @@
                    (when (asdf:find-system s nil)
                      (asdf:operate 'list-autoloaded-op s :force t)))
                  (setq processed (append pending processed)))))
-    (reverse *listed-autoloaded-systems*)))
+    (reverse *listed-autodeps*)))
 
 (defun check-function-autoload (name system-name)
   (when *autoload-system*
     (let ((system-name (asdf:coerce-name system-name))
-          (system-autoloaded-systems
-            (system-autoloaded-systems *autoload-system*)))
-      (unless (find system-name system-autoloaded-systems :test #'equal)
+          (deps (system-auto-depends-on *autoload-system*)))
+      (unless (find system-name deps :test #'equal)
         (signal-autoload-warning
          "~@<~S, the system to be autoloaded for function ~S, is ~
          not among ~S, the ~S of ~S.~:@>"
-         system-name name system-autoloaded-systems
-         'system-autoloaded-systems
+         system-name name deps 'system-auto-depends-on
          (asdf:component-name *autoload-system*))))
-    (when (function-autoload-p name)
-      (maybe-gather-unresolved-autoload :function name))))
+    (when (autoload-fbound-p name)
+      (maybe-gather-unresolved-loaddef :function name))))
 
 
-;;;; @GENERATING-AUTOLOADS
+;;;; @AUTOMATIC-LOADDEFS
 
 (defvar *gathering-unresolved-from-system* nil)
-(defvar *gathered-unresolved-autoloads*)
+(defvar *gathered-unresolved-loaddefs*)
 
-(defun maybe-gather-unresolved-autoload (kind name)
+(defun maybe-gather-unresolved-loaddef (kind name)
   (when (eq *autoload-system* *gathering-unresolved-from-system*)
-    (push `(,kind ,name) *gathered-unresolved-autoloads*)))
+    (push `(,kind ,name) *gathered-unresolved-loaddefs*)))
 
 (defvar *recording-from-system* nil)
 (defvar *recorded-autoload-infos*)
 
-(defmacro with-autoloads-file-syntax (&body body)
+(defmacro with-loaddefs-file-syntax (&body body)
   `(uiop:with-safe-io-syntax (:package :cl)
      (let ((*print-pretty* t)
            (*print-case* :downcase)
@@ -902,10 +905,10 @@
 
 (defun prin1-to-string* (object)
   ;; We need to print the same string on all Lisp implementations for
-  ;; the sake of the EQUAL comparison in CHECK-SYSTEM-AUTOLOADS.
+  ;; the sake of the EQUAL comparison in CHECK-LOADDEFS.
   ;; *PRINT-PRETTY* NIL would be the easy way, but CLISP still prints
   ;; (QUOTE X) as 'X.
-  (with-autoloads-file-syntax
+  (with-loaddefs-file-syntax
     (let ((*print-right-margin* most-positive-fixnum)
           (*print-miser-width* nil))
       (prin1-to-string object))))
@@ -924,37 +927,38 @@
                      (and (eq (second entry) definer)
                           (equal (third entry) name))))))
 
-(defun autoloads (system &key (process-arglist t) (process-docstring t)
-                  packages)
-  "Return a list of forms that set up autoloading for definitions such
-  as DEFUN/AUTOLOADED in [:AUTOLOADED-SYSTEMS][
-  SYSTEM-AUTOLOADED-SYSTEMS (reader autoload-system)] of SYSTEM.
+(defun extract-loaddefs (system &key (process-arglist t) (process-docstring t)
+                         packages)
+  "Return a list of so-called loaddef forms that set up autoloading
+  for definitions such as DEFUN/AUTOLOADED in @AUTO-DEPENDS-ON of
+  SYSTEM.
 
   There is rarely a need to call this function directly, as
-  [RECORD-SYSTEM-AUTOLOADS][function] and CHECK-SYSTEM-AUTOLOADS
-  provide @ASDF-INTEGRATION.
+  [RECORD-LOADDEFS][ function] and CHECK-LOADDEFS provide
+  @ASDF-INTEGRATION.
 
   Note that this is an expensive operation, as it loads or reloads the
   direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
   records the association with the system and the autoloaded
   definitions such as DEFUN/AUTOLOADED.
 
-  - For function definitions such as DEFUN/AUTOLOADED, an
-    [AUTOLOAD][macro] form is emitted.
+  - For function definitions such as DEFUN/AUTOLOADED, an AUTOLOAD
+    form is emitted.
 
-     If PROCESS-ARGLIST is T, then the autoload forms will pass the
-     ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
-     AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
-     AUTOLOAD.
+      If PROCESS-ARGLIST is T, then the autoload forms will pass the
+      ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
+      AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
+      AUTOLOAD.
 
-  - For DEFVAR/AUTOLOADED, a DECLARE-VARIABLE-AUTOLOAD is emitted.
+  - For DEFVAR/AUTOLOADED, the emitted loaddefs declaim the variable
+    special and maybe set its initial value and docstring.
 
-     If the initial value form in DEFVAR/AUTOLOADED is detected as a
-     simple constant form, then it is passed as INIT to
-     DECLARE-VARIABLE-AUTOLOAD. Simple constant forms are strings,
-     numbers, characters, keywords, constants in the CL package, and
-     QUOTEd nested lists containing any of the previous or any symbol
-     from the `CL` package.
+      If the initial value form in DEFVAR/AUTOLOADED is detected as a
+      simple constant form, then it is evaluated and its value is
+      assigned to the variable as in DEFVAR. Simple constant forms are
+      strings, numbers, characters, keywords, constants in the CL
+      package, and QUOTEd nested lists containing any of the previous
+      or any symbol from the `CL` package.
 
   - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
     package-altering operations are emitted.
@@ -969,40 +973,38 @@
     definition.
 
   Note that if a function is not defined with DEFUN/AUTOLOADED or its
-  kin in @BASICS, then AUTOLOADS will not detect it. For such
-  functions, [AUTOLOAD][macro] forms must be written manually. Similar
+  kin in @BASICS, then EXTRACT-LOADDEFS will not detect it. For such
+  functions, AUTOLOAD forms must be written manually. Similar
   considerations apply to variables and packages."
   (let* ((infos (without-asdf-session
                   (mapcan #'extract-autoload-infos
-                          (system-autoloaded-systems
-                           (asdf:find-system system)))))
+                          (system-auto-depends-on (asdf:find-system system)))))
          (package-infos (remove 'defpackage/autoloaded infos
                                 :test-not #'eq :key #'second))
          (other-infos (remove 'defpackage/autoloaded infos
                               :test #'eq :key #'second)))
     (append
-     ;; These are ordered.
-     (generate-package-autoloads (union (mapcar #'third package-infos)
-                                        (uiop:ensure-list packages))
-                                 :process-docstring process-docstring)
-     (sort-autoload-declarations
-      (mapcan (lambda (info)
-                (info-to-autoload-forms info process-arglist
-                                        process-docstring))
-              other-infos)))))
+     ;; These are already ordered.
+     (generate-package-loaddefs (union (mapcar #'third package-infos)
+                                       (uiop:ensure-list packages))
+                                :process-docstring process-docstring)
+     (sort-loaddefs (mapcan (lambda (info)
+                              (info-to-loaddefs info process-arglist
+                                                process-docstring))
+                            other-infos)))))
 
-(defun sort-autoload-declarations (autoloads)
+(defun sort-loaddefs (autoloads)
   (sort (copy-seq autoloads) #'string< :key #'prin1-to-string*))
 
-(defun write-autoloads (forms stream)
+(defun write-loaddefs (forms stream)
   "Write the autoload FORMS to STREAM so they can be LOADed or
-  included in an ASDF:DEFSYSTEM."
-  (with-autoloads-file-syntax
+included in an ASDF:DEFSYSTEM."
+  (with-loaddefs-file-syntax
     (format stream "~S~%~%" `(in-package :cl))
     (format stream "~{~S~%~^~%~}" forms)))
 
-(defun read-autoloads-file (pathname)
-  (with-autoloads-file-syntax
+(defun read-loaddefs-file (pathname)
+  (with-loaddefs-file-syntax
     (uiop:read-file-forms pathname)))
 
 (defun extract-autoload-infos (system)
@@ -1013,110 +1015,95 @@
     (asdf:load-system system :force t)
     (reverse *recorded-autoload-infos*)))
 
-(defun info-to-autoload-forms (info process-arglist process-docstring)
+(defun info-to-loaddefs (info process-arglist process-docstring)
   (let ((system-name (pop info))
         (definer (pop info)))
     (ecase definer
       ((defun/autoloaded)
-       (defun/autoloaded-info-to-autoload-form system-name info
+       (defun/autoloaded-info-to-loaddefs system-name info
          process-arglist process-docstring))
       ((defvar/autoloaded)
-       (defvar/autoloaded-info-to-autoload-form system-name info
+       (defvar/autoloaded-info-to-loaddefs system-name info
          process-arglist process-docstring)))))
 
-(defun record-autoloads (system output &key (process-arglist t)
-                         (process-docstring t) packages)
-  (write-autoloads (autoloads system :process-arglist process-arglist
-                              :process-docstring process-docstring
-                              :packages packages)
-                   output))
+(defun record-loaddefs (system)
+  "EXTRACT-LOADDEFS from SYSTEM and WRITE-LOADDEFS. The arguments of
+  these functions are taken from SYSTEM's @AUTO-LOADDEFS.
 
-(defun record-system-autoloads (system)
-  "Write the AUTOLOADS of SYSTEM to the file in its
-  [:RECORD-AUTOLOADS][ SYSTEM-RECORD-AUTOLOADS (reader
-  autoload-system)], which may be a [pathname designator][clhs] or a
-  list of the form
+  As EXTRACT-LOADDEFS loads the direct autoloaded dependencies,
+  compiler warnings (e.g. about undefined specials and functions) may
+  occur that go away once the generated loaddefs are in place. The
+  easiest way to trigger this is to call RECORD-LOADDEFS before these
+  dependencies have been loaded. In this case, temporarily emptying
+  the loaddefs file and fixing these warnings is recommended.
 
-      (pathname &key (process-arglist t) (process-docstring t) packages)
-
-  See [AUTOLOADS][function] and WRITE-AUTOLOADS for the description of
-  these arguments. PATHNAME is relative to
-  ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
-  :SUPERSEDE.
-
-  As AUTOLOADS loads the direct autoloaded dependencies, compiler
-  warnings (e.g. about undefined specials and functions) may occur
-  that go away once the generated autoloads are in place. The easiest
-  way to trigger this is to call [RECORD-SYSTEM-AUTOLOADS][function]
-  before these dependencies have been loaded. In this case,
-  temporarily emptying the autoloads file and fixing these warnings is
-  recommended.
-
-  [RECORD-SYSTEM-AUTOLOADS][function] may also be used as a [condition
-  handler][clhs], in which case it invokes the RECORD-SYSTEM-AUTOLOADS
-  restart."
+  RECORD-LOADDEFS may also be used as a [condition handler][clhs], in
+  which case it invokes the RECORD-LOADDEFS restart."
   (when (or (null system) (typep system 'condition))
-    (invoke-restart 'record-system-autoloads)
-    (return-from record-system-autoloads))
+    (invoke-restart 'record-loaddefs)
+    (return-from record-loaddefs))
   (let ((system (asdf:find-system system)))
     (check-type system autoload-system)
-    (multiple-value-bind (pathname args) (system-record-autoloads* system)
+    (multiple-value-bind (pathname args) (split-system-auto-loaddefs system)
       (let ((pathname (asdf:system-relative-pathname system pathname))
             #+clisp (custom:*reopen-open-file* nil))
         (with-file-superseded (stream pathname)
-          (with-autoloads-file-syntax
+          (with-loaddefs-file-syntax
             (format stream ";;;; This file was emptied by~%~
                             ;;;;~%~
                             ;;;;   ~S~%~
                             ;;;;~%~
                             ;;;; Recording is ongoing or has failed. ~
                                  Do not edit.~%~%"
-                    `(record-system-autoloads ,(asdf:component-name system)))))
+                    `(record-loaddefs ,(asdf:component-name system)))))
         (with-file-superseded (stream pathname)
-          (with-autoloads-file-syntax
+          (with-loaddefs-file-syntax
             (format stream ";;;; This file was generated by~%~
                             ;;;;~%~
                             ;;;;   ~S~%~
                             ;;;;~%~
                             ;;;; Do not edit.~%~%"
-                    `(record-system-autoloads ,(asdf:component-name system))))
+                    `(record-loaddefs ,(asdf:component-name system))))
           (let ((*suppress-has-not-been-declared-warnings* t))
-            (apply #'record-autoloads system stream args)))))))
+            (write-loaddefs (apply #'extract-loaddefs system args) stream)))))))
 
-(defun system-record-autoloads* (system)
-  (let ((args (uiop:ensure-list (system-record-autoloads system))))
+(defun split-system-auto-loaddefs (system)
+  (let ((args (uiop:ensure-list (system-auto-loaddefs system))))
     (handler-case
         (destructuring-bind (pathname &key (process-arglist t)
-                             (process-docstring t) packages)
+                             (process-docstring t) packages (test t))
             args
           (check-type pathname (or string pathname))
           (values pathname `(:process-arglist ,process-arglist
                              :process-docstring ,process-docstring
-                             :packages ,packages)))
+                             :packages ,packages)
+                  test))
       ((and error (not type-error)) ()
         (error "~@<~S, the ~S of ~S, is not of the form ~S.~:@>"
-               args :record-autoloads (asdf:component-name system)
-               '(pathname &key (process-arglist t) (process-docstring t)))))))
+               args :auto-loaddefs (asdf:component-name system)
+               '(pathname &key (process-arglist t) (process-docstring t)
+                 packages (test t)))))))
 
-(defun check-system-autoloads (system &key (errorp t))
+(defun system-test-loaddefs-p (system)
+  (and (system-auto-loaddefs system)
+       (nth-value 2 (split-system-auto-loaddefs system))))
+
+(defun check-loaddefs (system &key (errorp t))
   "In the AUTOLOAD-SYSTEM SYSTEM, check that both recorded and manual
   autoload declarations are correct.
 
-  - If there is a [:RECORD-AUTOLOADS][ system-record-autoloads], then
-    the file generated by [RECORD-SYSTEM-AUTOLOADS][function] is
-    up-to-date.
+  - If there is a @AUTO-LOADDEFS, then the file generated by
+    [RECORD-LOADDEFS][ function] is up-to-date.
 
-  - All manual autoload declarations (i.e. [AUTOLOAD][macro]s and
-    DECLARE-VARIABLE-AUTOLOAD not in the :RECORD-AUTOLOADS file) in
+  - All manual (non-generated) autoload declarations with AUTOLOADs in
     SYSTEM are resolved (the corresponding function or variable is
-    defined) by loading [:AUTOLOADED-SYSTEMS][
-    SYSTEM-AUTOLOADED-SYSTEMS (reader autoload-system)].
+    defined) by loading @AUTO-DEPENDS-ON.
 
   If ERRORP, then signal an error if the check fails or the file
-  cannot be read. The RECORD-SYSTEM-AUTOLOADS restart is provided.
+  cannot be read. The RECORD-LOADDEFS restart is provided.
 
-  This function is called automatically by ASDF:TEST-OP on a
-  AUTOLOAD-SYSTEM method if SYSTEM-TEST-AUTOLOADS."
+  This function is called automatically by ASDF:TEST-OP on an
+  AUTOLOAD-SYSTEM method if @AUTO-LOADDEFS has :TEST T."
   (let ((system (asdf:find-system system)))
     (check-type system autoload-system)
     (flet ((fail (provide-restart-p control &rest args)
@@ -1127,78 +1114,71 @@
                                "~@<In system ~S, ~?~:@>"
                                (asdf:component-name system)
                                control args)
-                       (return-from check-system-autoloads nil))
-                   (record-system-autoloads ()
+                       (return-from check-loaddefs nil))
+                   (record-loaddefs ()
                      :test (lambda (condition)
                              (declare (ignore condition))
                              (and provide-restart-p
-                                  (system-record-autoloads system)))
+                                  (system-auto-loaddefs system)))
                      :report (lambda (stream)
                                (format stream
-                                       "Record system autoloads."))
-                     (record-system-autoloads system)
-                     (return-from check-system-autoloads
-                       (check-system-autoloads system :errorp errorp))))
-                 (return-from check-system-autoloads nil))))
-      (check-recorded-autoloads system #'fail errorp)
-      (check-manual-autoloads system #'fail)
+                                       "Record system loaddefs."))
+                     (record-loaddefs system)
+                     (return-from check-loaddefs
+                       (check-loaddefs system :errorp errorp))))
+                 (return-from check-loaddefs nil))))
+      (check-recorded-loaddefs system #'fail errorp)
+      (check-manual-loaddefs system #'fail)
       t)))
 
-(defun check-recorded-autoloads (system fail errorp)
-  (when (system-record-autoloads system)
-    (multiple-value-bind (pathname args) (system-record-autoloads* system)
-      (destructuring-bind (&key (process-arglist t) (process-docstring t)
-                           packages)
-          args
-        (let ((pathname (asdf:system-relative-pathname system pathname)))
-          (unless (uiop:file-exists-p pathname)
-            (funcall fail t "~A file ~S is missing."
-                     :record-autoloads pathname))
-          (let ((recorded-forms
-                  (if errorp
-                      (read-autoloads-file pathname)
-                      (handler-case
-                          (read-autoloads-file pathname)
-                        (error (e)
-                          (funcall fail t "reading file ~S failed with ~A."
-                                   pathname e)))))
-                (current-forms (autoloads
-                                system :process-arglist process-arglist
-                                :process-docstring process-docstring
-                                :packages packages)))
-            (let ((expected '(in-package :cl)))
-              (unless (equal (pop recorded-forms) expected)
-                (funcall fail t "the expected ~S form is not found."
-                         expected)))
-            (loop for recorded-form in recorded-forms
-                  for current-form in current-forms
-                  do (unless (equal recorded-form current-form)
-                       (funcall fail t "recorded and current forms differ.~%~
-                                Recorded form:~%  ~S~%~%Current form:~%  ~S"
-                                recorded-form current-form)))
-            (unless (= (length recorded-forms) (length current-forms))
-              (funcall fail t
-                       "number of recorded (~S) and current ~S (~S) differ."
-                       (length recorded-forms) 'autoloads
-                       (length current-forms)))))))))
+(defun check-recorded-loaddefs (system fail errorp)
+  (when (system-auto-loaddefs system)
+    (multiple-value-bind (pathname extract-args)
+        (split-system-auto-loaddefs system)
+      (let ((pathname (asdf:system-relative-pathname system pathname)))
+        (unless (uiop:file-exists-p pathname)
+          (funcall fail t "~A file ~S is missing." :auto-loaddefs pathname))
+        (let ((recorded-forms
+                (if errorp
+                    (read-loaddefs-file pathname)
+                    (handler-case
+                        (read-loaddefs-file pathname)
+                      (error (e)
+                        (funcall fail t "reading file ~S failed with ~A."
+                                 pathname e)))))
+              (current-forms (apply #'extract-loaddefs system extract-args)))
+          (let ((expected '(in-package :cl)))
+            (unless (equal (pop recorded-forms) expected)
+              (funcall fail t "the expected ~S form is not found."
+                       expected)))
+          (loop for recorded-form in recorded-forms
+                for current-form in current-forms
+                do (unless (equal recorded-form current-form)
+                     (funcall fail t "recorded and current loaddefs differ.~%~
+                              Recorded form:~%  ~S~%~%Current form:~%  ~S"
+                              recorded-form current-form)))
+          (unless (= (length recorded-forms) (length current-forms))
+            (funcall fail t
+                     "number of recorded (~S) and current loaddefs (~S) differ."
+                     (length recorded-forms) (length current-forms))))))))
 
-;;; Since this is called only if CHECK-RECORDED-AUTOLOADS succeeds,
-;;; any unresolved autoload must be manual.
-(defun check-manual-autoloads (system fail)
+;;; Since this is called only if CHECK-LOADDEFS succeeds, any
+;;; unresolved autoload must be manual.
+(defun check-manual-loaddefs (system fail)
   (without-asdf-session
-    (map nil #'asdf:load-system (system-autoloaded-systems system))
-    (let ((unresolved (unresolved-autoloads system)))
+    (map nil #'asdf:load-system (system-auto-depends-on system))
+    (let ((unresolved (unresolved-loaddefs system)))
       (when unresolved
         (funcall fail nil
-                 "the following manual autoloads are unresolved: ~_~S."
+                 "the following manual loaddefs are unresolved: ~_~S."
                  unresolved)))))
 
-(defun unresolved-autoloads (system)
+(defun unresolved-loaddefs (system)
   (let ((*gathering-unresolved-from-system* system)
-        (*gathered-unresolved-autoloads* ()))
+        (*gathered-unresolved-loaddefs* ()))
     (asdf:load-system system :force t)
-    *gathered-unresolved-autoloads*))
+    *gathered-unresolved-loaddefs*))
 
 (defmethod asdf:perform ((op asdf:test-op) (system autoload-system))
-  (when (system-test-autoloads system)
-    (check-system-autoloads system)))
+  (when (system-test-loaddefs-p system)
+    (check-loaddefs system)))

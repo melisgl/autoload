@@ -3,17 +3,17 @@
   (:export
    ;; Basics
    ;;; Functions
-   #:autoload #:function-autoload-p
+   #:autoload #:autoload-fbound-p
    #:defun/autoloaded #:defgeneric/autoloaded #:define-autoloaded-function
    ;;; Variables
-   #:declare-variable-autoload #:variable-autoload-p #:defvar/autoloaded
+   #:defvar/autoloaded
    ;;; Packages
    #:defpackage/autoloaded
    ;;; Conditions
    #:autoload-error #:autoload-warning
    ;; ASDF integration
-   #:autoload-system #:system-autoloaded-systems #:system-record-autoloads
-   #:autoloaded-systems
-   ;;; Generating autoloads
-   #:autoloads #:write-autoloads
-   #:record-system-autoloads #:check-system-autoloads))
+   #:autoload-system #:autoload-cl-source-file
+   #:system-auto-depends-on #:system-auto-loaddefs #:autodeps
+   ;;; Automatically generating loaddefs
+   #:extract-loaddefs #:write-loaddefs
+   #:record-loaddefs #:check-loaddefs))
