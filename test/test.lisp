@@ -1,7 +1,7 @@
 (cl:in-package :autoload-test)
 
 (deftest test-autoload-defaults ()
-  (let ((loadedp (and (not (function-autoload-p 'pax:escape-markdown))
+  (let ((loadedp (and (not (autoload-fbound-p 'pax:escape-markdown))
                       (ignore-errors (fdefinition 'pax:escape-markdown)))))
     ;; KLUDGE: Some Lisps don't immediately associate the arglist and
     ;; docstring with the definition.
@@ -105,14 +105,14 @@
                  (if load-source-p
                      (asdf:operate 'asdf:load-source-op "%simple-test")
                      (asdf:load-system "%simple-test" :force t))))
-             (load-simple-test (&optional empty-autoloads-file-p)
+             (load-simple-test (&optional empty-loaddefs-file-p)
                (signals-not (autoload-warning :pred #'unexpected-condition-p
                              :handler #'muffle-warning)
                  ;; CCC [handle][clhs]s warnings in COMPILE-FILE.
                  #-ccl
                  (signals (autoload-warning :pred #'missing-system-condition-p
                            :handler #'muffle-warning)
-                   (if empty-autoloads-file-p
+                   (if empty-loaddefs-file-p
                        (%load-simple-test)
                        ;; Some Lisps let compile-time warnings through
                        ;; but handle load-time ones.
@@ -125,49 +125,49 @@
                        (%load-simple-test)))
                  #+ccl
                  (%load-simple-test))))
-          (with-test ("RECORD-SYSTEM-AUTOLOADS")
+          (with-test ("RECORD-LOADDEFS")
             (with-test-systems
-              (empty-file (test-file "autoloads.lisp"))
+              (empty-file (test-file "loaddefs.lisp"))
               (load-simple-test t)
-              ;; RECORD-SYSTEM-AUTOLOADS should handle this missing file.
-              (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
+              ;; RECORD-LOADDEFS should handle this missing file.
+              (uiop:delete-file-if-exists (test-file "loaddefs.lisp"))
               (if (not load-source-p)
                   ;; This tests
                   ;; AUTOLOAD::*SUPPRESS-HAS-NOT-BEEN-DECLARED-WARNINGS*.
                   (signals-not (autoload-warning :handler #'muffle-warning)
-                    (record-system-autoloads "%simple-test"))
+                    (record-loaddefs "%simple-test"))
                   ;; KLUDGE: For some reason, this loads the base
                   ;; system, which emits a warning for
                   ;; %MISSING-SYSTEM.
                   (handler-bind ((autoload-warning #'muffle-warning))
-                    (record-system-autoloads "%simple-test")))
+                    (record-loaddefs "%simple-test")))
               (let ((*package* (find-package :autoload-test)))
                 (is (equal (uiop:read-file-forms
-                            (test-file "autoloads.lisp"))
+                            (test-file "loaddefs.lisp"))
                            (uiop:read-file-forms
-                            (test-file "expected-autoloads.lisp")))))))
+                            (test-file "expected-loaddefs.lisp")))))))
           (with-test ("variables and simple DEFUN")
             (with-test-systems
               (load-simple-test)
-              (is (not (function-autoload-p 'non-existent)))
+              (is (not (autoload-fbound-p 'non-existent)))
               ;; *VAR/NO-VALUE*
-              (is (variable-autoload-p *var/no-value*))
+              (is (autoload::foreshadowed-defvar-p *var/no-value*))
               (is (not (boundp *var/no-value*)))
               (is (equal (documentation *var/no-value* 'variable)
                          "*var/no-value* docstring"))
               ;; *VAR/SIMPLE-VALUE*
-              (is (variable-autoload-p *var/simple-value*))
+              (is (autoload::foreshadowed-defvar-p *var/simple-value*))
               (is (and (boundp *var/simple-value*)
                        (equal (symbol-value *var/simple-value*)
                               '("xxx" 7 :key nil t))))
               (is (equal (documentation *var/simple-value* 'variable)
                          "*var/simple-value* docstring"))
               ;; *VAR/COMPLEX-VALUE*
-              (is (variable-autoload-p *var/complex-value*))
+              (is (autoload::foreshadowed-defvar-p *var/complex-value*))
               (is (not (boundp *var/complex-value*)))
               (is (null (documentation *var/complex-value* 'variable)))
               ;; FOO
-              (is (function-autoload-p foo))
+              (is (autoload-fbound-p foo))
               #+sbcl
               (is (equal (dref:arglist (dref:dref foo 'function))
                          (read-from-string "(%simple-test::x)")))
@@ -175,11 +175,11 @@
               (is (not (asdf:component-loaded-p "%simple-test/full")))
               (is (equal (funcall foo 'secret) 'secret))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (function-autoload-p foo)))))
+              (is (not (autoload-fbound-p foo)))))
           (with-test ("traced stub")
             (with-test-systems
               (load-simple-test)
-              (is (function-autoload-p foo))
+              (is (autoload-fbound-p foo))
               ;; CMUCL sometimes fails with a type error somewhere in the
               ;; tracing machinery.
               #-cmucl
@@ -188,7 +188,7 @@
               (let ((*trace-output* (make-broadcast-stream)))
                 (is (equal (funcall foo 'secret) 'secret)))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (function-autoload-p foo)))))
+              (is (not (autoload-fbound-p foo)))))
           (with-test ("GLOBAL-SYMBOL-VALUE")
             (with-test-systems
               (load-simple-test)
@@ -202,52 +202,52 @@
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (function-autoload-p setf-xxx))
+              (is (autoload-fbound-p setf-xxx))
               (is (eq (eval (read-from-string
                              "(cl:setf (%simple-test::xxx)
                                    'autoload-test::secret)"))
                       'secret))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (function-autoload-p setf-xxx)))))
+              (is (not (autoload-fbound-p setf-xxx)))))
           (with-test ("DEFGENERIC")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (function-autoload-p foo-gf))
+              (is (autoload-fbound-p foo-gf))
               (is (eq (funcall foo-gf 7) 8))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (function-autoload-p foo-gf)))))
+              (is (not (autoload-fbound-p foo-gf)))))
           (with-test ("AUTOLOAD missing system")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (function-autoload-p missing-system))
+              (is (autoload-fbound-p missing-system))
               (signals (autoload-error
                         :pred (lambda (c)
                                 (eq (autoload::autoload-error-cause c)
                                     :system-not-found)))
                 (funcall missing-system))
-              (is (function-autoload-p missing-system))))
+              (is (autoload-fbound-p missing-system))))
           (with-test ("AUTOLOAD not redefined")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (function-autoload-p missing-fn))
+              (is (autoload-fbound-p missing-fn))
               (signals (autoload-error
                         :pred (lambda (c)
                                 (eq (autoload::autoload-error-cause c)
                                     :not-resolved)))
                 (funcall missing-fn))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (function-autoload-p missing-fn))))
+              (is (autoload-fbound-p missing-fn))))
           (with-test ("DEFINE-AUTOLOADED-FUNCTION")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (function-autoload-p custom))
+              (is (autoload-fbound-p custom))
               (is (eq (funcall custom 'secret) 'secret))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (function-autoload-p custom))))))))))
+              (is (not (autoload-fbound-p custom))))))))))
 
 (deftest test-package ()
   (let ((dir (asdf:system-relative-pathname "autoload-test"
@@ -255,17 +255,17 @@
     (flet ((test-file (file)
              (merge-pathnames file dir)))
       (with-test-systems
-        (uiop:delete-file-if-exists (test-file "autoloads.lisp"))
+        (uiop:delete-file-if-exists (test-file "loaddefs.lisp"))
         (signals-not (autoload-warning :handler nil)
-          (record-system-autoloads "%package-test"))
+          (record-loaddefs "%package-test"))
         (let ((*package* (find-package :autoload-test)))
           (is (equal (uiop:read-file-forms
-                      (test-file "autoloads.lisp"))
+                      (test-file "loaddefs.lisp"))
                      (uiop:read-file-forms
-                      (test-file "expected-autoloads.lisp")))))
+                      (test-file "expected-loaddefs.lisp")))))
         (asdf:load-system "%package-test" :force t))
       (with-test-systems
-        (load (compile-file (test-file "autoloads.lisp")))
+        (load (compile-file (test-file "loaddefs.lisp")))
         (let ((pkg (find-package :%package-test))
               (%aaa (find-package :%aaa)))
           ;; Ensure packages were created
@@ -309,7 +309,7 @@
            (merge-pathnames file dir))
          (write-manual (bar-p)
            (autoload::with-file-superseded
-               (stream (test-file "manual-autoloads.lisp"))
+               (stream (test-file "manual-loaddefs.lisp"))
              (when bar-p
                (format stream "(autoload:autoload %test-system::bar ~
                        \"%test-system/full\")"))))
@@ -326,11 +326,11 @@
                        (cl:defun %test-system::bar ())~%")))))
       (with-test ("sunshine")
         (with-test-systems
-          (empty-file (test-file "autoloads.lisp"))
+          (empty-file (test-file "loaddefs.lisp"))
           (write-manual nil)
           (write-full t t nil)
-          (record-system-autoloads "%test-system")
-          (is (check-system-autoloads "%test-system" :errorp nil))))
+          (record-loaddefs "%test-system")
+          (is (check-loaddefs "%test-system" :errorp nil))))
       (with-test ("unresolved function autoload")
         (with-test-systems
           (write-manual nil)
@@ -349,14 +349,14 @@
                       :handler (lambda (condition)
                                  (when (= (incf n-continues) 1)
                                    (continue condition))))
-              (is (not (check-system-autoloads "%test-system")))))
-          ;; Test the RECORD-SYSTEM-AUTOLOADS restart.
+              (is (not (check-loaddefs "%test-system")))))
+          ;; Test the RECORD-LOADDEFS restart.
           (let ((n-handles 0))
             (signals (error :pred "differ"
                       :handler (lambda (condition)
                                  (when (= (incf n-handles) 1)
-                                   (record-system-autoloads condition))))
-              (is (check-system-autoloads "%test-system"))))))
+                                   (record-loaddefs condition))))
+              (is (check-loaddefs "%test-system"))))))
       (with-test ("unresolved variable autoload")
         (with-test-systems
           (write-manual nil)
@@ -370,31 +370,31 @@
                       :handler (lambda (condition)
                                  (when (= (incf n-continues) 1)
                                    (continue condition))))
-              (is (not (check-system-autoloads "%test-system")))))
-          ;; Test the RECORD-SYSTEM-AUTOLOADS restart.
+              (is (not (check-loaddefs "%test-system")))))
+          ;; Test the RECORD-LOADDEFS restart.
           (let ((n-handles 0))
             (signals (error :pred "differ"
                       :handler (lambda (condition)
                                  (when (= (incf n-handles) 1)
-                                   (record-system-autoloads condition))))
-              (is (check-system-autoloads "%test-system"))))))
+                                   (record-loaddefs condition))))
+              (is (check-loaddefs "%test-system"))))))
       (with-test ("resolved manual function autoload")
         (with-test-systems
           (write-manual t)
           (write-full t t t)
           (asdf:load-system "%test-system" :force t)
-          (signals (autoload-warning :pred "has not been declared"
+          (signals (autoload-warning :pred "Missing loaddef"
                     :handler #'muffle-warning)
             (asdf:load-system "%test-system/full" :force t))
-          (record-system-autoloads "%test-system")
-          (is (check-system-autoloads "%test-system"))))
+          (record-loaddefs "%test-system")
+          (is (check-loaddefs "%test-system"))))
       (with-test ("unresolved manual function autoload")
         (with-test-systems
           (write-manual t)
           (write-full t t nil)
           (asdf:load-system "%test-system" :force t)
           (asdf:load-system "%test-system/full" :force t)
-          (record-system-autoloads "%test-system")
+          (record-loaddefs "%test-system")
           ;; Test the CONTINUE restart.
           (with-test ("CONTINUE")
             (let ((n-continues 0))
@@ -402,7 +402,7 @@
                         :handler (lambda (condition)
                                    (when (= (incf n-continues) 1)
                                      (continue condition))))
-                (is (not (check-system-autoloads "%test-system"))))))
+                (is (not (check-loaddefs "%test-system"))))))
           (with-test ("ASDF:TEST-SYSTEM")
             (let ((n-continues 0))
               (signals (error :pred "manual"
@@ -410,43 +410,43 @@
                                    (when (= (incf n-continues) 1)
                                      (continue condition))))
                 (asdf:test-system "%test-system"))))
-          ;; Test that there is no RECORD-SYSTEM-AUTOLOADS restart.
+          ;; Test that there is no RECORD-LOADDEFS restart.
           (signals (error :pred "manual"
                     :handler (lambda (condition)
                                (is (null (find-restart
-                                          'record-system-autoloads
+                                          'record-loaddefs
                                           condition)))
                                (continue condition)))
-            (is (not (check-system-autoloads "%test-system"))))))
-      (with-test ("compile error in autoloads")
+            (is (not (check-loaddefs "%test-system"))))))
+      (with-test ("compile error in loaddefs")
         (with-test-systems
           (write-manual t)
           (write-full t t t)
-          (autoload::with-file-superseded (stream (test-file "autoloads.lisp"))
+          (autoload::with-file-superseded (stream (test-file "loaddefs.lisp"))
             (format stream "yyy:xxx"))
-          (signals (error :handler #'record-system-autoloads)
+          (signals (error :handler #'record-loaddefs)
             (let ((*standard-output* (make-broadcast-stream))
                   (*error-output* (make-broadcast-stream)))
               (with-compilation-unit (:override t)
                 (asdf:load-system "%test-system" :force t)))))))))
 
-(deftest test-autoloaded-systems ()
+(deftest test-autodeps ()
   (with-test-systems
     (asdf:defsystem "%installer-test"
       :class "autoload:autoload-system"
-      :autoloaded-systems ("%not-installed-1"))
-    (is (equal (autoloaded-systems "%installer-test" :follow-autoloaded nil)
+      :auto-depends-on ("%not-installed-1"))
+    (is (equal (autodeps "%installer-test" :follow-autoloaded nil)
                '("%not-installed-1")))
     (let* ((installed ())
            (systems
-             (autoloaded-systems
+             (autodeps
               "%installer-test"
               :installer
               (lambda (system-name)
                 (cond ((string= system-name "%not-installed-1")
                        (eval '(asdf:defsystem "%not-installed-1"
                                :class "autoload:autoload-system"
-                               :autoloaded-systems ("%not-installed-2"))))
+                               :auto-depends-on ("%not-installed-2"))))
                       ((string= system-name "%not-installed-2")
                        (eval '(asdf:defsystem "%not-installed-2"
                                :class "autoload:autoload-system"))))
@@ -462,7 +462,7 @@
     (test-simple)
     (test-package)
     (test-test-system))
-  (test-autoloaded-systems))
+  (test-autodeps))
 
 (defun test (&key (debug nil) (print 'leaf) (describe *describe*))
   (with-compilation-unit (:override t)

@@ -16,7 +16,7 @@
                                          nil)))))
 
 ;;; KLUDGE: Hide any enclosing ASDF session. This allows a nested
-;;; ASDF:OPERATE with :FORCE T operate to execute.
+;;; ASDF:OPERATE with :FORCE T to execute.
 (defmacro without-asdf-session (&body body)
   ;; Bind ASDF/SESSION:*ASDF-SESSION* to NIL.
   `(let (,@(when *asdf-session-symbol*
@@ -60,16 +60,6 @@
                             :if-does-not-exist :create
                             :if-exists :supersede)
      ,@body))
-
-;;; Even though ASDF:SYSTEM names rarely contain special Markdown
-;;; characters, play nice with PAX and escape the names if
-;;; MGL-PAX:ESCAPE-MARKDOWN is loaded.
-(defun %escape-markdown (string)
-  (let ((symbol (uiop:find-symbol* '#:escape-markdown '#:mgl-pax nil)))
-    (if (and symbol (not (function-autoload-p symbol))
-             (fdefinition* symbol))
-        (funcall symbol string)
-        string)))
 
 
 ;;;; Cargo-culted from DREF::FDEFINITION*

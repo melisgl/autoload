@@ -59,8 +59,8 @@ The core idea is
          (asdf:load-system ,asdf-system)
          (apply ',name args)))
 
-Suppose we have a library called my-lib that autoloads my-lib/full.
-In my-lib, we could use AUTOLOAD as
+Suppose we have a library called my-lib that autoloads
+my-lib/full. In my-lib, we could use AUTOLOAD as
 
     (autoload foo "my-lib/full")
 
@@ -72,23 +72,23 @@ and have
 
 in my-lib/full.
 
-However, manually keeping the autoload declarations in sync with the
-definitions is fragile, so instead we mark autoloaded functions in
-the my-lib/full system:
+However, manually keeping the loaddefs (e.g. the AUTOLOAD form
+above) in sync with the definitions is fragile, so instead we mark
+autoloaded functions in the my-lib/full system:
 
     (defun/autoloaded foo (x)
       "doc"
       (1+ x))
 
-and generate autoloads through the
+and generate loaddefs through the
 ASDF Integration:
 
     (asdf:defsystem "my-lib"
       :defsystem-depends-on ("autoload")
       :class "autoload:autoload-system"
-      :autoloaded-systems ("my-lib/full")
-      :record-autoloads "autoloads.lisp"
-      :components ((:file "autoloads")
+      :auto-depends-on ("my-lib/full")
+      :auto-loaddefs "loaddefs.lisp"
+      :components ((:file "loaddefs")
                    ...))
 
     (asdf:defsystem "my-lib/full"
@@ -96,29 +96,33 @@ ASDF Integration:
       :class "autoload:autoload-system"
       :components (...))
 
-Then, the autoloaded definitions can be extracted:
+Then, the loaddefs can be extracted:
 
-    (autoloads "my-lib")
-    => ((autoload foo :arglist "(x)" :docstring "doc"))
+    (extract-loaddefs "my-lib")
+    => ((autoload foo "my-lib/full" :arglist "(x)" :docstring "doc"))
 
-This is implemented by loading the :AUTOLOADED-SYSTEMS of my-lib
-and recording DEFUN/AUTOLOADEDs. AUTOLOADS is a low-level utility
-used by RECORD-SYSTEM-AUTOLOADS, which writes its
-results to the system's :RECORD-AUTOLOADS, "autoloads.lisp" in the above
-example. So, all we need to do is call it to regenerate the
-autoloads file:
+This is implemented by loading the :AUTO-DEPENDS-ON of my-lib and
+recording DEFUN/AUTOLOADEDs. EXTRACT-LOADDEFS is a low-level utility
+used by RECORD-LOADDEFS, which writes its results to
+the system's :AUTO-LOADDEFS, "loaddefs.lisp" in the above example.
+So, all we need to do is call it to regenerate the loaddefs file:
 
-    (record-system-autoloads "my-lib")
+    (record-loaddefs "my-lib")
 
-To prevent the autoloads file from getting out of sync with the
-definitions, ASDF:TEST-SYSTEM calls CHECK-SYSTEM-AUTOLOADS by
-default.
+To prevent the loaddefs file from getting out of sync with the
+definitions, ASDF:TEST-SYSTEM calls CHECK-LOADDEFS by default.
 
 ASDF, and by extension Quicklisp, don't know about the declared
-:AUTOLOADED-SYSTEMS, so (QL:QUICKLOAD "my-lib") does not install
-the autoloaded dependencies. This can be done with
+:AUTO-DEPENDS-ON, so (QL:QUICKLOAD "my-lib") does not install the
+autoloaded dependencies. This can be done with
 
-    (autoloaded-systems "my-lib" :installer #'ql:quickload)
+    (autodeps "my-lib" :installer #'ql:quickload)
+
+If all the autoloaded dependencies are installed, one can eagerly
+load them to ensure that autoloading is not triggered later (e.g.
+in deployment):
+
+    (mapcar #'asdf:load-system (autodeps "my-lib"))
 
 ## Basics
 
@@ -129,7 +133,7 @@ the autoloaded dependencies. This can be done with
     Define a stub function with NAME that loads SYSTEM-NAME, expecting
     it to redefine the function, and then calls the newly loaded
     definition. Return NAME. The arguments are not evaluated. If NAME
-    has an FDEFINITION and it is not FUNCTION-AUTOLOAD-P, then do
+    has an FDEFINITION and it is not AUTOLOAD-FBOUND-P, then do
     nothing and return NIL.
 
     The stub does the following.
@@ -142,7 +146,7 @@ the autoloaded dependencies. This can be done with
        environment.
 
     3. It checks that the function with NAME has been redefined as a
-       normal function (that's not FUNCTION-AUTOLOAD-P), else it signals
+       normal function (that's not AUTOLOAD-FBOUND-P), else it signals
        an AUTOLOAD-ERROR.
 
     4. It calls the function NAME passing on the stub's own arguments.
@@ -166,18 +170,18 @@ the autoloaded dependencies. This can be done with
 
     When AUTOLOAD is macroexpanded during the compilation or loading of
     an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
-    not among those declared in :AUTOLOADED-SYSTEMS.
+    not among those declared in :AUTO-DEPENDS-ON.
 
-- [function] FUNCTION-AUTOLOAD-P NAME
+- [function] AUTOLOAD-FBOUND-P NAME
 
     See if NAME's function definition is an autoloader function
     established by AUTOLOAD.
 
 - [macro] DEFUN/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN, but mark the function for automatically
-    Generating Autoloads and silence redefinition warnings. Also, warn
-    if NAME has never been FUNCTION-AUTOLOAD-P.
+    Like DEFUN, but mark the function for Automatically Generating Loaddefs and
+    silence redefinition warnings. Also, warn if NAME has never been
+    AUTOLOAD-FBOUND-P.
 
 - [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
@@ -194,29 +198,9 @@ the autoloaded dependencies. This can be done with
 
 ### Variables
 
-- [macro] DECLARE-VARIABLE-AUTOLOAD VAR &KEY (INIT NIL) DOCSTRING
-
-    Define VAR with DEFVAR and mark it as VARIABLE-AUTOLOAD-P.
-
-    - Depending on whether INIT is specified, (DEFVAR <VAR>
-      <init>) or (DEFVAR <VAR>) is executed.
-
-    - If DOCSTRING is non-NIL, then the DOCUMENTATION of VAR as a
-      VARIABLE is set to it.
-
-    Note that on accessing VAR, nothing is autoloaded.
-    DECLARE-VARIABLE-AUTOLOAD is solely to allow DEFVAR/AUTOLOADED to
-    perform some checking.
-
-- [function] VARIABLE-AUTOLOAD-P NAME
-
-    See if NAME has been declared with DECLARE-VARIABLE-AUTOLOAD and
-    has not been defined with DEFVAR/AUTOLOADED since.
-
 - [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOC
 
-    Like DEFVAR, but mark the variable for automatically
-    Generating Autoloads.
+    Like DEFVAR, but mark the variable for Automatically Generating Loaddefs.
 
     Also, this works with the global binding on Lisps that support
     it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
@@ -231,14 +215,15 @@ the autoloaded dependencies. This can be done with
           *x*)
         => 1
 
-    DEFVAR/AUTOLOADED warns if VAR has never been VARIABLE-AUTOLOAD-P.
+    DEFVAR/AUTOLOADED warns if VAR does not have a loaddef in
+    :AUTO-LOADDEFS.
 
 ### Packages
 
 - [macro] DEFPACKAGE/AUTOLOADED NAME &REST OPTIONS
 
-    Like DEFPACKAGE, but mark the package for Generating Autoloads
-    automatically and extend the existing definition additively.
+    Like DEFPACKAGE, but mark the package for Automatically Generating Loaddefs and
+    extend the existing definition additively.
 
     The additivity means that instead of replacing the package
     definition or signaling errors on redefinition, it expands into
@@ -259,16 +244,15 @@ the autoloaded dependencies. This can be done with
       DEFPACKAGE/AUTOLOADED.
 
     Alternatively, one may use, for example, DEFPACKAGE or
-    UIOP:DEFINE-PACKAGE and arrange for Generating Autoloads for the
-    package by listing it in :PACKAGES of
-    SYSTEM-RECORD-AUTOLOADS.
+    UIOP:DEFINE-PACKAGE and arrange for Automatically Generating Loaddefs for the
+    package by listing it in :PACKAGES of :AUTO-LOADDEFS.
 
 ### Conditions
 
 - [condition] AUTOLOAD-ERROR ERROR
 
-    Signalled by the stub defined by AUTOLOAD
-    if autoloading fails.
+    Signalled by the stub defined by AUTOLOAD if
+    autoloading fails.
 
 - [condition] AUTOLOAD-WARNING SIMPLE-WARNING
 
@@ -286,54 +270,75 @@ the autoloaded dependencies. This can be done with
         (asdf:defsystem "my-system"
           :defsystem-depends-on ("autoload")
           :class "autoload:autoload-system"
-          :autoloaded-systems ("dyndep")
-          :record-autoloads "autoloads.lisp"
+          :auto-depends-on ("dyndep")
+          :auto-loaddefs "loaddefs.lisp"
           :components ((:file "package")
-                       (:file "autoloads")
+                       (:file "loaddefs")
                        ...))
 
     With the above,
 
-    - It is an error if an AUTOLOAD refers to a
-      system other than dyndep.
+    - It is an error if an AUTOLOAD refers to a system other than
+      dyndep.
 
-    - (RECORD-SYSTEM-AUTOLOADS "my-system") will
-      update autoloads.lisp.
+    - (RECORD-LOADDEFS "my-system") will update
+      loaddefs.lisp.
 
-    - (ASDF:TEST-SYSTEM "my-system") checks that autoload.lisp is up-to-date.
+    - (ASDF:TEST-SYSTEM "my-system") checks that
+      loaddefs.lisp is up-to-date.
 
     If the package definitions are also generated with
-    RECORD-SYSTEM-AUTOLOADS (e.g. because there is a
-    DEFPACKAGE/AUTOLOADED in dyndep or :RECORD-AUTOLOADS specifies
+    RECORD-LOADDEFS (e.g. because there is a
+    DEFPACKAGE/AUTOLOADED in dyndep or :AUTO-LOADDEFS specifies
     :PACKAGES), then we can do without the package.lisp file:
 
         (asdf:defsystem "my-system"
           :defsystem-depends-on ("autoload")
           :class "autoload:autoload-system"
-          :autoloaded-systems ("dyndep")
-          :record-autoloads ("autoloads.lisp" :packages #:my-pkg)
-          :components ((:file "autoloads")
+          :auto-depends-on ("dyndep")
+          :auto-loaddefs ("loaddefs.lisp" :packages #:my-pkg)
+          :components ((:file "loaddefs")
                        ...))
 
-- [reader] SYSTEM-AUTOLOADED-SYSTEMS AUTOLOAD-SYSTEM (:AUTOLOADED-SYSTEMS = NIL)
+- [class] AUTOLOAD-CL-SOURCE-FILE CL-SOURCE-FILE
 
-    Return the list of the names of systems declared
-    to be autoloaded directly by this system. The names are
-    canonicalized with ASDF:COERCE-NAME. This is used by AUTOLOADS and
-    affects the checks performed by the AUTOLOAD macro and AUTOLOADS.
+    The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
+    ASDF Integration relies on source files belonging to this class. When
+    combining autoload with another ASDF extension that has its own
+    ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
+    both, and use that as :DEFAULT-COMPONENT-CLASS.
 
-- [reader] SYSTEM-RECORD-AUTOLOADS AUTOLOAD-SYSTEM (:RECORD-AUTOLOADS = NIL)
+- [reader] SYSTEM-AUTO-DEPENDS-ON AUTOLOAD-SYSTEM (:AUTO-DEPENDS-ON = NIL)
 
-    This specifies where the automatically extracted
-    autoload forms shall be written by RECORD-SYSTEM-AUTOLOADS. Conditions signalled while ASDF is compiling or loading
-    the file given have a RECORD-SYSTEM-AUTOLOADS restart.
+    This is the list of the names of systems that this
+    system may autoload. The names are canonicalized with
+    ASDF:COERCE-NAME. This is used by EXTRACT-LOADDEFS and affects
+    the checks performed by the AUTOLOAD macro.
 
-- [reader] SYSTEM-TEST-AUTOLOADS AUTOLOAD-SYSTEM (:TEST-AUTOLOADS = T)
+- [reader] SYSTEM-AUTO-LOADDEFS AUTOLOAD-SYSTEM (:AUTO-LOADDEFS = NIL)
 
-    Specifies whether CHECK-SYSTEM-AUTOLOADS shall be
-    invoked on ASDF:TEST-OP.
+    When non-NIL, this specifies parameters for
+    RECORD-LOADDEFS and whether CHECK-LOADDEFS shall be
+    run by ASDF:TEST-SYSTEM. It may be a single pathname designator or
+    a list of the form
 
-- [function] AUTOLOADED-SYSTEMS SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER
+        (loaddefs-file &key (process-arglist t) (process-docstring t)
+                       packages test)
+
+    - LOADDEFS-FILE designates the pathname where RECORD-LOADDEFS
+      writes the extracted loaddefs. The pathname
+      is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is
+      OPENed with :IF-EXISTS :SUPERSEDE.
+
+    - PROCESS-ARGLIST, PROCESS-DOCSTRING and PACKAGES are passed on by
+      RECORD-LOADDEFS to EXTRACT-LOADDEFS.
+
+    - If TEST, then CHECK-LOADDEFS is run by ASDF:TEST-SYSTEM.
+
+    Conditions signalled while ASDF is compiling or loading the file
+    given have a RECORD-LOADDEFS restart.
+
+- [function] AUTODEPS SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER
 
     Return the list of the names of systems that may be autoloaded by
     SYSTEM or any of its normal dependencies (the transitive closure of
@@ -351,43 +356,45 @@ the autoloaded dependencies. This can be done with
       INSTALLER is passed a single argument, the name of the system to
       be installed, and it may or may not install the system.
 
-        The following example makes sure that all normal and autoloaded
-        dependencies (direct or indirect) of my-system are installed:
+    The following example makes sure that all normal and autoloaded
+    dependencies (direct or indirect) of my-system are installed:
 
-            (autoloaded-systems "my-system" :installer #'ql:quickload)
+        (autodeps "my-system" :installer #'ql:quickload)
 
-### Generating Autoloads
+### Automatically Generating Loaddefs
 
-- [function] AUTOLOADS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
+- [function] EXTRACT-LOADDEFS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
 
-    Return a list of forms that set up autoloading for definitions such
-    as DEFUN/AUTOLOADED in :AUTOLOADED-SYSTEMS of SYSTEM.
+    Return a list of so-called loaddef forms that set up autoloading
+    for definitions such as DEFUN/AUTOLOADED in :AUTO-DEPENDS-ON of
+    SYSTEM.
 
     There is rarely a need to call this function directly, as
-    RECORD-SYSTEM-AUTOLOADS and CHECK-SYSTEM-AUTOLOADS
-    provide ASDF Integration.
+    RECORD-LOADDEFS and CHECK-LOADDEFS provide
+    ASDF Integration.
 
     Note that this is an expensive operation, as it loads or reloads the
     direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
     records the association with the system and the autoloaded
     definitions such as DEFUN/AUTOLOADED.
 
-    - For function definitions such as DEFUN/AUTOLOADED, an
-      AUTOLOAD form is emitted.
+    - For function definitions such as DEFUN/AUTOLOADED, an AUTOLOAD
+      form is emitted.
 
-    If PROCESS-ARGLIST is T, then the autoload forms will pass the
-       ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
-       AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
-       AUTOLOAD.
+        If PROCESS-ARGLIST is T, then the autoload forms will pass the
+        ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
+        AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
+        AUTOLOAD.
 
-    - For DEFVAR/AUTOLOADED, a DECLARE-VARIABLE-AUTOLOAD is emitted.
+    - For DEFVAR/AUTOLOADED, the emitted loaddefs declaim the variable
+      special and maybe set its initial value and docstring.
 
-    If the initial value form in DEFVAR/AUTOLOADED is detected as a
-       simple constant form, then it is passed as INIT to
-       DECLARE-VARIABLE-AUTOLOAD. Simple constant forms are strings,
-       numbers, characters, keywords, constants in the CL package, and
-       QUOTEd nested lists containing any of the previous or any symbol
-       from the CL package.
+        If the initial value form in DEFVAR/AUTOLOADED is detected as a
+        simple constant form, then it is evaluated and its value is
+        assigned to the variable as in DEFVAR. Simple constant forms are
+        strings, numbers, characters, keywords, constants in the CL
+        package, and QUOTEd nested lists containing any of the previous
+        or any symbol from the CL package.
 
     - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
       package-altering operations are emitted.
@@ -402,76 +409,54 @@ the autoloaded dependencies. This can be done with
       definition.
 
     Note that if a function is not defined with DEFUN/AUTOLOADED or its
-    kin in Basics, then AUTOLOADS will not detect it. For such
+    kin in Basics, then EXTRACT-LOADDEFS will not detect it. For such
     functions, AUTOLOAD forms must be written manually. Similar
     considerations apply to variables and packages.
 
-- [function] WRITE-AUTOLOADS FORMS STREAM
+- [function] WRITE-LOADDEFS FORMS STREAM
 
     Write the autoload FORMS to STREAM so they can be LOADed or
     included in an ASDF:DEFSYSTEM.
 
-- [function] RECORD-SYSTEM-AUTOLOADS SYSTEM
+- [function] RECORD-LOADDEFS SYSTEM
 
-    Write the AUTOLOADS of SYSTEM to the file in its
-    :RECORD-AUTOLOADS, which may be a pathname designator or a
-    list of the form
+    EXTRACT-LOADDEFS from SYSTEM and WRITE-LOADDEFS. The arguments of
+    these functions are taken from SYSTEM's :AUTO-LOADDEFS.
 
-        (pathname &key (process-arglist t) (process-docstring t) packages)
+    As EXTRACT-LOADDEFS loads the direct autoloaded dependencies,
+    compiler warnings (e.g. about undefined specials and functions) may
+    occur that go away once the generated loaddefs are in place. The
+    easiest way to trigger this is to call RECORD-LOADDEFS before these
+    dependencies have been loaded. In this case, temporarily emptying
+    the loaddefs file and fixing these warnings is recommended.
 
-    See AUTOLOADS and WRITE-AUTOLOADS for the description of
-    these arguments. PATHNAME is relative to
-    ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is OPENed with :IF-EXISTS
-    :SUPERSEDE.
+    RECORD-LOADDEFS may also be used as a condition handler, in
+    which case it invokes the RECORD-LOADDEFS restart.
 
-    As AUTOLOADS loads the direct autoloaded dependencies, compiler
-    warnings (e.g. about undefined specials and functions) may occur
-    that go away once the generated autoloads are in place. The easiest
-    way to trigger this is to call RECORD-SYSTEM-AUTOLOADS
-    before these dependencies have been loaded. In this case,
-    temporarily emptying the autoloads file and fixing these warnings is
-    recommended.
-
-    RECORD-SYSTEM-AUTOLOADS may also be used as a condition
-    handler, in which case it invokes the RECORD-SYSTEM-AUTOLOADS
-    restart.
-
-- [function] CHECK-SYSTEM-AUTOLOADS SYSTEM &KEY (ERRORP T)
+- [function] CHECK-LOADDEFS SYSTEM &KEY (ERRORP T)
 
     In the AUTOLOAD-SYSTEM SYSTEM, check that both recorded and manual
     autoload declarations are correct.
 
-    - If there is a :RECORD-AUTOLOADS, then
-      the file generated by RECORD-SYSTEM-AUTOLOADS is
-      up-to-date.
+    - If there is a :AUTO-LOADDEFS, then the file generated by
+      RECORD-LOADDEFS is up-to-date.
 
-    - All manual autoload declarations (i.e. AUTOLOADs and
-      DECLARE-VARIABLE-AUTOLOAD not in the :RECORD-AUTOLOADS file) in
+    - All manual (non-generated) autoload declarations with AUTOLOADs in
       SYSTEM are resolved (the corresponding function or variable is
-      defined) by loading :AUTOLOADED-SYSTEMS.
+      defined) by loading :AUTO-DEPENDS-ON.
 
     If ERRORP, then signal an error if the check fails or the file
-    cannot be read. The RECORD-SYSTEM-AUTOLOADS restart is provided.
+    cannot be read. The RECORD-LOADDEFS restart is provided.
 
-    This function is called automatically by ASDF:TEST-OP on a
-    AUTOLOAD-SYSTEM method if SYSTEM-TEST-AUTOLOADS.
+    This function is called automatically by ASDF:TEST-OP on an
+    AUTOLOAD-SYSTEM method if :AUTO-LOADDEFS has :TEST T.
 
-- [restart] RECORD-SYSTEM-AUTOLOADS
+- [restart] RECORD-LOADDEFS
 
-    Provided by CHECK-SYSTEM-AUTOLOADS and also when the compilation of
-    the autoloads file declared in :RECORD-AUTOLOADS fails. The
-    function RECORD-SYSTEM-AUTOLOADS can be used as a condition handler
-    to invoke this restart.
-
-- [class] AUTOLOAD-CL-SOURCE-FILE CL-SOURCE-FILE
-
-    The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
-    The SYSTEM-AUTOLOADED-SYSTEMS and
-    SYSTEM-RECORD-AUTOLOADS features rely
-    on source files belonging to this class. When combining autoload
-    with another ASDF extension that has its own ASDF:CL-SOURCE-FILE
-    subclass, define a new class that inherits from both and use that as
-    :DEFAULT-COMPONENT-CLASS.
+    Provided by CHECK-LOADDEFS and also when the compilation of the
+    loaddefs file declared in :AUTO-LOADDEFS fails. The function
+    RECORD-LOADDEFS can be used as a condition handler to invoke this
+    restart.
 
 * * *
 ###### \[generated by [MGL-PAX](https://github.com/melisgl/mgl-pax)\]
