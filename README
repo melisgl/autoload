@@ -122,7 +122,7 @@ If all the autoloaded dependencies are installed, one can eagerly
 load them to ensure that autoloading is not triggered later (e.g.
 in deployment):
 
-    (mapcar #'asdf:load-system (autodeps "my-lib"))
+    (map nil #'asdf:load-system (autodeps "my-lib"))
 
 ## Basics
 
@@ -149,7 +149,8 @@ in deployment):
        normal function (that's not AUTOLOAD-FBOUND-P), else it signals
        an AUTOLOAD-ERROR.
 
-    4. It calls the function NAME passing on the stub's own arguments.
+    4. It APPLYs the redefined function NAME to the arguments originally
+       provided to the stub.
 
     The stub is not defined at compile time, which matches the
     required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -317,47 +318,51 @@ in deployment):
 
 - [reader] SYSTEM-AUTO-LOADDEFS AUTOLOAD-SYSTEM (:AUTO-LOADDEFS = NIL)
 
-    When non-NIL, this specifies parameters for
-    RECORD-LOADDEFS and whether CHECK-LOADDEFS shall be
-    run by ASDF:TEST-SYSTEM. It may be a single pathname designator or
-    a list of the form
+    When non-NIL, this specifies arguments for
+    Automatically Generating Loaddefs. It may be a single pathname designator or a
+    list of the form
 
         (loaddefs-file &key (process-arglist t) (process-docstring t)
-                       packages test)
+                            packages test)
 
-    - LOADDEFS-FILE designates the pathname where RECORD-LOADDEFS
-      writes the extracted loaddefs. The pathname
-      is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is
-      OPENed with :IF-EXISTS :SUPERSEDE.
+    - LOADDEFS-FILE designates the pathname where RECORD-LOADDEFS writes the extracted loaddefs.
+      The pathname is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of
+      SYSTEM and is OPENed with :IF-EXISTS :SUPERSEDE.
 
-    - PROCESS-ARGLIST, PROCESS-DOCSTRING and PACKAGES are passed on by
-      RECORD-LOADDEFS to EXTRACT-LOADDEFS.
+    - PROCESS-ARGLIST, PROCESS-DOCSTRING and PACKAGES
+      are passed on by RECORD-LOADDEFS to EXTRACT-LOADDEFS.
 
     - If TEST, then CHECK-LOADDEFS is run by ASDF:TEST-SYSTEM.
 
     Conditions signalled while ASDF is compiling or loading the file
     given have a RECORD-LOADDEFS restart.
 
-- [function] AUTODEPS SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER
+- [function] AUTODEPS SYSTEM &KEY (CROSS-AUTOLOADED T) INSTALLER
 
     Return the list of the names of systems that may be autoloaded by
-    SYSTEM or any of its normal dependencies (the transitive closure of
-    its :DEPENDS-ON). This works even if SYSTEM is not an
-    AUTOLOAD-SYSTEM.
+    SYSTEM or any of its direct or indirect dependencies. This
+    recursively visits systems in the dependency tree, traversing both
+    normal (:DEPENDS-ON) and autoloaded (:AUTO-DEPENDS-ON) dependencies.
+    It works even if SYSTEM is not an AUTOLOAD-SYSTEM.
 
-    - If FOLLOW-AUTOLOADED, look further for autoloaded systems among
-      the normal and autoloaded dependencies of any autoloaded systems
-      found. If an autoloaded system is not installed (i.e.
-      ASDF:FIND-SYSTEM fails), then that system is not followed.
+    - CROSS-AUTOLOADED controls whether systems only reachable from
+      SYSTEM via intermediate autoloaded dependencies are visited. Thus,
+      if CROSS-AUTOLOADED is NIL, then the returned list is the first
+      boundary of autoloaded systems.
 
-    - If INSTALLER is non-NIL, it is called when an uninstalled system
-      is encountered. This is an autoloaded system if normal ASDF
-      dependencies are installed, as is the case with e.g. Quicklisp.
+    - If INSTALLER is non-NIL, it is called when an autoloaded system
+      that is not installed (i.e. ASDF:FIND-SYSTEM fails) is visited.
       INSTALLER is passed a single argument, the name of the system to
-      be installed, and it may or may not install the system.
+      be installed. It may or may not install the system.
 
-    The following example makes sure that all normal and autoloaded
-    dependencies (direct or indirect) of my-system are installed:
+    If an autoloaded system is not installed (i.e. ASDF:FIND-SYSTEM
+    fails, even after INSTALLER had a chance), then its dependencies are
+    unknown and cannot be traversed. Note that autoloaded systems that
+    are not installed are still visited and included in the returned
+    list.
+
+    The following example makes sure that all autoloaded dependencies
+    (direct or indirect) of my-system are installed:
 
         (autodeps "my-system" :installer #'ql:quickload)
 

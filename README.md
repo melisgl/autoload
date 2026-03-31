@@ -154,7 +154,7 @@ load them to ensure that autoloading is not triggered later (e.g.
 in deployment):
 
 ```
-(mapcar #'asdf:load-system (autodeps "my-lib"))
+(map nil #'asdf:load-system (autodeps "my-lib"))
 ```
 
 
@@ -189,7 +189,8 @@ in deployment):
        normal function (that's not `AUTOLOAD-FBOUND-P`), else it signals
        an `AUTOLOAD-ERROR`.
     
-    4. It calls the function `NAME` passing on the stub's own arguments.
+    4. It [`APPLY`][d811]s the redefined function `NAME` to the arguments originally
+       provided to the stub.
     
     The stub is not defined at [compile time][27c6], which matches the
     required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1] `FUNCTION`([`0`][119e] [`1`][81f7])
@@ -359,7 +360,7 @@ in deployment):
     
     If the package definitions are also generated with
     [`RECORD-LOADDEFS`][e90c] (e.g. because there is a
-    [`DEFPACKAGE/AUTOLOADED`][990a] in `dyndep` or `:AUTO-LOADDEFS` specifies
+    [`DEFPACKAGE/AUTOLOADED`][990a] in `dyndep` or [`:AUTO-LOADDEFS`][0724] specifies
     `:PACKAGES`), then we can do without the `package.lisp` file:
     
     ```
@@ -395,49 +396,53 @@ in deployment):
 
 - [reader] **SYSTEM-AUTO-LOADDEFS** *[AUTOLOAD-SYSTEM][cd2d] (:AUTO-LOADDEFS = NIL)*
 
-    When non-`NIL`, this specifies parameters for
-    [`RECORD-LOADDEFS`][e90c] and whether [`CHECK-LOADDEFS`][451b] shall be
-    run by `ASDF:TEST-SYSTEM`. It may be a single pathname designator or
-    a list of the form
+    When non-`NIL`, this specifies arguments for
+    [Automatically Generating Loaddefs][c1d4]. It may be a single pathname designator or a
+    list of the form
     
         (loaddefs-file &key (process-arglist t) (process-docstring t)
-                       packages test)
+                            packages test)
     
-    - `LOADDEFS-FILE` designates the pathname where `RECORD-LOADDEFS`
-      writes the [extracted loaddefs][dd7e]. The pathname
-      is relative to `ASDF:SYSTEM-SOURCE-DIRECTORY` of `SYSTEM` and is
-      [`OPEN`][6547]ed with `:IF-EXISTS` `:SUPERSEDE`.
+    - `LOADDEFS-FILE` designates the pathname where [`RECORD-LOADDEFS`][e90c] writes the [extracted loaddefs][dd7e].
+      The pathname is relative to `ASDF:SYSTEM-SOURCE-DIRECTORY` of
+      `SYSTEM` and is [`OPEN`][6547]ed with `:IF-EXISTS` `:SUPERSEDE`.
     
-    - `PROCESS-ARGLIST`, `PROCESS-DOCSTRING` and [`PACKAGES`][1d5a] are passed on by
-      `RECORD-LOADDEFS` to `EXTRACT-LOADDEFS`.
+    - `PROCESS-ARGLIST`, `PROCESS-DOCSTRING` and `PACKAGES`
+      are passed on by `RECORD-LOADDEFS` to `EXTRACT-LOADDEFS`.
     
-    - If `TEST`, then `CHECK-LOADDEFS` is run by `ASDF:TEST-SYSTEM`.
+    - If `TEST`, then [`CHECK-LOADDEFS`][451b] is run by `ASDF:TEST-SYSTEM`.
     
     Conditions signalled while ASDF is compiling or loading the file
     given have a [`RECORD-LOADDEFS`][3d01] restart.
 
 <a id="x-28AUTOLOAD-3AAUTODEPS-20FUNCTION-29"></a>
 
-- [function] **AUTODEPS** *SYSTEM &KEY (FOLLOW-AUTOLOADED T) INSTALLER*
+- [function] **AUTODEPS** *SYSTEM &KEY (CROSS-AUTOLOADED T) INSTALLER*
 
     Return the list of the names of systems that may be autoloaded by
-    `SYSTEM` or any of its normal dependencies (the transitive closure of
-    its `:DEPENDS-ON`). This works even if `SYSTEM` is not an
-    [`AUTOLOAD-SYSTEM`][cd2d].
+    `SYSTEM` or any of its direct or indirect dependencies. This
+    recursively visits systems in the dependency tree, traversing both
+    normal (`:DEPENDS-ON`) and autoloaded ([`:AUTO-DEPENDS-ON`][9b08]) dependencies.
+    It works even if `SYSTEM` is not an [`AUTOLOAD-SYSTEM`][cd2d].
     
-    - If `FOLLOW-AUTOLOADED`, look further for autoloaded systems among
-      the normal and autoloaded dependencies of any autoloaded systems
-      found. If an autoloaded system is not installed (i.e.
-      `ASDF:FIND-SYSTEM` fails), then that system is not followed.
+    - `CROSS-AUTOLOADED` controls whether systems only reachable from
+      `SYSTEM` via intermediate autoloaded dependencies are visited. Thus,
+      if `CROSS-AUTOLOADED` is `NIL`, then the returned list is the first
+      boundary of autoloaded systems.
     
-    - If `INSTALLER` is non-`NIL`, it is called when an uninstalled system
-      is encountered. This is an autoloaded system if normal ASDF
-      dependencies are installed, as is the case with e.g. [Quicklisp][ae25].
+    - If `INSTALLER` is non-`NIL`, it is called when an autoloaded system
+      that is not installed (i.e. `ASDF:FIND-SYSTEM` fails) is visited.
       `INSTALLER` is passed a single argument, the name of the system to
-      be installed, and it may or may not install the system.
+      be installed. It may or may not install the system.
     
-    The following example makes sure that all normal and autoloaded
-    dependencies (direct or indirect) of `my-system` are installed:
+    If an autoloaded system is not installed (i.e. `ASDF:FIND-SYSTEM`
+    fails, even after `INSTALLER` had a chance), then its dependencies are
+    unknown and cannot be traversed. Note that autoloaded systems that
+    are not installed are still visited and included in the returned
+    list.
+    
+    The following example makes sure that all autoloaded dependencies
+    (direct or indirect) of `my-system` are installed:
     
         (autodeps "my-system" :installer #'ql:quickload)
 
@@ -555,7 +560,6 @@ in deployment):
   [0c4f]: http://www.lispworks.com/documentation/HyperSpec/Body/f_export.htm "EXPORT (MGL-PAX:CLHS FUNCTION)"
   [0c5c]: #x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29 "ASDF Integration"
   [119e]: http://www.lispworks.com/documentation/HyperSpec/Body/t_fn.htm "FUNCTION (MGL-PAX:CLHS CLASS)"
-  [1d5a]: http://www.lispworks.com/documentation/HyperSpec/Body/t_pkg.htm "PACKAGE (MGL-PAX:CLHS CLASS)"
   [2264]: http://www.lispworks.com/documentation/HyperSpec/Body/f_use_pk.htm "USE-PACKAGE (MGL-PAX:CLHS FUNCTION)"
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [39df]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_std_.htm "WITH-STANDARD-IO-SYNTAX (MGL-PAX:CLHS MGL-PAX:MACRO)"
@@ -590,6 +594,7 @@ in deployment):
   [d162]: http://www.lispworks.com/documentation/HyperSpec/Body/e_error.htm "ERROR (MGL-PAX:CLHS CONDITION)"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
   [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"
+  [d811]: http://www.lispworks.com/documentation/HyperSpec/Body/f_apply.htm "APPLY (MGL-PAX:CLHS FUNCTION)"
   [da95]: #x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29 "AUTOLOAD:AUTOLOAD-WARNING CONDITION"
   [dd7e]: #x-28AUTOLOAD-3AEXTRACT-LOADDEFS-20FUNCTION-29 "AUTOLOAD:EXTRACT-LOADDEFS FUNCTION"
   [e90c]: #x-28AUTOLOAD-3ARECORD-LOADDEFS-20FUNCTION-29 "AUTOLOAD:RECORD-LOADDEFS FUNCTION"
