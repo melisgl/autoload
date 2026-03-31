@@ -29,3 +29,73 @@ depends-on systems).
 * MAYBE DEFCLASS/AUTOLADED?
 Either via ENSURE-CLASS-USING-CLASS or we can forward declare the
 class and hook into CLASSS-SLOTS, CLASS-DIRECT-SLOTS, etc.
+* DONE compare to Emacs autoload
+** Architectural comparison
+
+| Feature                 | Emacs Lisp `autoload`                                     | Common Lisp `autoload`                               |
+|-------------------------+-----------------------------------------------------------+------------------------------------------------------|
+| **Unit of Loading**     | Individual file (e.g. `foo.el` or `foo.elc`)              | ASDF system (e.g. `"my-lib/full"`)                   |
+| **Stub Implementation** | Built-in C primitive modifying the symbol's function cell | Lisp macro generating a stub `defun` that calls ASDF |
+| **Source Annotation**   | Magic comments (e.g. `;;;###autoload`)                    | Defining macros (e.g. `defun/autoloaded`)            |
+| **Generation Method**   | Textual regex parsing of source files                     | Controlled Lisp evaluation and macroexpansion        |
+| **Output File**         | `loaddefs.el`                                             | User-defined (typically `loaddefs.lisp`)             |
+| **Package Management**  | Implicit global namespace (obarray)                       | Explicit `defpackage/autoloaded` definitions         |
+
+** Loading granularity
+
+Emacs binds an autoloaded function to a specific file path. When the
+stub is called, Emacs evaluates that single file. The Common Lisp
+`autoload` delegates to ASDF, meaning an autoload trigger loads a
+complete ASDF system. This is required because Common Lisp projects
+rely on ASDF for dependency resolution, compilation, and load
+ordering, whereas Emacs Lisp historically managed dependencies on a
+per-file basis via `require`.
+
+** Loaddef generation strategy
+
+Emacs generates its `loaddefs.el` textually. The `update-directory-
+autoloads` function scans `.el` files for `;;;###autoload` comments
+and blindly copies the subsequent s-expression into the output file.
+
+The Common Lisp `autoload` generates its definitions dynamically.
+`extract-loaddefs` loads the target ASDF system in an isolated
+session, executes the `defun/autoloaded` macros, and records the
+resulting state to emit valid Lisp forms. This guarantees that the
+generated loaddefs are structurally valid Lisp, avoiding the parsing
+errors that can occur with textual extraction.
+
+** State management and variables
+
+Emacs handles variables with a specific `custom-autoload` mechanism
+that sets up default values without loading the full package.
+
+The Common Lisp `autoload` manages variables via `defvar/autoloaded`
+and `foreshadow-defvar`. Because Common Lisp has proper lexical and
+dynamic bindings, `defvar/autoloaded` must carefully manage global
+symbols to prevent an autoloaded system from overriding local bindings
+established before the system was loaded.
+
+** Runtime integration
+
+Emacs `autoload` is deeply integrated into the editor's C core. The
+Emacs evaluator explicitly checks if a function is an autoload object
+before execution.
+
+The Common Lisp `autoload` is a library-level implementation. It
+relies on standard standard Common Lisp features i.e. `fdefinition`
+and `fmakunbound` to redefine the function in place of the stub,
+combined with ASDF for the actual loading mechanism.
+
+** Arglist handling
+
+Emacs Lisp handles autoloaded arglists by appending a serialized
+signature like `(fn ARG)` to the function's docstring, requiring
+introspection tools to parse this text to display the signature. In
+contrast, the Common Lisp `autoload` facility captures the lambda list
+during extraction, stores it as a separate keyword argument in the
+generated loaddef, and injects it directly into the stub function's
+internal metadata (e.g. via `sb-c::%fun-lambda-list` on SBCL). This
+allows standard environment tools like SLIME autodoc to query the
+stub's arglist transparently without custom parsing, while both
+systems ultimately rely on the loaded target function to enforce
+runtime arity.
