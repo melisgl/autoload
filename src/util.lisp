@@ -1,6 +1,6 @@
 (in-package :autoload)
 
-;;;Since ASDF/SESSION is an implementation package, we cannot be sure
+;;; Since ASDF/SESSION is an implementation package, we cannot be sure
 ;;; that *ASDF-SESSION* will remain there. Assuming that the
 ;;; SYMBOL-NAME remains the same, we search for the first ASDF package
 ;;; that has a symbol named *ASDF-SESSION*.

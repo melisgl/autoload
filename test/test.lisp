@@ -16,8 +16,8 @@
     (is (equal
          (dref:docstring #'xyz)
          (if loadedp
-             "[AUTOLOADed][pax:macro] function in the \\*xyz ASDF:SYSTEM."
-             "[AUTOLOADed][pax:macro] function in the *xyz ASDF:SYSTEM.")))))
+             "Autoloaded function in the \\*xyz ASDF:SYSTEM."
+             "Autoloaded function in the *xyz ASDF:SYSTEM.")))))
 
 
 (defun empty-file (pathname)
@@ -435,7 +435,7 @@
     (asdf:defsystem "%installer-test"
       :class "autoload:autoload-system"
       :auto-depends-on ("%not-installed-1"))
-    (is (equal (autodeps "%installer-test" :follow-autoloaded nil)
+    (is (equal (autodeps "%installer-test" :cross-autoloaded nil)
                '("%not-installed-1")))
     (let* ((installed ())
            (systems

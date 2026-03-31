@@ -122,7 +122,7 @@
   in deployment):
 
   ```
-  (mapcar #'asdf:load-system (autodeps "my-lib"))
+  (map nil #'asdf:load-system (autodeps "my-lib"))
   ```
   """)
 

@@ -74,7 +74,8 @@
      normal function (that's not AUTOLOAD-FBOUND-P), else it signals
      an AUTOLOAD-ERROR.
 
-  4. It calls the function NAME passing on the stub's own arguments.
+  4. It APPLYs the redefined function NAME to the arguments originally
+     provided to the stub.
 
   The stub is not defined at [compile time][clhs], which matches the
   required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -117,8 +118,7 @@
        (defun ,name (&rest args)
          ,(if docstringp
               docstring
-              (format nil "[AUTOLOADed][pax:macro] function in ~
-                          the ~A ASDF:SYSTEM."
+              (format nil "Autoloaded function in the ~A ASDF:SYSTEM."
                       (%escape-markdown system-name)))
          (autoload-system-for ',system-name ',name)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
@@ -401,7 +401,7 @@
   - :SIZE is not supported.
 
   - Implementation-specific extensions such as :LOCAL-NICKNAMES are
-    not supported. Use `ADD-PACKAGE-LOCAL-NICKNAMES` after the
+    not supported. Use `ADD-PACKAGE-LOCAL-NICKNAME` after the
     DEFPACKAGE/AUTOLOADED.
 
   Alternatively, one may use, for example, DEFPACKAGE or
@@ -474,9 +474,9 @@
   (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
                                                    package-designators))
                         #'string< :key #'package-name))
-        ;; MAKE-PACKAGE forms for all packages. We execute these
-        ;; first, in case their :USEs are circular. The phases follow
-        ;; the order specified in [DEFPACKAGE][clhs].
+        ;; We create the packages first, in case their :USEs are
+        ;; circular. The phases follow the order specified in
+        ;; [DEFPACKAGE][clhs].
         (phase-1-create nil)
         (phase-2-shadow nil)
         (phase-3-use nil)
@@ -739,21 +739,20 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
     :initform nil
     :initarg :auto-loaddefs
     :reader system-auto-loaddefs
-    :documentation "When non-NIL, this specifies parameters for
-    [RECORD-LOADDEFS][ function] and whether CHECK-LOADDEFS shall be
-    run by ASDF:TEST-SYSTEM. It may be a single pathname designator or
-    a list of the form
+    :documentation "When non-NIL, this specifies arguments for
+    @AUTOMATIC-LOADDEFS. It may be a single pathname designator or a
+    list of the form
 
         (loaddefs-file &key (process-arglist t) (process-docstring t)
-                       packages test)
+                            packages test)
 
-    - LOADDEFS-FILE designates the pathname where RECORD-LOADDEFS
-      writes the [extracted loaddefs][ extract-loaddefs]. The pathname
-      is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of SYSTEM and is
-      OPENed with :IF-EXISTS :SUPERSEDE.
+    - LOADDEFS-FILE designates the pathname where [RECORD-LOADDEFS][
+      function] writes the [extracted loaddefs][ extract-loaddefs].
+      The pathname is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of
+      SYSTEM and is OPENed with :IF-EXISTS :SUPERSEDE.
 
-    - PROCESS-ARGLIST, PROCESS-DOCSTRING and PACKAGES are passed on by
-      RECORD-LOADDEFS to EXTRACT-LOADDEFS.
+    - PROCESS-ARGLIST, PROCESS-DOCSTRING and [PACKAGES][pax:argument]
+      are passed on by RECORD-LOADDEFS to EXTRACT-LOADDEFS.
 
     - If TEST, then CHECK-LOADDEFS is run by ASDF:TEST-SYSTEM.
 
@@ -790,7 +789,7 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 
   If the package definitions are also generated with
   [RECORD-LOADDEFS][ function] (e.g. because there is a
-  DEFPACKAGE/AUTOLOADED in `dyndep` or :AUTO-LOADDEFS specifies
+  DEFPACKAGE/AUTOLOADED in `dyndep` or @AUTO-LOADDEFS specifies
   :PACKAGES), then we can do without the `package.lisp` file:
 
   ```
@@ -830,32 +829,38 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 (defmethod asdf:perform ((op list-autoloaded-op) (system asdf:system))
   nil)
 
-(defun autodeps (system &key (follow-autoloaded t) installer)
+(defun autodeps (system &key (cross-autoloaded t) installer)
   "Return the list of the names of systems that may be autoloaded by
-  SYSTEM or any of its normal dependencies (the transitive closure of
-  its :DEPENDS-ON). This works even if SYSTEM is not an
-  AUTOLOAD-SYSTEM.
+  SYSTEM or any of its direct or indirect dependencies. This
+  recursively visits systems in the dependency tree, traversing both
+  normal (:DEPENDS-ON) and autoloaded (@AUTO-DEPENDS-ON) dependencies.
+  It works even if SYSTEM is not an AUTOLOAD-SYSTEM.
 
-  - If FOLLOW-AUTOLOADED, look further for autoloaded systems among
-    the normal and autoloaded dependencies of any autoloaded systems
-    found. If an autoloaded system is not installed (i.e.
-    ASDF:FIND-SYSTEM fails), then that system is not followed.
+  - CROSS-AUTOLOADED controls whether systems only reachable from
+    SYSTEM via intermediate autoloaded dependencies are visited. Thus,
+    if CROSS-AUTOLOADED is NIL, then the returned list is the first
+    boundary of autoloaded systems.
 
-  - If INSTALLER is non-NIL, it is called when an uninstalled system
-    is encountered. This is an autoloaded system if normal ASDF
-    dependencies are installed, as is the case with e.g. @QUICKLISP.
+  - If INSTALLER is non-NIL, it is called when an autoloaded system
+    that is not installed (i.e. ASDF:FIND-SYSTEM fails) is visited.
     INSTALLER is passed a single argument, the name of the system to
-    be installed, and it may or may not install the system.
+    be installed. It may or may not install the system.
 
-  The following example makes sure that all normal and autoloaded
-  dependencies (direct or indirect) of `my-system` are installed:
+  If an autoloaded system is not installed (i.e. ASDF:FIND-SYSTEM
+  fails, even after INSTALLER had a chance), then its dependencies are
+  unknown and cannot be traversed. Note that autoloaded systems that
+  are not installed are still visited and included in the returned
+  list.
+
+  The following example makes sure that all autoloaded dependencies
+  (direct or indirect) of `my-system` are installed:
 
       (autodeps \"my-system\" :installer #'ql:quickload)"
   (let ((*listed-autodeps* ()))
     (without-asdf-session
       ;; This will visit all systems in the dependency tree of SYSTEM.
       (asdf:operate 'list-autoloaded-op system :force t)
-      (when follow-autoloaded
+      (when cross-autoloaded
         (loop with processed = ()
               for pending = (set-difference *listed-autodeps*
                                             processed :test #'equal)
@@ -1092,7 +1097,7 @@ included in an ASDF:DEFSYSTEM."
   "In the AUTOLOAD-SYSTEM SYSTEM, check that both recorded and manual
   autoload declarations are correct.
 
-  - If there is a @AUTO-LOADDEFS, then the file generated by
+  - If there is an @AUTO-LOADDEFS, then the file generated by
     [RECORD-LOADDEFS][ function] is up-to-date.
 
   - All manual (non-generated) autoload declarations with AUTOLOADs in
