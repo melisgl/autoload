@@ -1013,8 +1013,12 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
                                                 process-docstring))
                             other-infos)))))
 
-(defun sort-loaddefs (autoloads)
-  (sort (copy-seq autoloads) #'string< :key #'prin1-to-string*))
+(defun sort-loaddefs (loaddefs)
+  (mapcar #'car
+          (sort (mapcar (lambda (loaddef)
+                          (cons loaddef (prin1-to-string* loaddef)))
+                        loaddefs)
+                #'string< :key #'cdr)))
 
 (defun write-loaddefs (forms stream)
   "Write the autoload FORMS to STREAM so they can be LOADed or
