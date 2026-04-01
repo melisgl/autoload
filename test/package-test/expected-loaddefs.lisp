@@ -10,28 +10,25 @@
 
 (autoload::ensure-package-names "%package-test" '("%ptest" "%ptest-alt"))
 
-(setf (documentation (find-package (autoload::native-name "%package-test"))
-                     t)
-        "%PACKAGE-TEST docstring")
+(autoload::set-package-documentation "%package-test"
+                                     "%PACKAGE-TEST docstring")
 
 (autoload::shadow* '("cons" "ghost-shadow") "%package-test")
 
-(autoload::shadowing-import/existing '(("%3rd-party" . "shadow-target"))
-                                     "%package-test")
+(autoload::shadowing-import* '(("%3rd-party" . "shadow-target"))
+                             "%package-test")
 
-(autoload::use-package/existing '("%package-test" "common-lisp") "%aaa")
+(autoload::use-package* '("%package-test" "common-lisp") "%aaa")
 
-(autoload::use-package/existing '("%aaa" "autoload" "common-lisp")
-                                "%package-test")
+(autoload::use-package* '("%aaa" "autoload" "common-lisp") "%package-test")
 
-(autoload::import/existing '(("%3rd-party" . "missing")) "%aaa")
+(autoload::import* '(("%3rd-party" . "missing")) "%aaa")
 
-(autoload::import/existing
+(autoload::import*
  '(("%3rd-party" . "plain-import-target") ("%aaa" . "forward-import-target")
    ("%aaa" . "forward-import-target"))
  "%package-test")
 
-(autoload::intern-and-export '("aaa-foo" "forward-import-target" "missing")
-                             "%aaa")
+(autoload::export* '("aaa-foo" "forward-import-target" "missing") "%aaa")
 
-(autoload::intern-and-export '("foo" "plain-import-target") "%package-test")
+(autoload::export* '("foo" "plain-import-target") "%package-test")
