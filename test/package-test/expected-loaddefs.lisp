@@ -25,8 +25,7 @@
 (autoload::import* '(("%3rd-party" . "missing")) "%aaa")
 
 (autoload::import*
- '(("%3rd-party" . "plain-import-target") ("%aaa" . "forward-import-target")
-   ("%aaa" . "forward-import-target"))
+ '(("%3rd-party" . "plain-import-target") ("%aaa" . "forward-import-target"))
  "%package-test")
 
 (autoload::export* '("aaa-foo" "forward-import-target" "missing") "%aaa")
