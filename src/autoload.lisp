@@ -314,8 +314,10 @@
        ,@(when initp
            `(,init)))
      ,@(when docstring
-         `((setf (documentation ',var 'variable) ,docstring)))
-     (setf (state ',var :defvar) :declared)))
+         `((unless (eq (state ',var :defvar) :resolved)
+             (setf (documentation ',var 'variable) ,docstring))))
+     (unless (state ',var :defvar)
+       (setf (state ',var :defvar) :declared))))
 
 (defun check-foreshadow-defvar (name)
   ;; We rely on CHECK-MANUAL-LOADDEFS having loaded the dependencies.
@@ -656,8 +658,8 @@
                     names)
             package)))
 
-;;; These are not exported, but GENERATE-PACKAGE-LOADDEFS outputs
-;;; them, so treat them as public.
+;;; These are not exported, but they are loaddefs, so treat them as
+;;; public.
 
 (defmacro ensure-package-names (name nicknames)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
