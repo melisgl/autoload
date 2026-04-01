@@ -349,13 +349,24 @@
   => 1
   ```
 
+  In case the global binding has been set in between the corresponding
+  [loaddef][ extract-loaddefs] and the first evaluation of this form,
+  VAL is evaluated for side effect.
+
   DEFVAR/AUTOLOADED warns if VAR does not have a loaddef in
   @AUTO-LOADDEFS."
   (maybe-record-autoload-info 'defvar/autoloaded var val valp doc)
   `(progn
      (before-defvar/autoloaded ',var)
      (defvar ,var)
-     (after-defvar/autoloaded ',var ,val ,valp ,doc)
+     ;; Only evaluate VAL if necessary to mimic the semantics of
+     ;; DEFVAR, but
+     ,@(when valp
+         `((cond ((not (symbol-globally-boundp ',var))
+                  (setf (symbol-global-value ',var) ,val))
+                 ((eq (state ',var :defvar) :declared)
+                  ,val))))
+     (after-defvar/autoloaded ',var ,doc)
      ',var))
 
 (defun defvar/autoloaded-info-to-loaddefs
@@ -384,10 +395,7 @@
     (signal-autoload-warning "~@<Missing loaddef for ~S ~S.~:@>"
                              'defvar/autoloaded name)))
 
-(defun after-defvar/autoloaded (name val valp doc)
-  (when valp
-    (unless (symbol-globally-boundp name)
-      (setf (symbol-global-value name) val)))
+(defun after-defvar/autoloaded (name doc)
   (when doc
     (setf (documentation name 'variable) doc))
   (setf (state name :defvar) :resolved))

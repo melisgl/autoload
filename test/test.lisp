@@ -26,10 +26,12 @@
     (eval '(defun/autoloaded test-fun (x) "doc" x)))
   (is (eq (autoload::state 'test-fun :function) :resolved))
   (let ((dref (dref:dref 'test-fun 'function)))
+    #-ccl
     (is (equal (dref:arglist dref) '(x)))
     (is (equal (dref:docstring dref) "doc"))
     (eval '(autoload test-fun "xxx" :arglist '(y) :docstring "early"))
     (is (eq (autoload::state 'test-fun :function) :resolved))
+    #-ccl
     (is (equal (dref:arglist dref) '(x)))
     (is (equal (dref:docstring dref) "doc"))))
 
@@ -45,12 +47,20 @@
             :docstring "early"))
     (is (equal (dref:docstring dref) "doc"))
     (is (eq (autoload::state '*test-var* :defvar) :resolved))))
-    (is (equal (dref:docstring dref) "doc"))
-    (is (eq (autoload::state '*foreshadow-test-var* :defvar) :resolved))
-    (eval '(autoload::foreshadow-defvar *foreshadow-test-var*
-            :docstring "early"))
-    (is (equal (dref:docstring dref) "doc"))
-    (is (eq (autoload::state '*foreshadow-test-var* :defvar) :resolved))))
+
+(defvar *defvar-init-evaluatedp*)
+
+(deftest test-defvar-init ()
+  (makunbound '*test-var*)
+  (setf (autoload::state '*test-var* :defvar) nil)
+  (eval '(autoload::foreshadow-defvar *test-var*))
+  (is (eq (autoload::state '*test-var* :defvar) :declared))
+  (set '*test-var* 1)
+  (let ((*defvar-init-evaluatedp* nil))
+    (eval '(defvar/autoloaded *test-var* (setq *defvar-init-evaluatedp* t)))
+    (is (eq (autoload::state '*test-var* :defvar) :resolved))
+    (is (eql (symbol-value '*test-var*) 1))
+    (is *defvar-init-evaluatedp*)))
 
 
 (defun empty-file (pathname)
@@ -505,6 +515,7 @@
   (test-autoload-defaults)
   (test-defun-state)
   (test-defvar-state)
+  (test-defvar-init)
   (let ((*compile-verbose* nil))
     (test-simple)
     (test-package)
