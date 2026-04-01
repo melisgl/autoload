@@ -382,7 +382,7 @@
     (unless (symbol-globally-boundp name)
       (setf (symbol-global-value name) val)))
   (when doc
-    (setf (documentation name 'function) doc))
+    (setf (documentation name 'variable) doc))
   (setf (state name :defvar) :resolved))
 
 
