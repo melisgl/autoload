@@ -249,14 +249,20 @@
      ',name))
 
 (defun find-docstring-in-body (body)
-  (if (stringp (first body))
-      (first body)
-      ;; DEFGENERIC syntax
-      (loop for form in body
-              thereis (and (consp form)
-                           (eq (car form) :documentation)
-                           (consp (cdr form))
-                           (second form)))))
+  (or
+   ;; DEFUN syntax
+   (loop for rest on body
+         for form = (car rest)
+         if (and (stringp form) (cdr rest))
+           return form
+         unless (and (consp form) (eq (car form) 'declare))
+           return nil)
+   ;; DEFGENERIC syntax
+   (loop for form in body
+           thereis (and (consp form)
+                        (eq (car form) :documentation)
+                        (consp (cdr form))
+                        (second form)))))
 
 (defun defun/autoloaded-info-to-loaddefs
     (system-name info process-arglist process-docstring)
