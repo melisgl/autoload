@@ -900,7 +900,8 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 (defvar *gathered-unresolved-loaddefs*)
 
 (defun maybe-gather-unresolved-loaddef (kind name)
-  (when (eq *autoload-system* *gathering-unresolved-from-system*)
+  (when (and *autoload-system*
+             (eq *autoload-system* *gathering-unresolved-from-system*))
     (push `(,kind ,name) *gathered-unresolved-loaddefs*)))
 
 (defvar *recording-from-system* nil)
