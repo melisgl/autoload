@@ -429,6 +429,7 @@
   Alternatively, one may use, for example, DEFPACKAGE or
   UIOP:DEFINE-PACKAGE and arrange for @AUTOMATIC-LOADDEFS for the
   package by listing it in :PACKAGES of @AUTO-LOADDEFS."
+  (check-defpackage-options options)
   (let ((nicknames (filter-options :nicknames options :append))
         (shadows (filter-options :shadow options :append))
         (shadowing-imports (filter-options :shadowing-import-from options
@@ -465,6 +466,16 @@
        ,@(when doc
            `((setf (documentation (find-package ,pkg-name) t) ,doc)))
        (find-package ,pkg-name))))
+
+(defun check-defpackage-options (options)
+  (loop for option in options
+        unless (and (listp option)
+                    (member (first option)
+                            '(:nicknames :shadow :shadowing-import-from
+                              :use :import-from :intern :export
+                              :documentation)))
+          do (error "~@<Unexpected option ~S in ~S.~:@>"
+                    option 'defpackage/autoloaded)))
 
 (defun filter-options (name options mode)
   (ecase mode
