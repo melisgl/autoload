@@ -1,7 +1,7 @@
 ;;; Imagine that this is defined in a dependency of
 ;;; %package-test/full.
 (mgl-pax:define-package :%3rd-party
-    (:export #:missing #:shadow-target #:plain-import-target)
+  (:export #:missing #:shadow-target #:plain-import-target)
   (:use :cl))
 
 (autoload:defpackage/autoloaded :%package-test
@@ -28,7 +28,7 @@
 
 (mgl-pax:define-package :%aaa
   (:use :cl)
-  (:export #:aaa-foo))
+  (:export #:aaa-foo #:forward-import-target))
 
 ;; Circular :USEs
 (eval-when (:compile-toplevel :load-toplevel :execute)
@@ -38,4 +38,5 @@
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (use-package :%aaa :%3rd-party)
   (import '%3rd-party:missing :%aaa)
-  (export '%3rd-party:missing :%aaa))
+  (export '%3rd-party:missing :%aaa)
+  (import '%aaa::forward-import-target :%package-test))
