@@ -662,9 +662,13 @@
   (let ((native (native-name name))
         (native-nicks (mapcar #'native-name nicknames)))
     (if (find-package native)
-        (rename-package native native
-                        (union (package-nicknames native)
-                               native-nicks :test #'string=))
+        (let ((old-name (package-name (find-package native))))
+          (rename-package native native
+                          (remove native
+                                  (union (package-nicknames native)
+                                         (cons old-name native-nicks)
+                                         :test #'string=)
+                                  :test #'string=)))
         (make-package native :nicknames native-nicks :use ()))))
 
 (defun %shadow* (names package)
