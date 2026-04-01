@@ -48,6 +48,10 @@
 (defun signal-autoload-warning (format-control &rest format-args)
   (warn 'autoload-warning :format-control format-control
         :format-arguments format-args))
+
+;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
+;;; loaded
+(defvar *autoload-system* nil)
 
 
 ;;;; @FUNCTIONS
@@ -171,7 +175,13 @@
     #+sbcl (:override t :policy '(optimize))
     #-sbcl (:override t)
     (with-standard-io-syntax
-      (let ((*print-readably* nil))
+      (let ((*print-readably* nil)
+            ;; If we are compiling or loading through ASDF, and
+            ;; SYSTEM-NAME does not inherit from AUTOLOAD-SYSTEM or
+            ;; has a :DEFAULT-COMPONENT-CLASS that does not inherit
+            ;; from AUTOLOAD-CL-SOURCE-FILE, then prevent the current
+            ;; *AUTOLOAD-SYSTEM* from leaking.
+            (*autoload-system* nil))
         (without-asdf-session
           (asdf:load-system system-name)))))
   (when (autoload-fbound-p function-name)
@@ -729,10 +739,6 @@
 combining autoload with another ASDF extension that has its own
 ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
 both, and use that as :DEFAULT-COMPONENT-CLASS."))
-
-;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
-;;; loaded
-(defvar *autoload-system* nil)
 
 (defmacro with-autoload-system ((autoload-cl-source-file) &body body)
   (let ((cl-file (gensym "CL-FILE"))
