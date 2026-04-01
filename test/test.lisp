@@ -61,6 +61,18 @@
     (is (eq (autoload::state '*test-var* :defvar) :resolved))
     (is (eql (symbol-value '*test-var*) 1))
     (is *defvar-init-evaluatedp*)))
+
+(deftest test-defpackage/autoloaded-rename ()
+  (unwind-protect
+       (progn
+         (eval '(defpackage/autoloaded :%xxx (:nicknames :%yyy)))
+         (eval '(defpackage/autoloaded :%yyy (:nicknames :%zzz)))
+         (is (equal (package-name :%xxx) (string :%yyy)))
+         (is (try:same-set-p (package-nicknames :%yyy)
+                             (list (string :%xxx) (string :%zzz))
+                             :test #'equal)))
+    (ignore-errors (delete-package '#:%xxx))
+    (ignore-errors (delete-package '#:%yyy))))
 
 
 (defun empty-file (pathname)
@@ -516,6 +528,7 @@
   (test-defun-state)
   (test-defvar-state)
   (test-defvar-init)
+  (test-defpackage/autoloaded-rename)
   (let ((*compile-verbose* nil))
     (test-simple)
     (test-package)
