@@ -504,9 +504,7 @@
              (exports nil))
         ;; Split PACKAGE-SHADOWING-SYMBOLS into SHADOWs and
         ;; SHADOWING-IMPORTs
-        (dolist (sym #-ecl (package-shadowing-symbols pkg)
-                     ;; https://gitlab.com/embeddable-common-lisp/ecl/-/work_items/827
-                     #+ecl (remove-duplicates (package-shadowing-symbols pkg)))
+        (dolist (sym (package-shadowing-symbols pkg))
           (if (or (eql (symbol-package sym) pkg)
                   ;; UNINTERNed. Maybe it was a SHADOWING-IMPORT, but
                   ;; we can't tell.
@@ -535,16 +533,26 @@
         (flet ((-> (name)
                  (canonical-name name))
                (->s (names)
-                 (sort (mapcar #'canonical-name names) #'string<))
+                 ;; REMOVE-DUPLICATES because DO-SYMBOLS may visit
+                 ;; execute symbols that are inherited from multiple
+                 ;; packages multiple times and also due to
+                 ;; https://gitlab.com/embeddable-common-lisp/ecl/-/work_items/827.
+                 (remove-duplicates
+                  (sort (mapcar #'canonical-name names) #'string<)
+                  :test #'equal))
                (->s* (package-and-name-list)
-                 (sort (mapcar (lambda (package-and-name)
-                                 (cons (canonical-name (car package-and-name))
-                                       (canonical-name (cdr package-and-name))))
-                               package-and-name-list)
-                       (lambda (cons1 cons2)
-                         (or (string< (car cons1) (car cons2))
-                             (and (string= (car cons1) (car cons2))
-                                  (string< (cdr cons1) (cdr cons2))))))))
+                 (remove-duplicates
+                  (sort (mapcar (lambda (package-and-name)
+                                  (destructuring-bind (package . name)
+                                      package-and-name
+                                    (cons (canonical-name package)
+                                          (canonical-name name))))
+                                package-and-name-list)
+                        (lambda (cons1 cons2)
+                          (or (string< (car cons1) (car cons2))
+                              (and (string= (car cons1) (car cons2))
+                                   (string< (cdr cons1) (cdr cons2))))))
+                  :test #'equal)))
           (push `(ensure-package-names ,(-> pkg-name)
                                        ,(maybe-quote (->s nicknames)))
                 phase-1-create)
