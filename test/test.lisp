@@ -264,42 +264,54 @@
                      (uiop:read-file-forms
                       (test-file "expected-loaddefs.lisp")))))
         (asdf:load-system "%package-test" :force t))
-      (with-test-systems
-        (load (compile-file (test-file "loaddefs.lisp")))
-        (let ((pkg (find-package :%package-test))
-              (%aaa (find-package :%aaa)))
-          ;; Ensure packages were created
-          (is (not (null pkg)))
-          (is (not (null %aaa)))
-          ;; Check nicknames
-          (is (subsetp (list (string '#:%ptest) (string '#:%ptest-alt))
-                       (package-nicknames pkg) :test #'string=))
-          ;; Check circular use-list
-          (is (member (find-package :cl) (package-use-list pkg)))
-          (is (member %aaa (package-use-list pkg)))
-          (is (member pkg (package-use-list %aaa)))
-          ;; Check shadows (including the uninterned GHOST-SHADOW)
-          (let ((shadows (mapcar #'symbol-name
-                                 (package-shadowing-symbols pkg))))
-            (is (member (string '#:cons) shadows :test #'string=))
-            (is (member (string '#:ghost-shadow) shadows :test #'string=)))
-          ;; Check documentation
-          (is (equal (documentation pkg t) "%PACKAGE-TEST docstring"))
-          ;; Check exports and missing dependencies. %3rd-party isn't
-          ;; loaded yet, so PLAIN-IMPORT-TARGET and SHADOW-TARGET are
-          ;; gracefully interned in %PACKAGE-TEST rather than
-          ;; imported.
-          (is (null (find-package :%3rd-party)))
-          (is (match-values (uiop:find-symbol* '#:plain-import-target pkg nil)
-                (eq (symbol-package *) pkg)
-                (eq * :external)))
-          (is (match-values (uiop:find-symbol* '#:foo pkg nil)
-                (eq (symbol-package *) pkg)
-                (eq * :external)))
-          ;; Check the transitive export on %AAA
-          (is (match-values (uiop:find-symbol* '#:missing %aaa nil)
-                (eq (symbol-package *) %aaa)
-                (eq * :external))))))))
+      (dolist (compilep '(t nil))
+        (with-test-systems
+          (if compilep
+              (load (compile-file (test-file "loaddefs.lisp")))
+              (load (test-file "loaddefs.lisp")))
+          (let ((pkg (find-package :%package-test))
+                (%aaa (find-package :%aaa)))
+            ;; Ensure packages were created
+            (is (not (null pkg)))
+            (is (not (null %aaa)))
+            ;; Check nicknames
+            (is (subsetp (list (string '#:%ptest) (string '#:%ptest-alt))
+                         (package-nicknames pkg) :test #'string=))
+            ;; Check circular use-list
+            (is (member (find-package :cl) (package-use-list pkg)))
+            (is (member %aaa (package-use-list pkg)))
+            (is (member pkg (package-use-list %aaa)))
+            ;; Check shadows (including the uninterned GHOST-SHADOW)
+            (let ((shadows (mapcar #'symbol-name
+                                   (package-shadowing-symbols pkg))))
+              (is (member (string '#:cons) shadows :test #'string=))
+              (is (member (string '#:ghost-shadow) shadows :test #'string=)))
+            ;; Check documentation
+            (is (equal (documentation pkg t) "%PACKAGE-TEST docstring"))
+            ;; Check exports and missing dependencies. %3rd-party isn't
+            ;; loaded yet, so PLAIN-IMPORT-TARGET and SHADOW-TARGET are
+            ;; gracefully interned in %PACKAGE-TEST rather than
+            ;; imported.
+            (is (null (find-package :%3rd-party)))
+            (is (match-values (uiop:find-symbol* '#:plain-import-target pkg nil)
+                  (eq (symbol-package *) pkg)
+                  (eq * :external)))
+            (is (match-values (uiop:find-symbol* '#:foo pkg nil)
+                  (eq (symbol-package *) pkg)
+                  (eq * :external)))
+            ;; Check the transitive export on %AAA
+            (is (match-values (uiop:find-symbol* '#:missing %aaa nil)
+                  (eq (symbol-package *) %aaa)
+                  (eq * :external)))
+            ;; Check forward imports between co-defined packages. This
+            ;; fails if EXISTING-SYMBOLS relies on FIND-SYMBOL instead
+            ;; of INTERN, causing phase 4 to silently drop the import,
+            ;; leaving the symbol with an :INHERITED status instead of
+            ;; :INTERNAL.
+            (is (match-values (uiop:find-symbol* '#:forward-import-target
+                                                 pkg nil)
+                  (eq (symbol-package *) %aaa)
+                  (eq * :internal)))))))))
 
 (deftest test-test-system ()
   (let ((dir (asdf:system-relative-pathname

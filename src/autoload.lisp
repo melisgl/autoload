@@ -618,10 +618,8 @@
       (destructuring-bind (symbol-package . symbol-name) entry
         (let ((p (find-package (native-name symbol-package))))
           (when p
-            (multiple-value-bind (symbol status)
-                (find-symbol (native-name symbol-name) p)
-              (when status
-                (push symbol symbols)))))))
+            (push (intern (native-name symbol-name) p)
+                  symbols)))))
     (reverse symbols)))
 
 (defun %ensure-package-names (name nicknames)
