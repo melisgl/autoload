@@ -146,11 +146,11 @@ in deployment):
        environment.
 
     3. It checks that the function with NAME has been redefined as a
-       normal function (that's not AUTOLOAD-FBOUND-P), else it signals
-       an AUTOLOAD-ERROR.
+       normal function or was FMAKUNBOUND (i.e. it is not
+       AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR.
 
-    4. It APPLYs the redefined function NAME to the arguments originally
-       provided to the stub.
+    4. It APPLYs the function NAME to the arguments originally provided
+       to the stub.
 
     The stub is not defined at compile time, which matches the
     required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -181,8 +181,10 @@ in deployment):
 - [macro] DEFUN/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
     Like DEFUN, but mark the function for Automatically Generating Loaddefs and
-    silence redefinition warnings. Also, warn if NAME has never been
-    AUTOLOAD-FBOUND-P.
+    silence redefinition warnings. See EXTRACT-LOADDEFS for the
+    corresponding loaddef.
+
+    Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
 
 - [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
 
@@ -201,7 +203,8 @@ in deployment):
 
 - [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOC
 
-    Like DEFVAR, but mark the variable for Automatically Generating Loaddefs.
+    Like DEFVAR, but mark the variable for Automatically Generating Loaddefs. See
+    EXTRACT-LOADDEFS for the corresponding loaddef.
 
     Also, this works with the global binding on Lisps that support
     it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
@@ -224,7 +227,8 @@ in deployment):
 - [macro] DEFPACKAGE/AUTOLOADED NAME &REST OPTIONS
 
     Like DEFPACKAGE, but mark the package for Automatically Generating Loaddefs and
-    extend the existing definition additively.
+    extend the existing definition additively. See EXTRACT-LOADDEFS for
+    the corresponding loaddefs.
 
     The additivity means that instead of replacing the package
     definition or signaling errors on redefinition, it expands into
@@ -408,6 +412,10 @@ in deployment):
         operations are additive. To handle circular dependencies, first
         all packages are created, then their state is reconstructed in
         phases following DEFPACKAGE.
+
+        Any reference to non-existent packages (e.g. in :USE) or symbols
+        in non-existent packages (e.g. :IMPORT-FROM) is silently
+        skipped.
 
     - If PROCESS-DOCSTRING, then the docstrings extracted from
       DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the

@@ -186,11 +186,11 @@ in deployment):
        environment.
     
     3. It checks that the function with `NAME` has been redefined as a
-       normal function (that's not `AUTOLOAD-FBOUND-P`), else it signals
-       an `AUTOLOAD-ERROR`.
+       normal function or was [`FMAKUNBOUND`][609c] (i.e. it is not
+       `AUTOLOAD-FBOUND-P`), else it signals an `AUTOLOAD-ERROR`.
     
-    4. It [`APPLY`][d811]s the redefined function `NAME` to the arguments originally
-       provided to the stub.
+    4. It [`APPLY`][d811]s the function `NAME` to the arguments originally provided
+       to the stub.
     
     The stub is not defined at [compile time][27c6], which matches the
     required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1] `FUNCTION`([`0`][119e] [`1`][81f7])
@@ -225,8 +225,10 @@ in deployment):
 - [macro] **DEFUN/AUTOLOADED** *NAME LAMBDA-LIST &BODY BODY*
 
     Like [`DEFUN`][f472], but mark the function for [Automatically Generating Loaddefs][c1d4] and
-    silence redefinition warnings. Also, warn if `NAME` has never been
-    [`AUTOLOAD-FBOUND-P`][8dd7].
+    silence redefinition warnings. See [`EXTRACT-LOADDEFS`][dd7e] for the
+    corresponding loaddef.
+    
+    Also, warn if `NAME` has never been [`AUTOLOAD-FBOUND-P`][8dd7].
 
 <a id="x-28AUTOLOAD-3ADEFGENERIC-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -253,7 +255,8 @@ in deployment):
 
 - [macro] **DEFVAR/AUTOLOADED** *VAR &OPTIONAL (VAL NIL) DOC*
 
-    Like [`DEFVAR`][7334], but mark the variable for [Automatically Generating Loaddefs][c1d4].
+    Like [`DEFVAR`][7334], but mark the variable for [Automatically Generating Loaddefs][c1d4]. See
+    [`EXTRACT-LOADDEFS`][dd7e] for the corresponding loaddef.
     
     Also, this works with the *global* binding on Lisps that support
     it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
@@ -282,7 +285,8 @@ in deployment):
 - [macro] **DEFPACKAGE/AUTOLOADED** *NAME &REST OPTIONS*
 
     Like [`DEFPACKAGE`][9b43], but mark the package for [Automatically Generating Loaddefs][c1d4] and
-    extend the existing definition additively.
+    extend the existing definition additively. See [`EXTRACT-LOADDEFS`][dd7e] for
+    the corresponding loaddefs.
     
     The additivity means that instead of replacing the package
     definition or signaling errors on redefinition, it expands into
@@ -493,6 +497,10 @@ in deployment):
         all packages are created, then their state is reconstructed in
         phases following [`DEFPACKAGE`][9b43].
     
+        Any reference to non-existent packages (e.g. in `:USE`) or symbols
+        in non-existent packages (e.g. `:IMPORT-FROM`) is silently
+        skipped.
+    
     - If `PROCESS-DOCSTRING`, then the docstrings extracted from
       `DEFUN/AUTOLOADED` or `DEFVAR/AUTOLOADED` will be associated with the
       definition.
@@ -573,6 +581,7 @@ in deployment):
   [471f]: #x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29 "Introduction"
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
+  [609c]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fmakun.htm "FMAKUNBOUND (MGL-PAX:CLHS FUNCTION)"
   [6166]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_comp.htm "WITH-COMPILATION-UNIT (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Packages"
   [6547]: http://www.lispworks.com/documentation/HyperSpec/Body/f_open.htm "OPEN (MGL-PAX:CLHS FUNCTION)"

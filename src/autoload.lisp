@@ -71,11 +71,11 @@
      environment.
 
   3. It checks that the function with NAME has been redefined as a
-     normal function (that's not AUTOLOAD-FBOUND-P), else it signals
-     an AUTOLOAD-ERROR.
+     normal function or was FMAKUNBOUND (i.e. it is not
+     AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR.
 
-  4. It APPLYs the redefined function NAME to the arguments originally
-     provided to the stub.
+  4. It APPLYs the function NAME to the arguments originally provided
+     to the stub.
 
   The stub is not defined at [compile time][clhs], which matches the
   required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -225,8 +225,10 @@
 
 (defmacro defun/autoloaded (name lambda-list &body body)
   "Like DEFUN, but mark the function for @AUTOMATIC-LOADDEFS and
-  silence redefinition warnings. Also, warn if NAME has never been
-  AUTOLOAD-FBOUND-P."
+  silence redefinition warnings. See EXTRACT-LOADDEFS for the
+  corresponding loaddef.
+
+  Also, warn if NAME has never been AUTOLOAD-FBOUND-P."
   `(define-autoloaded-function defun ,name ,lambda-list ,@body))
 
 (defmacro defgeneric/autoloaded (name lambda-list &body body)
@@ -316,6 +318,8 @@
      (setf (state ',var :defvar) :declared)))
 
 (defun check-foreshadow-defvar (name)
+  ;; We rely on CHECK-MANUAL-LOADDEFS having loaded the dependencies.
+  ;; Thus everything should be resolved.
   (when (foreshadowed-defvar-p name)
     (maybe-gather-unresolved-loaddef :defvar name)))
 
@@ -325,7 +329,8 @@
   (eq (state name :defvar) :declared))
 
 (defmacro defvar/autoloaded (var &optional (val nil valp) doc)
-  "Like DEFVAR, but mark the variable for @AUTOMATIC-LOADDEFS.
+  "Like DEFVAR, but mark the variable for @AUTOMATIC-LOADDEFS. See
+  EXTRACT-LOADDEFS for the corresponding loaddef.
 
   Also, this works with the _global_ binding on Lisps that support
   it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
@@ -390,7 +395,8 @@
 
 (defmacro defpackage/autoloaded (name &rest options)
   "Like DEFPACKAGE, but mark the package for @AUTOMATIC-LOADDEFS and
-  extend the existing definition additively.
+  extend the existing definition additively. See EXTRACT-LOADDEFS for
+  the corresponding loaddefs.
 
   The additivity means that instead of replacing the package
   definition or signaling errors on redefinition, it expands into
@@ -880,8 +886,7 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
                                             processed :test #'equal)
               while pending
               do (dolist (s pending)
-                   (when (and (null (asdf:find-system s nil))
-                              installer)
+                   (when (and installer (null (asdf:find-system s nil)))
                      (funcall installer s))
                    (when (asdf:find-system s nil)
                      (asdf:operate 'list-autoloaded-op s :force t)))
@@ -898,6 +903,8 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
          not among ~S, the ~S of ~S.~:@>"
          system-name name deps 'system-auto-depends-on
          (asdf:component-name *autoload-system*))))
+    ;; We rely on CHECK-MANUAL-LOADDEFS having loaded the
+    ;; dependencies. Thus everything should be resolved.
     (when (autoload-fbound-p name)
       (maybe-gather-unresolved-loaddef :function name))))
 
@@ -910,7 +917,9 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 (defun maybe-gather-unresolved-loaddef (kind name)
   (when (and *autoload-system*
              (eq *autoload-system* *gathering-unresolved-from-system*))
-    (push `(,kind ,name) *gathered-unresolved-loaddefs*)))
+    ;; We are called from macros, which can expanded multiple times.
+    (pushnew `(,kind ,name) *gathered-unresolved-loaddefs*
+             :test #'equal)))
 
 (defvar *recording-from-system* nil)
 (defvar *recorded-autoload-infos*)
@@ -987,6 +996,10 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
       operations are additive. To handle circular dependencies, first
       all packages are created, then their state is reconstructed in
       phases following [DEFPACKAGE][clhs].
+
+      Any reference to non-existent packages (e.g. in :USE) or symbols
+      in non-existent packages (e.g. :IMPORT-FROM) is silently
+      skipped.
 
   - If PROCESS-DOCSTRING, then the docstrings extracted from
     DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
