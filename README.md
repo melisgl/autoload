@@ -273,6 +273,10 @@ in deployment):
     => 1
     ```
     
+    In case the global binding has been set in between the corresponding
+    [loaddef][dd7e] and the first evaluation of this form,
+    `VAL` is evaluated for side effect.
+    
     `DEFVAR/AUTOLOADED` warns if `VAR` does not have a loaddef in
     [`:AUTO-LOADDEFS`][0724].
 
