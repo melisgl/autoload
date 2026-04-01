@@ -482,7 +482,7 @@
             symbol-names)))
 
 (defun generate-package-loaddefs (package-designators
-                                   &key (process-docstring t))
+                                  &key (process-docstring t))
   (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
                                                    package-designators))
                         #'string< :key #'package-name))
@@ -550,31 +550,28 @@
                 phase-1-create)
           (let ((doc (documentation (find-package pkg-name) t)))
             (when (and doc process-docstring)
-              (push `(setf (documentation (find-package (native-name
-                                                         ,(-> pkg-name)))
-                                          t)
-                           ,doc)
+              (push `(set-package-documentation ,(-> pkg-name) ,doc)
                     phase-1-create)))
           (when shadows
             (push `(shadow* ',(->s shadows) ,(-> pkg-name)) phase-2-shadow))
           (when shadowing-imports
-            (push `(shadowing-import/existing ',(->s* shadowing-imports)
-                                              ,(-> pkg-name))
+            (push `(shadowing-import* ',(->s* shadowing-imports)
+                                      ,(-> pkg-name))
                   phase-2-shadow))
           (when use-list
-            (push `(use-package/existing ',(->s use-list) ,(-> pkg-name))
+            (push `(use-package* ',(->s use-list) ,(-> pkg-name))
                   phase-3-use))
           (when imports
-            (push `(import/existing ',(->s* imports) ,(-> pkg-name))
+            (push `(import* ',(->s* imports) ,(-> pkg-name))
                   phase-4-import))
           (when exports
-            ;; If a USE-PACKAGE, SHADOWING-IMPORT or IMPORT was skipped
-            ;; because a package was missing, then INTERN makes the
-            ;; symbol present, which will cause a package conflict in
-            ;; any later USE-PACKAGE, SHADOWING-IMPORT or IMPORT that
-            ;; tried to make another symbol with the same name
-            ;; accessible.
-            (push `(intern-and-export ',(->s exports) ,(-> pkg-name))
+            ;; If a USE-PACKAGE, SHADOWING-IMPORT or IMPORT was
+            ;; skipped because a package was missing, then INTERN
+            ;; makes the symbol present, which will cause a package
+            ;; conflict in any later USE-PACKAGE, SHADOWING-IMPORT or
+            ;; IMPORT that tried to make another symbol with the same
+            ;; name accessible.
+            (push `(export* ',(->s exports) ,(-> pkg-name))
                   phase-5-export)))))
     (when (or phase-1-create phase-2-shadow phase-3-use phase-4-import
               phase-5-export)
@@ -612,7 +609,7 @@
   (remove-if-not #'find-package
                  (mapcar #'native-name (uiop:ensure-list packages))))
 
-(defun existing-symbols (package-and-name-list)
+(defun symbols/existing (package-and-name-list)
   (let ((symbols ()))
     (dolist (entry package-and-name-list)
       (destructuring-bind (symbol-package . symbol-name) entry
@@ -635,14 +632,14 @@
   (shadow (mapcar #'native-name names) (native-name package)))
 
 (defun %shadowing-import/existing (package-and-name-list package)
-  (shadowing-import (existing-symbols package-and-name-list)
+  (shadowing-import (symbols/existing package-and-name-list)
                     (native-name package)))
 
 (defun %use-package/existing (packages package)
   (use-package (existing-packages packages) (native-name package)))
 
 (defun %import/existing (package-and-name-list package)
-  (import (existing-symbols package-and-name-list) (native-name package)))
+  (import (symbols/existing package-and-name-list) (native-name package)))
 
 (defun %intern-and-export (names package)
   (let ((package (native-name package)))
@@ -658,23 +655,27 @@
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (%ensure-package-names ,name ,nicknames)))
 
+(defmacro set-package-documentation (package-name doc)
+  `(setf (documentation (find-package (native-name ,package-name)) t)
+         ,doc))
+
 (defmacro shadow* (names package)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (%shadow* ,names ,package)))
 
-(defmacro shadowing-import/existing (package-and-name-list package)
+(defmacro shadowing-import* (package-and-name-list package)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (%shadowing-import/existing ,package-and-name-list ,package)))
 
-(defmacro use-package/existing (packages package)
+(defmacro use-package* (packages package)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (%use-package/existing ,packages ,package)))
 
-(defmacro import/existing (package-and-name-list package)
+(defmacro import* (package-and-name-list package)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (%import/existing ,package-and-name-list ,package)))
 
-(defmacro intern-and-export (names package)
+(defmacro export* (names package)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (%intern-and-export ,names ,package)))
 
