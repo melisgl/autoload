@@ -135,6 +135,13 @@
 (define-symbol-macro custom
     (read-from-string "%simple-test::custom"))
 
+(defun system-not-found-error-p (c)
+  (eq (autoload::autoload-error-cause c) :system-not-found))
+
+(defun not-resolved-error-p (c)
+  (eq (autoload::autoload-error-cause c) :not-resolved))
+
+
 (deftest test-simple ()
   (let ((dir (asdf:system-relative-pathname
               "autoload-test" "test/simple-test/")))
@@ -206,19 +213,19 @@
               (load-simple-test)
               (is (not (autoload-fbound-p 'non-existent)))
               ;; *VAR/NO-VALUE*
-              (is (autoload::foreshadowed-defvar-p *var/no-value*))
+              (is (autoload::autoloadp *var/no-value* :defvar))
               (is (not (boundp *var/no-value*)))
               (is (equal (documentation *var/no-value* 'variable)
                          "*var/no-value* docstring"))
               ;; *VAR/SIMPLE-VALUE*
-              (is (autoload::foreshadowed-defvar-p *var/simple-value*))
+              (is (autoload::autoloadp *var/simple-value* :defvar))
               (is (and (boundp *var/simple-value*)
                        (equal (symbol-value *var/simple-value*)
                               '("xxx" 7 :key nil t))))
               (is (equal (documentation *var/simple-value* 'variable)
                          "*var/simple-value* docstring"))
               ;; *VAR/COMPLEX-VALUE*
-              (is (autoload::foreshadowed-defvar-p *var/complex-value*))
+              (is (autoload::autoloadp *var/complex-value* :defvar))
               (is (not (boundp *var/complex-value*)))
               (is (null (documentation *var/complex-value* 'variable)))
               ;; FOO
@@ -277,10 +284,7 @@
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
               (is (autoload-fbound-p missing-system))
-              (signals (autoload-error
-                        :pred (lambda (c)
-                                (eq (autoload::autoload-error-cause c)
-                                    :system-not-found)))
+              (signals (autoload-error :pred #'system-not-found-error-p)
                 (funcall missing-system))
               (is (autoload-fbound-p missing-system))))
           (with-test ("AUTOLOAD not redefined")
@@ -288,10 +292,7 @@
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
               (is (autoload-fbound-p missing-fn))
-              (signals (autoload-error
-                        :pred (lambda (c)
-                                (eq (autoload::autoload-error-cause c)
-                                    :not-resolved)))
+              (signals (autoload-error :pred #'not-resolved-error-p)
                 (funcall missing-fn))
               (is (asdf:component-loaded-p "%simple-test/full"))
               (is (autoload-fbound-p missing-fn))))
@@ -428,7 +429,7 @@
         (with-test-systems
           (write-manual nil)
           (write-full t nil nil)
-          (signals (autoload-warning :pred "has not been declared"
+          (signals (autoload-warning :pred "Missing loaddef"
                     :handler #'muffle-warning)
             (asdf:load-system "%test-system/full" :force t))
           ;; Test the CONTINUE restart.

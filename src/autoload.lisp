@@ -49,9 +49,98 @@
   (warn 'autoload-warning :format-control format-control
         :format-arguments format-args))
 
+(defvar *suppress-missing-loaddef-warnings* nil)
+
+(defun maybe-signal-missing-loaddef (name kind)
+  (unless (state name kind)
+    (unless *suppress-missing-loaddef-warnings*
+      (signal-autoload-warning "~@<Missing loaddef for autoloaded ~A ~S.~:@>"
+                               kind name))))
+
+(define-condition autoload-error (error)
+  ((name
+    :initarg :name
+    :reader autoload-error-name)
+   (kind
+    :initarg :kind
+    :reader autoload-error-kind)
+   (system-name
+    :initarg :system-name
+    :reader autoload-error-system-name)
+   (cause
+    :initarg :cause
+    :initform nil
+    :reader autoload-error-cause))
+  (:report (lambda (condition stream)
+             (let ((name (autoload-error-name condition))
+                   (kind (autoload-error-kind condition))
+                   (system-name (autoload-error-system-name condition))
+                   (cause (autoload-error-cause condition)))
+               (cond
+                 ((eq cause :system-not-found)
+                  (format stream "~@<Could not find ASDF:SYSTEM ~S for ~
+                          autoloaded ~A ~S. It may not be installed. ~
+                          See ~S.~:@>"
+                          system-name kind name 'autodeps))
+                 ((eq cause :not-resolved)
+                  (format stream "~@<Autoloaded ~A ~S was not ~
+                          resolved by the ~S ASDF:SYSTEM.~:@>"
+                          kind name system-name))
+                 (t
+                  (format stream "~@<Autoload failure for ~A ~S in ~
+                          ASDF:SYSTEM ~S.~:@>"
+                          kind name system-name))))))
+  (:documentation "Signalled by the stub defined by AUTOLOAD if
+  autoloading fails."))
+
 ;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
 ;;; loaded
 (defvar *autoload-system* nil)
+
+(defvar *test-load-system* nil)
+
+(defun autoload-system-for (system-name name kind)
+  (when (and (null *test-load-system*)
+             (null (asdf:find-system system-name nil)))
+    (error 'autoload-error :name name :kind kind
+           :system-name system-name :cause :system-not-found))
+  (with-compilation-unit
+    ;; Combined with :OVERRIDE T, this switches to the default policy.
+    #+sbcl (:override t :policy '(optimize))
+    #-sbcl (:override t)
+    (with-standard-io-syntax
+      (let ((*print-readably* nil)
+            ;; If we are compiling or loading through ASDF, and
+            ;; SYSTEM-NAME does not inherit from AUTOLOAD-SYSTEM or
+            ;; has a :DEFAULT-COMPONENT-CLASS that does not inherit
+            ;; from AUTOLOAD-CL-SOURCE-FILE, then prevent the current
+            ;; *AUTOLOAD-SYSTEM* from leaking.
+            (*autoload-system* nil))
+        (without-asdf-session
+          (if *test-load-system*
+              (funcall *test-load-system* system-name)
+              (asdf:load-system system-name))))))
+  (when (autoloadp name kind)
+    (error 'autoload-error :name name :kind kind
+           :system-name system-name :cause :not-resolved)))
+
+(defun autoloadp (name kind)
+  (case kind
+    ((:function) (autoload-fbound-p name))
+    (t (eq (state name kind) :declared))))
+
+(defun check-loaddef (name kind &optional system-name)
+  (when *autoload-system*
+    (when system-name
+      (let ((system-name (asdf:coerce-name system-name))
+            (deps (system-auto-depends-on *autoload-system*)))
+        (unless (find system-name deps :test #'equal)
+          (signal-autoload-warning
+           "~@<~S, the system to be autoloaded for ~A ~S, is ~
+           not among ~S, the ~S of ~S.~:@>"
+           system-name kind name deps 'system-auto-depends-on
+           (asdf:component-name *autoload-system*)))))
+    (maybe-gather-unresolved-loaddef name kind)))
 
 
 ;;;; @FUNCTIONS
@@ -102,7 +191,7 @@
   an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
   not among those declared in @AUTO-DEPENDS-ON."
   (declare (ignorable arglist))
-  (check-function-autoload name system-name)
+  (check-loaddef name :function system-name)
   `(progn
      (declaim
       ;; This is mainly to prevent undefined function compiler
@@ -124,71 +213,13 @@
               docstring
               (format nil "Autoloaded function in the ~A ASDF:SYSTEM."
                       (%escape-markdown system-name)))
-         (autoload-system-for ',system-name ',name)
+         (autoload-system-for ',system-name ',name :function)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
          ;; is invoked and not this stub, which could be the case
          ;; without the FDEFINITION call.
          (apply (fdefinition ',name) args))
        (after-function-autoload-definition ',name ',arglistp ',arglist)
        ',name)))
-
-(define-condition autoload-error (error)
-  ((function-name
-    :initarg :function-name
-    :reader autoload-error-function-name)
-   (system-name
-    :initarg :system-name
-    :reader autoload-error-system-name)
-   (cause
-    :initarg :cause
-    :initform nil
-    :reader autoload-error-cause))
-  (:report (lambda (condition stream)
-             (let ((function-name (autoload-error-function-name condition))
-                   (system-name (autoload-error-system-name condition))
-                   (cause (autoload-error-cause condition)))
-               (cond
-                 ((eq cause :system-not-found)
-                  (format stream "~@<Could not find ASDF:SYSTEM ~S for ~
-                          autoloaded function ~S. It may not be installed. ~
-                          See ~S.~:@>"
-                          system-name function-name 'autodeps))
-                 ((eq cause :not-resolved)
-                  (format stream "~@<Autoloaded function ~S was not ~
-                          redefined by the ~S ASDF:SYSTEM.~:@>"
-                          function-name system-name))
-                 (t
-                  (format stream "~@<Autoload failure for function ~S in ~
-                          ASDF:SYSTEM ~S.~:@>"
-                          function-name system-name))))))
-  (:documentation "Signalled by the stub defined by AUTOLOAD if
-  autoloading fails."))
-
-(defun autoload-system-for (system-name function-name)
-  (unless (asdf:find-system system-name nil)
-    (error 'autoload-error
-           :function-name function-name
-           :system-name system-name
-           :cause :system-not-found))
-  (with-compilation-unit
-    ;; Combined with :OVERRIDE T, this switches to the default policy.
-    #+sbcl (:override t :policy '(optimize))
-    #-sbcl (:override t)
-    (with-standard-io-syntax
-      (let ((*print-readably* nil)
-            ;; If we are compiling or loading through ASDF, and
-            ;; SYSTEM-NAME does not inherit from AUTOLOAD-SYSTEM or
-            ;; has a :DEFAULT-COMPONENT-CLASS that does not inherit
-            ;; from AUTOLOAD-CL-SOURCE-FILE, then prevent the current
-            ;; *AUTOLOAD-SYSTEM* from leaking.
-            (*autoload-system* nil))
-        (without-asdf-session
-          (asdf:load-system system-name)))))
-  (when (autoload-fbound-p function-name)
-    (error 'autoload-error
-           :function-name function-name
-           :system-name system-name
-           :cause :not-resolved)))
 
 (defun after-function-autoload-definition (name arglistp arglist)
   (declare (ignorable arglistp arglist))
@@ -255,26 +286,17 @@
   (maybe-record-autoload-info 'defun/autoloaded name lambda-list
                               (find-docstring-in-body body))
   `(progn
-     (before-define-autoloaded-function ',name)
+     (maybe-signal-missing-loaddef ',name :function)
+     ;; We don't want to FMAKUNBOUND a generic function and lose its
+     ;; methods.
+     (when (autoload-fbound-p ',name)
+       ;; This prevents redefinition warnings and allows DEFINER to be
+       ;; a DEFGENERIC without running into an error when trying to
+       ;; redefine a DEFUN (the autoload stub).
+       (fmakunbound ',name))
      (,definer ,name ,lambda-list ,@body)
-     (after-define-autoloaded-function ',name)
+     (setf (state ',name :function) :resolved)
      ',name))
-
-(defun find-docstring-in-body (body)
-  (or
-   ;; DEFUN syntax
-   (loop for rest on body
-         for form = (car rest)
-         if (and (stringp form) (cdr rest))
-           return form
-         unless (and (consp form) (eq (car form) 'declare))
-           return nil)
-   ;; DEFGENERIC syntax
-   (loop for form in body
-           thereis (and (consp form)
-                        (eq (car form) :documentation)
-                        (consp (cdr form))
-                        (second form)))))
 
 (defun defun/autoloaded-info-to-loaddefs
     (system-name info process-arglist process-docstring)
@@ -288,37 +310,13 @@
                               docstring)))
                     (when (and process-docstring docstring)
                       `(:docstring ,docstring)))))))
-
-(defvar *suppress-has-not-been-declared-warnings* nil)
-
-(defun before-define-autoloaded-function (name)
-  (unless (state name :function)
-    (unless *suppress-has-not-been-declared-warnings*
-      (signal-autoload-warning
-       "~@<Defining ~S as an autoloaded function, ~
-       but it has not been declared with ~S.~:@>"
-       name 'autoload)))
-  ;; We don't want to FMAKUNBOUND a generic function and lose its
-  ;; methods.
-  (when (autoload-fbound-p name)
-    ;; This prevents redefinition warnings and allows DEFINER to be a
-    ;; DEFGENERIC without running into an error when trying to
-    ;; redefine a DEFUN (the autoload stub).
-    (fmakunbound name)))
-
-(defun after-define-autoloaded-function (name)
-  ;; Leave the property around so that
-  ;; BEFORE-DEFINE-AUTOLOADED-FUNCTION knows not to warn when, for
-  ;; example, a DEFUN/AUTOLOADED is evaluated multiple times (e.g.
-  ;; during interactive development).
-  (setf (state name :function) :resolved))
 
 
 ;;;; @VARIABLES
 
 ;;; Be wary of changing this: although not exported, it is a loaddef.
 (defmacro foreshadow-defvar (var &key (init nil initp) docstring)
-  (check-foreshadow-defvar var)
+  (check-loaddef var :defvar)
   `(progn
      (defvar ,var
        ,@(when initp
@@ -328,17 +326,6 @@
              (setf (documentation ',var 'variable) ,docstring))))
      (unless (state ',var :defvar)
        (setf (state ',var :defvar) :declared))))
-
-(defun check-foreshadow-defvar (name)
-  ;; We rely on CHECK-MANUAL-LOADDEFS having loaded the dependencies.
-  ;; Thus everything should be resolved.
-  (when (foreshadowed-defvar-p name)
-    (maybe-gather-unresolved-loaddef :defvar name)))
-
-;;; See if NAME has been declared with FORESHADOW-DEFVAR and has not
-;;; been defined with DEFVAR/AUTOLOADED since.
-(defun foreshadowed-defvar-p (name)
-  (eq (state name :defvar) :declared))
 
 (defmacro defvar/autoloaded (var &optional (val nil valp) doc)
   "Like DEFVAR, but mark the variable for @AUTOMATIC-LOADDEFS. See
@@ -367,7 +354,7 @@
   @AUTO-LOADDEFS."
   (maybe-record-autoload-info 'defvar/autoloaded var val valp doc)
   `(progn
-     (before-defvar/autoloaded ',var)
+     (maybe-signal-missing-loaddef ',var :defvar)
      (defvar ,var)
      ;; Only evaluate VAL if necessary to mimic the semantics of
      ;; DEFVAR, but
@@ -376,7 +363,9 @@
                   (setf (symbol-global-value ',var) ,val))
                  ((eq (state ',var :defvar) :declared)
                   ,val))))
-     (after-defvar/autoloaded ',var ,doc)
+     ,@(when doc
+         `((setf (documentation ',var 'variable) ,doc)))
+     (setf (state ',var :defvar) :resolved)
      ',var))
 
 (defun defvar/autoloaded-info-to-loaddefs
@@ -398,17 +387,6 @@
                      docstring)))
            (when (and process-docstring docstring)
              `(:docstring ,docstring)))))))
-
-(defun before-defvar/autoloaded (name)
-  (when (and (null (state name :defvar))
-             (not *suppress-has-not-been-declared-warnings*))
-    (signal-autoload-warning "~@<Missing loaddef for ~S ~S.~:@>"
-                             'defvar/autoloaded name)))
-
-(defun after-defvar/autoloaded (name doc)
-  (when doc
-    (setf (documentation name 'variable) doc))
-  (setf (state name :defvar) :resolved))
 
 
 ;;;; @PACKAGES
@@ -932,21 +910,6 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
                      (asdf:operate 'list-autoloaded-op s :force t)))
                  (setq processed (append pending processed)))))
     (reverse *listed-autodeps*)))
-
-(defun check-function-autoload (name system-name)
-  (when *autoload-system*
-    (let ((system-name (asdf:coerce-name system-name))
-          (deps (system-auto-depends-on *autoload-system*)))
-      (unless (find system-name deps :test #'equal)
-        (signal-autoload-warning
-         "~@<~S, the system to be autoloaded for function ~S, is ~
-         not among ~S, the ~S of ~S.~:@>"
-         system-name name deps 'system-auto-depends-on
-         (asdf:component-name *autoload-system*))))
-    ;; We rely on CHECK-MANUAL-LOADDEFS having loaded the
-    ;; dependencies. Thus everything should be resolved.
-    (when (autoload-fbound-p name)
-      (maybe-gather-unresolved-loaddef :function name))))
 
 
 ;;;; @AUTOMATIC-LOADDEFS
@@ -954,9 +917,12 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 (defvar *gathering-unresolved-from-system* nil)
 (defvar *gathered-unresolved-loaddefs*)
 
-(defun maybe-gather-unresolved-loaddef (kind name)
+(defun maybe-gather-unresolved-loaddef (name kind)
+  ;; We rely on CHECK-MANUAL-LOADDEFS having loaded the dependencies.
+  ;; Thus everything should be resolved.
   (when (and *autoload-system*
-             (eq *autoload-system* *gathering-unresolved-from-system*))
+             (eq *autoload-system* *gathering-unresolved-from-system*)
+             (autoloadp name kind))
     ;; We are called from macros, which can expanded multiple times.
     (pushnew `(,kind ,name) *gathered-unresolved-loaddefs*
              :test #'equal)))
@@ -1141,8 +1107,9 @@ included in an ASDF:DEFSYSTEM."
                             ;;;;~%~
                             ;;;; Do not edit.~%~%"
                     `(record-loaddefs ,(asdf:component-name system))))
-          (let ((*suppress-has-not-been-declared-warnings* t))
-            (write-loaddefs (apply #'extract-loaddefs system args) stream)))))))
+          (let ((*suppress-missing-loaddef-warnings* t))
+            (write-loaddefs (apply #'extract-loaddefs system args)
+                            stream)))))))
 
 (defun split-system-auto-loaddefs (system)
   (let ((args (uiop:ensure-list (system-auto-loaddefs system))))
