@@ -60,6 +60,22 @@
                             :if-does-not-exist :create
                             :if-exists :supersede)
      ,@body))
+
+(defun find-docstring-in-body (body)
+  (or
+   ;; DEFUN syntax
+   (loop for rest on body
+         for form = (car rest)
+         if (and (stringp form) (cdr rest))
+           return form
+         unless (and (consp form) (eq (car form) 'declare))
+           return nil)
+   ;; DEFGENERIC syntax
+   (loop for form in body
+           thereis (and (consp form)
+                        (eq (car form) :documentation)
+                        (consp (cdr form))
+                        (second form)))))
 
 
 ;;;; Cargo-culted from DREF::FDEFINITION*
