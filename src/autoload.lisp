@@ -39,7 +39,73 @@
 (defsetf state set-state)
 
 
-;;;; @BASICS
+;;;; @SCAFFOLDING
+
+;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
+;;; loaded
+(defvar *autoload-system* nil)
+
+(defvar *test-load-system* nil)
+
+(defun autoload-system-for (system-name name kind)
+  "FIXME: Whenever 
+
+  1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
+     asdf:find-system].
+
+  2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
+     WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
+     non-portable measures may be taken to standardize the dynamic
+     environment.
+
+  3. FIXME: It checks that the function with NAME has been redefined as a
+     normal function or was FMAKUNBOUND (i.e. it is not
+     AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR."
+  (when (and (null *test-load-system*)
+             (null (asdf:find-system system-name nil)))
+    (error 'autoload-error :name name :kind kind
+           :system-name system-name :cause :system-not-found))
+  ;; FIXME: It's an error (or warning?) if autoloading happens during
+  ;; file compilation or loading. This is to prevent circular
+  ;; autoloads.
+  (with-compilation-unit
+      ;; Combined with :OVERRIDE T, this switches to the default policy.
+      #+sbcl (:override t :policy '(optimize))
+    #-sbcl (:override t)
+    (with-standard-io-syntax
+      (let ((*print-readably* nil)
+            ;; If we are compiling or loading through ASDF, and
+            ;; SYSTEM-NAME does not inherit from AUTOLOAD-SYSTEM or
+            ;; has a :DEFAULT-COMPONENT-CLASS that does not inherit
+            ;; from AUTOLOAD-CL-SOURCE-FILE, then prevent the current
+            ;; *AUTOLOAD-SYSTEM* from leaking.
+            (*autoload-system* nil))
+        (without-asdf-session
+          (if *test-load-system*
+              (funcall *test-load-system* system-name)
+              (asdf:load-system system-name))))))
+  (when (autoloadp name kind)
+    (error 'autoload-error :name name :kind kind
+           :system-name system-name :cause :not-resolved)))
+
+(defun autoloadp (name kind)
+  (case kind
+    ((:function) (autoload-fbound-p name))
+    ((:class) (autoload-class-p name))
+    (t (eq (state name kind) :declared))))
+
+(defun check-loaddef (name kind &optional system-name)
+  (when *autoload-system*
+    (when system-name
+      (let ((system-name (asdf:coerce-name system-name))
+            (deps (system-auto-depends-on *autoload-system*)))
+        (unless (find system-name deps :test #'equal)
+          (signal-autoload-warning
+           "~@<~S, the system to be autoloaded for ~A ~S, is ~
+           not among ~S, the ~S of ~S.~:@>"
+           system-name kind name deps 'system-auto-depends-on
+           (asdf:component-name *autoload-system*)))))
+    (maybe-gather-unresolved-loaddef name kind)))
 
 (define-condition autoload-warning (simple-warning)
   ()
@@ -93,84 +159,19 @@
                           kind name system-name))))))
   (:documentation "Signalled by the stub defined by AUTOLOAD if
   autoloading fails."))
-
-;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
-;;; loaded
-(defvar *autoload-system* nil)
-
-(defvar *test-load-system* nil)
-
-(defun autoload-system-for (system-name name kind)
-  (when (and (null *test-load-system*)
-             (null (asdf:find-system system-name nil)))
-    (error 'autoload-error :name name :kind kind
-           :system-name system-name :cause :system-not-found))
-  (with-compilation-unit
-    ;; Combined with :OVERRIDE T, this switches to the default policy.
-    #+sbcl (:override t :policy '(optimize))
-    #-sbcl (:override t)
-    (with-standard-io-syntax
-      (let ((*print-readably* nil)
-            ;; If we are compiling or loading through ASDF, and
-            ;; SYSTEM-NAME does not inherit from AUTOLOAD-SYSTEM or
-            ;; has a :DEFAULT-COMPONENT-CLASS that does not inherit
-            ;; from AUTOLOAD-CL-SOURCE-FILE, then prevent the current
-            ;; *AUTOLOAD-SYSTEM* from leaking.
-            (*autoload-system* nil))
-        (without-asdf-session
-          (if *test-load-system*
-              (funcall *test-load-system* system-name)
-              (asdf:load-system system-name))))))
-  (when (autoloadp name kind)
-    (error 'autoload-error :name name :kind kind
-           :system-name system-name :cause :not-resolved)))
-
-(defun autoloadp (name kind)
-  (case kind
-    ((:function) (autoload-fbound-p name))
-    ((:class) (autoload-class-p name))
-    (t (eq (state name kind) :declared))))
-
-(defun check-loaddef (name kind &optional system-name)
-  (when *autoload-system*
-    (when system-name
-      (let ((system-name (asdf:coerce-name system-name))
-            (deps (system-auto-depends-on *autoload-system*)))
-        (unless (find system-name deps :test #'equal)
-          (signal-autoload-warning
-           "~@<~S, the system to be autoloaded for ~A ~S, is ~
-           not among ~S, the ~S of ~S.~:@>"
-           system-name kind name deps 'system-auto-depends-on
-           (asdf:component-name *autoload-system*)))))
-    (maybe-gather-unresolved-loaddef name kind)))
 
 
 ;;;; @FUNCTIONS
 
-(defmacro autoload (name system-name &key (arglist nil arglistp)
-                    (docstring nil docstringp))
+(defmacro autoload (name system-name &key (arglist nil arglistp) docstring)
   "Define a stub function with NAME that loads SYSTEM-NAME, expecting
   it to redefine the function, and then calls the newly loaded
   definition. Return NAME. The arguments are not evaluated. If NAME
   has an FDEFINITION and it is not AUTOLOAD-FBOUND-P, then do
   nothing and return NIL.
 
-  The stub does the following.
-
-  1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
-     asdf:find-system].
-
-  2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
-     WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
-     non-portable measures may be taken to standardize the dynamic
-     environment.
-
-  3. It checks that the function with NAME has been redefined as a
-     normal function or was FMAKUNBOUND (i.e. it is not
-     AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR.
-
-  4. It APPLYs the function NAME to the arguments originally provided
-     to the stub.
+  The stub first [loads SYSTEM-NAME][@loading-systems], then it APPLYs
+  the function NAME to the arguments originally provided to the stub.
 
   The stub is not defined at [compile time][clhs], which matches the
   required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -185,9 +186,9 @@
       Arglists are for interactive purposes only. For example, they
       are shown by @SLIME-AUTODOC and returned by DREF:ARGLIST.
 
-  - DOCSTRING, if specified, will be the stub's docstring. If not
-    specified, a generic docstring that says what system it autoloads
-    will be used.
+  - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
+    a generic docstring that says what system it autoloads will be
+    used.
 
   When AUTOLOAD is macroexpanded during the compilation or loading of
   an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
@@ -211,10 +212,10 @@
      (when (or (null (fdefinition* ',name))
                (autoload-fbound-p ',name))
        (defun ,name (&rest args)
-         ,(if docstringp
-              docstring
-              (format nil "Autoloaded function in the ~A ASDF:SYSTEM."
-                      (%escape-markdown system-name)))
+         ,(or docstring
+              (let ((*package* (find-package :keyword)))
+                (format nil "~S in the ~A ASDF:SYSTEM."
+                        'autoload (%escape-markdown system-name))))
          (autoload-system-for ',system-name ',name :function)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
          ;; is invoked and not this stub, which could be the case
@@ -302,6 +303,13 @@
 
 (defun defun/autoloaded-info-to-loaddefs
     (system-name info process-arglist process-docstring)
+  "- For function definitions such as DEFUN/AUTOLOADED, an AUTOLOAD
+  form is emitted.
+
+      If PROCESS-ARGLIST is T, then the autoload forms will pass the
+      ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
+      AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
+      AUTOLOAD."
   (destructuring-bind (name lambda-list docstring) info
     `((autoload ,name ,system-name
                 ,@(when process-arglist
@@ -317,6 +325,26 @@
 ;;;; @CLASSES
 
 (defmacro autoload-class (class-name system-name &key docstring)
+  "Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
+  be [loaded][ @loading-systems] when it or any of its subclasses are
+  [instantiated][ make-instance clhs]. Return the class object. The
+  arguments are not evaluated. If CLASS-NAME [denotes][find-class
+  clhs] a CLASS and it is not AUTOLOAD-CLASS-P, then do nothing and
+  return NIL.
+
+  - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
+    a generic docstring that says what system it autoloads will be
+    used.
+
+  The dummy class is defined at [compile time][clhs] too to
+  approximate the semantics of DEFCLASS. The dummy class is a
+  STANDARD-CLASS with no superclasses or slots. These are visible
+  through introspection e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES.
+  Introspection does not trigger autoloading.
+
+  When AUTOLOAD-CLASS is macroexpanded during the compilation or
+  loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
+  SYSTEM-NAME is not among those declared in @AUTO-DEPENDS-ON."
   (check-loaddef class-name :class system-name)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (when (or (null (find-class ',class-name nil))
@@ -337,6 +365,7 @@
 (defmethod initialize-instance :around ((instance %autoload-class)
                                         &rest initargs
                                         &key &allow-other-keys)
+  ;; FIXME: load all autoloads systems
   (let ((stub-class (find-if #'autoload-class-p
                              (closer-mop:class-precedence-list
                               (class-of instance)))))
@@ -352,10 +381,13 @@
       (apply #'initialize-instance instance initargs))))
 
 (defun autoload-class-p (class-designator)
+  "See if the class denoted by CLASS-DESIGNATOR was declared as
+  AUTOLOAD-CLASS and was not redefined or deleted since. Subclasses do
+  not inherit this property."
   (let ((class (if (symbolp class-designator)
                    (find-class class-designator nil)
                    class-designator)))
-    (when (and class
+    (when (and (typep class 'class)
                ;; It can be a different class object if there was an
                ;; intervening (SETF (FIND-CLASS ...) NIL).
                (eq (state (class-name class) :class) class))
@@ -367,6 +399,10 @@
 
 (defmacro defclass/autoloaded (name direct-superclasses direct-slots
                                &rest options)
+  "Like DEFCLASS, but mark the function for @AUTOMATIC-LOADDEFS. See
+  EXTRACT-LOADDEFS for the corresponding loaddef.
+
+  Also, warn if NAME has never been AUTOLOAD-CLASS-P."
   (maybe-record-autoload-info 'defclass/autoloaded name
                               (find-docstring-in-body options))
   `(progn
@@ -375,6 +411,27 @@
        ,direct-slots
        ,@options)
      (setf (state ',name :class) :resolved)))
+
+(defun defclass/autoloaded-info-to-loaddefs
+    (system-name info process-arglist process-docstring)
+  "- For DEFVAR/AUTOLOADED, the emitted loaddefs declaim the variable
+  special and maybe set its initial value and docstring.
+
+      If the initial value form in DEFVAR/AUTOLOADED is detected as a
+      simple constant form, then it is evaluated and its value is
+      assigned to the variable as in DEFVAR. Simple constant forms are
+      strings, numbers, characters, keywords, constants in the CL
+      package, and QUOTEd nested lists containing any of the previous
+      or any symbol from the `CL` package."
+  (declare (ignore process-arglist))
+  (destructuring-bind (name docstring) info
+    `((autoload-class ,name ,system-name
+                      ,@(let ((docstring
+                                ;; Prefer the current one. FIXME?
+                                (or (documentation name 'function)
+                                    docstring)))
+                          (when (and process-docstring docstring)
+                            `(:docstring ,docstring)))))))
 
 
 ;;;; @VARIABLES
@@ -557,6 +614,17 @@
 
 (defun generate-package-loaddefs (package-designators
                                   &key (process-docstring t))
+  "- For DEFPACKAGE/AUTOLOADED and the provided PACKAGES,
+  individual package-altering operations are emitted.
+
+      As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
+      operations are additive. To handle circular dependencies, first
+      all packages are created, then their state is reconstructed in
+      phases following [DEFPACKAGE][clhs].
+
+      Any reference to non-existent packages (e.g. in :USE) or symbols
+      in non-existent packages (e.g. :IMPORT-FROM) is silently
+      skipped."
   (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
                                                    package-designators))
                         #'string< :key #'package-name))
@@ -1042,35 +1110,13 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
   records the association with the system and the autoloaded
   definitions such as DEFUN/AUTOLOADED.
 
-  - For function definitions such as DEFUN/AUTOLOADED, an AUTOLOAD
-    form is emitted.
+  [defun/autoloaded-info-to-loaddefs function][docstring]
 
-      If PROCESS-ARGLIST is T, then the autoload forms will pass the
-      ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
-      AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
-      AUTOLOAD.
+  [defclass/autoloaded-info-to-loaddefs function][docstring]
 
-  - For DEFVAR/AUTOLOADED, the emitted loaddefs declaim the variable
-    special and maybe set its initial value and docstring.
+  [defvar/autoloaded-info-to-loaddefs function][docstring]
 
-      If the initial value form in DEFVAR/AUTOLOADED is detected as a
-      simple constant form, then it is evaluated and its value is
-      assigned to the variable as in DEFVAR. Simple constant forms are
-      strings, numbers, characters, keywords, constants in the CL
-      package, and QUOTEd nested lists containing any of the previous
-      or any symbol from the `CL` package.
-
-  - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
-    package-altering operations are emitted.
-
-      As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
-      operations are additive. To handle circular dependencies, first
-      all packages are created, then their state is reconstructed in
-      phases following [DEFPACKAGE][clhs].
-
-      Any reference to non-existent packages (e.g. in :USE) or symbols
-      in non-existent packages (e.g. :IMPORT-FROM) is silently
-      skipped.
+  [generate-package-loaddefs function][docstring]
 
   - If PROCESS-DOCSTRING, then the docstrings extracted from
     DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
@@ -1129,6 +1175,9 @@ included in an ASDF:DEFSYSTEM."
     (ecase definer
       ((defun/autoloaded)
        (defun/autoloaded-info-to-loaddefs system-name info
+         process-arglist process-docstring))
+      ((defclass/autoloaded)
+       (defclass/autoloaded-info-to-loaddefs system-name info
          process-arglist process-docstring))
       ((defvar/autoloaded)
        (defvar/autoloaded-info-to-loaddefs system-name info

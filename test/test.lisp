@@ -15,9 +15,10 @@
     (is (equal (dref:arglist #'xyz) '(&rest autoload::args)))
     (is (equal
          (dref:docstring #'xyz)
-         (if loadedp
-             "Autoloaded function in the \\*xyz ASDF:SYSTEM."
-             "Autoloaded function in the *xyz ASDF:SYSTEM.")))))
+         (let ((*package* (find-package :keyword)))
+           (if loadedp
+               (format nil "~S in the \\*xyz ASDF:SYSTEM." 'autoload)
+               (format nil "~S in the *xyz ASDF:SYSTEM." 'autoload)))))))
 
 (deftest test-defun-state ()
   (fmakunbound 'test-fun)

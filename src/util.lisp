@@ -70,7 +70,7 @@
            return form
          unless (and (consp form) (eq (car form) 'declare))
            return nil)
-   ;; DEFGENERIC syntax
+   ;; DEFGENERIC and DEFCLASS syntax
    (loop for form in body
            thereis (and (consp form)
                         (eq (car form) :documentation)

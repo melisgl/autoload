@@ -28,6 +28,8 @@ for the latest version.
 
     - Source control: [GIT](https://github.com/melisgl/autoload.git)
 
+    - Depends on: closer-mop
+
 - [system] "autoload-doc"
 
     - Description: Parts of autoload that depend on
@@ -126,9 +128,38 @@ in deployment):
 
 ## Basics
 
+### scaffolding
+
+#### Loading Systems
+
+FIXME: Whenever 
+
+1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
+
+2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
+   WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
+   non-portable measures may be taken to standardize the dynamic
+   environment.
+
+3. FIXME: It checks that the function with NAME has been redefined as a
+   normal function or was FMAKUNBOUND (i.e. it is not
+   AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR.
+
+#### Conditions
+
+- [condition] AUTOLOAD-ERROR ERROR
+
+    Signalled by the stub defined by AUTOLOAD if
+    autoloading fails.
+
+- [condition] AUTOLOAD-WARNING SIMPLE-WARNING
+
+    Signalled when inconsistencies are detected by e.g.
+    AUTOLOAD and DEFVAR/AUTOLOADED.
+
 ### Functions
 
-- [macro] AUTOLOAD NAME SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)
+- [macro] AUTOLOAD NAME SYSTEM-NAME &KEY (ARGLIST NIL) DOCSTRING
 
     Define a stub function with NAME that loads SYSTEM-NAME, expecting
     it to redefine the function, and then calls the newly loaded
@@ -136,21 +167,8 @@ in deployment):
     has an FDEFINITION and it is not AUTOLOAD-FBOUND-P, then do
     nothing and return NIL.
 
-    The stub does the following.
-
-    1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
-
-    2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
-       WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
-       non-portable measures may be taken to standardize the dynamic
-       environment.
-
-    3. It checks that the function with NAME has been redefined as a
-       normal function or was FMAKUNBOUND (i.e. it is not
-       AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR.
-
-    4. It APPLYs the function NAME to the arguments originally provided
-       to the stub.
+    The stub first loads SYSTEM-NAME, then it APPLYs
+    the function NAME to the arguments originally provided to the stub.
 
     The stub is not defined at compile time, which matches the
     required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
@@ -165,9 +183,9 @@ in deployment):
         Arglists are for interactive purposes only. For example, they
         are shown by SLIME autodoc and returned by DREF:ARGLIST.
 
-    - DOCSTRING, if specified, will be the stub's docstring. If not
-      specified, a generic docstring that says what system it autoloads
-      will be used.
+    - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
+      a generic docstring that says what system it autoloads will be
+      used.
 
     When AUTOLOAD is macroexpanded during the compilation or loading of
     an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
@@ -255,18 +273,6 @@ in deployment):
     Alternatively, one may use, for example, DEFPACKAGE or
     UIOP:DEFINE-PACKAGE and arrange for Automatically Generating Loaddefs for the
     package by listing it in :PACKAGES of :AUTO-LOADDEFS.
-
-### Conditions
-
-- [condition] AUTOLOAD-ERROR ERROR
-
-    Signalled by the stub defined by AUTOLOAD if
-    autoloading fails.
-
-- [condition] AUTOLOAD-WARNING SIMPLE-WARNING
-
-    Signalled when inconsistencies are detected by e.g.
-    AUTOLOAD and DEFVAR/AUTOLOADED.
 
 ## ASDF Integration
 
@@ -392,7 +398,7 @@ in deployment):
     definitions such as DEFUN/AUTOLOADED.
 
     - For function definitions such as DEFUN/AUTOLOADED, an AUTOLOAD
-      form is emitted.
+    form is emitted.
 
         If PROCESS-ARGLIST is T, then the autoload forms will pass the
         ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
@@ -400,7 +406,7 @@ in deployment):
         AUTOLOAD.
 
     - For DEFVAR/AUTOLOADED, the emitted loaddefs declaim the variable
-      special and maybe set its initial value and docstring.
+    special and maybe set its initial value and docstring.
 
         If the initial value form in DEFVAR/AUTOLOADED is detected as a
         simple constant form, then it is evaluated and its value is
@@ -409,8 +415,8 @@ in deployment):
         package, and QUOTEd nested lists containing any of the previous
         or any symbol from the CL package.
 
-    - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES, individual
-      package-altering operations are emitted.
+    - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES,
+    individual package-altering operations are emitted.
 
         As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
         operations are additive. To handle circular dependencies, first
