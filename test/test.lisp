@@ -111,7 +111,7 @@
           (ignore-errors (setf (find-class 'test-class) nil))
           (ignore-errors (setf (find-class 'test-subclass) nil))
           ,@body)
-     (ignore-errors (autoload::remove-finalize-inheritance-hook 'test-class))
+     (ignore-errors (autoload::remove-autoload-class-hooks 'test-class))
      (ignore-errors (setf (find-class 'test-class) nil))
      (ignore-errors (setf (find-class 'test-subclass) nil))))
 
@@ -526,12 +526,11 @@
 
 (defun check-direct-accessors (class subclassp)
   (signals-not (autoload-error)
-    (is (not (closer-mop:class-finalized-p class)))
     (is (endp (closer-mop:class-direct-slots class)))
     (if subclassp
         (closer-mop:class-direct-superclasses class)
         (is (equal (closer-mop:class-direct-superclasses class)
-                   (list (find-class 'autoload::autoload-dummy-class)))))
+                   (list (find-class 'autoload::autoload-class)))))
     (is (endp (closer-mop:class-direct-subclasses class)))
     (is (endp (closer-mop:class-direct-default-initargs class)))
     (fmakunbound 'test-class-gf)
@@ -541,11 +540,8 @@
   (is (autoload::autoloadp 'test-class :class))
   (signals (autoload-error :pred #'system-not-found-error-p)
     (make-instance 'test-class))
-  (if subclassp
-      (signals-not (error)
-        (closer-mop:finalize-inheritance class))
-      (signals (autoload-error :pred #'system-not-found-error-p)
-        (closer-mop:finalize-inheritance class)))
+  (signals-not (error)
+    (closer-mop:finalize-inheritance class))
   (is (autoload::autoloadp 'test-class :class)))
 
 (deftest test-autoload-class-subclassing ()

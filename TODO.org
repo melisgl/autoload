@@ -26,9 +26,6 @@ An exhaustive check may not be possible (if there are multiple :auto-
 depends-on systems).
 * MAYBE defparameter/autoloaded?
 * MAYBE DEFPARAMETER/AUTOLOADED?
-* MAYBE DEFCLASS/AUTOLADED?
-Either via ENSURE-CLASS-USING-CLASS or we can forward declare the
-class and hook into CLASSS-SLOTS, CLASS-DIRECT-SLOTS, etc.
 * DONE compare to Emacs autoload
 ** Architectural comparison
 
