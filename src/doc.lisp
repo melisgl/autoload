@@ -3,18 +3,19 @@
 (named-readtables:in-readtable pythonic-string-reader:pythonic-string-syntax)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (import '(pax:clhs pax:macro pax:section pax:defsection pax:note
+  (import '(pax:clhs pax:macro pax:docstring
+            pax:section pax:defsection pax:note
             pax:reader pax:define-glossary-term pax:make-github-source-uri-fn
             pax:register-doc-in-pax-world dref:define-restart)
           :autoload))
 
-(defsection @autoload-manual (:title "Autoload Manual" :export nil)
+(defsection @autoload-manual (:title "Autoload Manual")
   (@links-and-systems section)
   (@introduction section)
   (@basics section)
   (@asdf-integration section))
 
-(defsection @links-and-systems (:title "Links and Systems" :export nil)
+(defsection @links-and-systems (:title "Links and Systems")
   "Here is the [official
   repository](https://github.com/melisgl/autoload/) and the [HTML
   documentation](http://melisgl.github.io/mgl-pax-world/autoload.html)
@@ -22,7 +23,7 @@
   ("autoload" asdf:system)
   ("autoload-doc" asdf:system))
 
-(defsection @introduction (:title "Introduction" :export nil)
+(defsection @introduction (:title "Introduction")
   """Libraries often choose to limit dependencies, even if it means
   sacrificing features or duplicating code, to minimize
 
@@ -126,30 +127,42 @@
   ```
   """)
 
-(defsection @basics (:title "Basics" :export nil)
+(defsection @basics (:title "Basics")
+  (@scaffolding section)
   (@functions section)
   (@variables section)
-  (@packages section)
+  (@packages section))
+
+(defsection @scaffolding (:title "scaffolding")
+  (@loading-systems section)
   (@conditions section))
 
-(defsection @functions (:title "Functions" :export nil)
+(defsection @loading-systems (:title "Loading Systems")
+  """[autoload-system-for function][docstring]""")
+
+(defsection @conditions (:title "Conditions")
+  (autoload-error condition)
+  (autoload-warning condition))
+
+(defsection @functions (:title "Functions")
   (autoload macro)
   (autoload-fbound-p function)
   (defun/autoloaded macro)
   (defgeneric/autoloaded macro)
   (define-autoloaded-function macro))
 
-(defsection @variables (:title "Variables" :export nil)
+(defsection @classes (:title "Classes")
+  (autoload-class macro)
+  (autoload-class-p function)
+  (defclass/autoloaded macro))
+
+(defsection @variables (:title "Variables")
   (defvar/autoloaded macro))
 
-(defsection @packages (:title "Packages" :export nil)
+(defsection @packages (:title "Packages")
   (defpackage/autoloaded macro))
 
-(defsection @conditions (:title "Conditions" :export nil)
-  (autoload-error condition)
-  (autoload-warning condition))
-
-(defsection @asdf-integration (:title "ASDF Integration" :export nil)
+(defsection @asdf-integration (:title "ASDF Integration")
   (autoload-system class)
   (autoload-cl-source-file class)
   (system-auto-depends-on (reader autoload-system))
@@ -158,7 +171,7 @@
   (@automatic-loaddefs section))
 
 (defsection @automatic-loaddefs
-    (:title "Automatically Generating Loaddefs" :export nil)
+    (:title "Automatically Generating Loaddefs")
   (extract-loaddefs function)
   (write-loaddefs function)
   (record-loaddefs function)

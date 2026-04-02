@@ -7,10 +7,12 @@
 - [1 Links and Systems][d60b]
 - [2 Introduction][471f]
 - [3 Basics][fa90]
-    - [3.1 Functions][4b04]
-    - [3.2 Variables][f490]
-    - [3.3 Packages][643f]
-    - [3.4 Conditions][f43d]
+    - [3.1 scaffolding][d17e]
+        - [3.1.1 Loading Systems][ddfa]
+        - [3.1.2 Conditions][f43d]
+    - [3.2 Functions][4b04]
+    - [3.3 Variables][f490]
+    - [3.4 Packages][643f]
 - [4 ASDF Integration][0c5c]
     - [4.1 Automatically Generating Loaddefs][c1d4]
 
@@ -37,6 +39,7 @@ for the latest version.
     - _Homepage:_ [https://github.com/melisgl/autoload](https://github.com/melisgl/autoload)
     - _Bug tracker:_ [https://github.com/melisgl/autoload/issues](https://github.com/melisgl/autoload/issues)
     - _Source control:_ [GIT](https://github.com/melisgl/autoload.git)
+    - *Depends on:* closer-mop
 
 <a id="x-28-22autoload-doc-22-20ASDF-2FSYSTEM-3ASYSTEM-29"></a>
 
@@ -162,13 +165,53 @@ in deployment):
 
 ## 3 Basics
 
+<a id="x-28AUTOLOAD-3A-40SCAFFOLDING-20MGL-PAX-3ASECTION-29"></a>
+
+### 3.1 scaffolding
+
+<a id="x-28AUTOLOAD-3A-40LOADING-SYSTEMS-20MGL-PAX-3ASECTION-29"></a>
+
+#### 3.1.1 Loading Systems
+
+FIXME: Whenever 
+
+1. It signals an [`AUTOLOAD-ERROR`][a515] if `SYSTEM-NAME` does not exist.
+
+2. It loads `SYSTEM-NAME` under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
+   [`WITH-STANDARD-IO-SYNTAX`][39df] but with [`*PRINT-READABLY*`][8aca] `NIL`. Other
+   non-portable measures may be taken to standardize the dynamic
+   environment.
+
+3. FIXME: It checks that the function with `NAME` has been redefined as a
+   normal function or was [`FMAKUNBOUND`][609c] (i.e. it is not
+   [`AUTOLOAD-FBOUND-P`][8dd7]), else it signals an `AUTOLOAD-ERROR`.
+
+
+<a id="x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29"></a>
+
+#### 3.1.2 Conditions
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-ERROR-20CONDITION-29"></a>
+
+- [condition] **AUTOLOAD-ERROR** *[ERROR][d162]*
+
+    Signalled by the stub defined by [`AUTOLOAD`][7da0] if
+    autoloading fails.
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29"></a>
+
+- [condition] **AUTOLOAD-WARNING** *[SIMPLE-WARNING][fc62]*
+
+    Signalled when inconsistencies are detected by e.g.
+    [`AUTOLOAD`][7da0] and [`DEFVAR/AUTOLOADED`][453a].
+
 <a id="x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.1 Functions
+### 3.2 Functions
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **AUTOLOAD** *NAME SYSTEM-NAME &KEY (ARGLIST NIL) (DOCSTRING NIL)*
+- [macro] **AUTOLOAD** *NAME SYSTEM-NAME &KEY (ARGLIST NIL) DOCSTRING*
 
     Define a stub function with `NAME` that loads `SYSTEM-NAME`, expecting
     it to redefine the function, and then calls the newly loaded
@@ -176,21 +219,8 @@ in deployment):
     has an [`FDEFINITION`][eea4] and it is not [`AUTOLOAD-FBOUND-P`][8dd7], then do
     nothing and return `NIL`.
     
-    The stub does the following.
-    
-    1. It signals an [`AUTOLOAD-ERROR`][a515] if `SYSTEM-NAME` does not exist.
-    
-    2. It loads `SYSTEM-NAME` under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
-       [`WITH-STANDARD-IO-SYNTAX`][39df] but with [`*PRINT-READABLY*`][8aca] `NIL`. Other
-       non-portable measures may be taken to standardize the dynamic
-       environment.
-    
-    3. It checks that the function with `NAME` has been redefined as a
-       normal function or was [`FMAKUNBOUND`][609c] (i.e. it is not
-       `AUTOLOAD-FBOUND-P`), else it signals an `AUTOLOAD-ERROR`.
-    
-    4. It [`APPLY`][d811]s the function `NAME` to the arguments originally provided
-       to the stub.
+    The stub first [loads `SYSTEM-NAME`][ddfa], then it [`APPLY`][d811]s
+    the function `NAME` to the arguments originally provided to the stub.
     
     The stub is not defined at [compile time][27c6], which matches the
     required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1] `FUNCTION`([`0`][119e] [`1`][81f7])
@@ -205,9 +235,9 @@ in deployment):
         Arglists are for interactive purposes only. For example, they
         are shown by [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
     
-    - `DOCSTRING`, if specified, will be the stub's docstring. If not
-      specified, a generic docstring that says what system it autoloads
-      will be used.
+    - `DOCSTRING`, if non-`NIL`, will be the stub's docstring. If `NIL`, then
+      a generic docstring that says what system it autoloads will be
+      used.
     
     When `AUTOLOAD` is macroexpanded during the compilation or loading of
     an [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `SYSTEM-NAME` is
@@ -249,7 +279,7 @@ in deployment):
 
 <a id="x-28AUTOLOAD-3A-40VARIABLES-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.2 Variables
+### 3.3 Variables
 
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -282,7 +312,7 @@ in deployment):
 
 <a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.3 Packages
+### 3.4 Packages
 
 <a id="x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29"></a>
 
@@ -313,24 +343,6 @@ in deployment):
     Alternatively, one may use, for example, `DEFPACKAGE` or
     `UIOP:DEFINE-PACKAGE` and arrange for [Automatically Generating Loaddefs][c1d4] for the
     package by listing it in `:PACKAGES` of [`:AUTO-LOADDEFS`][0724].
-
-<a id="x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29"></a>
-
-### 3.4 Conditions
-
-<a id="x-28AUTOLOAD-3AAUTOLOAD-ERROR-20CONDITION-29"></a>
-
-- [condition] **AUTOLOAD-ERROR** *[ERROR][d162]*
-
-    Signalled by the stub defined by [`AUTOLOAD`][7da0] if
-    autoloading fails.
-
-<a id="x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29"></a>
-
-- [condition] **AUTOLOAD-WARNING** *[SIMPLE-WARNING][fc62]*
-
-    Signalled when inconsistencies are detected by e.g.
-    [`AUTOLOAD`][7da0] and [`DEFVAR/AUTOLOADED`][453a].
 
 <a id="x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29"></a>
 
@@ -476,7 +488,7 @@ in deployment):
     definitions such as `DEFUN/AUTOLOADED`.
     
     - For function definitions such as `DEFUN/AUTOLOADED`, an [`AUTOLOAD`][7da0]
-      form is emitted.
+    form is emitted.
     
         If `PROCESS-ARGLIST` is `T`, then the autoload forms will pass the
         `ARGLIST` argument of the corresponding `DEFUN/AUTOLOADED` to
@@ -484,7 +496,7 @@ in deployment):
         `AUTOLOAD`.
     
     - For [`DEFVAR/AUTOLOADED`][453a], the emitted loaddefs declaim the variable
-      special and maybe set its initial value and docstring.
+    special and maybe set its initial value and docstring.
     
         If the initial value form in `DEFVAR/AUTOLOADED` is detected as a
         simple constant form, then it is evaluated and its value is
@@ -493,8 +505,10 @@ in deployment):
         package, and [`QUOTE`][f5d0]d nested lists containing any of the previous
         or any symbol from the `CL` package.
     
-    - For [`DEFPACKAGE/AUTOLOADED`][990a] and the provided `PACKAGES`, individual
-      package-altering operations are emitted.
+    
+    
+    - For [`DEFPACKAGE/AUTOLOADED`][990a] and the provided `PACKAGES`,
+    individual package-altering operations are emitted.
     
         As in the expansion of `DEFPACKAGE/AUTOLOADED` itself, these
         operations are additive. To handle circular dependencies, first
@@ -608,11 +622,13 @@ in deployment):
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
   [d162]: http://www.lispworks.com/documentation/HyperSpec/Body/e_error.htm "ERROR (MGL-PAX:CLHS CONDITION)"
+  [d17e]: #x-28AUTOLOAD-3A-40SCAFFOLDING-20MGL-PAX-3ASECTION-29 "scaffolding"
   [d60b]: #x-28AUTOLOAD-3A-40LINKS-AND-SYSTEMS-20MGL-PAX-3ASECTION-29 "Links and Systems"
   [d78c]: https://slime.common-lisp.dev/doc/html/slime_002dautodoc_002dmode.html#slime_002dautodoc_002dmode "SLIME autodoc"
   [d811]: http://www.lispworks.com/documentation/HyperSpec/Body/f_apply.htm "APPLY (MGL-PAX:CLHS FUNCTION)"
   [da95]: #x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29 "AUTOLOAD:AUTOLOAD-WARNING CONDITION"
   [dd7e]: #x-28AUTOLOAD-3AEXTRACT-LOADDEFS-20FUNCTION-29 "AUTOLOAD:EXTRACT-LOADDEFS FUNCTION"
+  [ddfa]: #x-28AUTOLOAD-3A-40LOADING-SYSTEMS-20MGL-PAX-3ASECTION-29 "Loading Systems"
   [e90c]: #x-28AUTOLOAD-3ARECORD-LOADDEFS-20FUNCTION-29 "AUTOLOAD:RECORD-LOADDEFS FUNCTION"
   [ea6a]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#condition_handler "\"condition handler\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
