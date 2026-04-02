@@ -105,6 +105,16 @@
      (asdf:clear-system "%not-installed-1")
      (asdf:clear-system "%not-installed-2")))
 
+(defmacro with-test-class (&body body)
+  `(unwind-protect
+        (progn
+          (ignore-errors (setf (find-class 'test-class) nil))
+          (ignore-errors (setf (find-class 'test-subclass) nil))
+          ,@body)
+     (ignore-errors (autoload::remove-finalize-inheritance-hook 'test-class))
+     (ignore-errors (setf (find-class 'test-class) nil))
+     (ignore-errors (setf (find-class 'test-subclass) nil))))
+
 (define-symbol-macro foo
     (read-from-string "%simple-test::foo"))
 
@@ -497,6 +507,90 @@
                   (*error-output* (make-broadcast-stream)))
               (with-compilation-unit (:override t)
                 (asdf:load-system "%test-system" :force t)))))))))
+
+
+(deftest test-autoload-class ()
+  (test-autoload-class-triggers)
+  (test-autoload-class-subclassing)
+  (test-autoload-class-reentrancy)
+  (test-autoload-class-not-resolved)
+  (test-autoload-class-interactive-failure-recovery))
+
+(deftest test-autoload-class-triggers ()
+  (with-test-class
+    (autoload-class test-class "non-existent")
+    (check-direct-accessors (find-class 'test-class) nil)
+    (eval '(defclass/autoloaded test-class () ()))
+    (is (eq (autoload::state 'test-class :class) :resolved))
+    (is (not (autoload::autoloadp 'test-class :class)))))
+
+(defun check-direct-accessors (class subclassp)
+  (signals-not (autoload-error)
+    (is (not (closer-mop:class-finalized-p class)))
+    (is (endp (closer-mop:class-direct-slots class)))
+    (if subclassp
+        (closer-mop:class-direct-superclasses class)
+        (is (equal (closer-mop:class-direct-superclasses class)
+                   (list (find-class 'autoload::autoload-dummy-class)))))
+    (is (endp (closer-mop:class-direct-subclasses class)))
+    (is (endp (closer-mop:class-direct-default-initargs class)))
+    (fmakunbound 'test-class-gf)
+    (eval '(defgeneric test-class-gf (x)
+            (:method ((x test-class))
+              x))))
+  (is (autoload::autoloadp 'test-class :class))
+  (signals (autoload-error :pred #'system-not-found-error-p)
+    (make-instance 'test-class))
+  (if subclassp
+      (signals-not (error)
+        (closer-mop:finalize-inheritance class))
+      (signals (autoload-error :pred #'system-not-found-error-p)
+        (closer-mop:finalize-inheritance class)))
+  (is (autoload::autoloadp 'test-class :class)))
+
+(deftest test-autoload-class-subclassing ()
+  (with-test-class
+    (autoload-class test-class "non-existent")
+    (defclass test-subclass (test-class) ())
+    (check-direct-accessors (find-class 'test-subclass) t)
+    (eval '(defclass/autoloaded test-class () ()))
+    (is (eq (autoload::state 'test-class :class) :resolved))
+    (is (not (autoload::autoloadp 'test-class :class)))))
+
+(deftest test-autoload-class-reentrancy ()
+  (with-test-class
+    (autoload-class test-class "xxx")
+    (let ((autoload::*test-load-system*
+            (lambda (system-name)
+              (is (equal system-name "xxx"))
+              (eval '(defclass/autoloaded test-class () ()))
+              (make-instance 'test-class))))
+      (let ((instance (make-instance 'test-class)))
+        (is (eval `(typep ,instance 'test-class)))
+        (is (eq (autoload::state 'test-class :class) :resolved))))))
+
+(deftest test-autoload-class-not-resolved ()
+  (with-test-class
+    (autoload-class test-class "xxx")
+    (let ((autoload::*test-load-system*
+            (lambda (system-name)
+              (is (equal system-name "xxx")))))
+      (signals (autoload-error :pred #'not-resolved-error-p)
+        (make-instance 'test-class)))))
+
+(deftest test-autoload-class-interactive-failure-recovery ()
+  (with-test-class
+    (autoload-class test-class "xxx")
+    (let ((*standard-output* (make-broadcast-stream))
+          (*error-output* (make-broadcast-stream))
+          (autoload::*test-load-system*
+            (lambda (system-name)
+              (is (equal system-name "xxx"))
+              (error "CoMpILe ErRoR"))))
+      (signals (error :pred "CoMpILe ErRoR")
+        (make-instance 'test-class))
+      (autoload::autoload-class-p 'test-class))))
+
 
 (deftest test-autodeps ()
   (with-test-systems
@@ -534,6 +628,7 @@
     (test-simple)
     (test-package)
     (test-test-system))
+  (test-autoload-class)
   (test-autodeps))
 
 (defun test (&key (debug nil) (print 'leaf) (describe *describe*))

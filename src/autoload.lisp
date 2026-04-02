@@ -11,6 +11,7 @@
 (defun kind-to-indicator (kind)
   (ecase kind
     ((:function) 'autoload-function)
+    ((:class) 'autoload-class)
     ((:defvar) 'autoload-variable)))
 
 (defun state (name kind)
@@ -127,6 +128,7 @@
 (defun autoloadp (name kind)
   (case kind
     ((:function) (autoload-fbound-p name))
+    ((:class) (autoload-class-p name))
     (t (eq (state name kind) :declared))))
 
 (defun check-loaddef (name kind &optional system-name)
@@ -310,6 +312,65 @@
                               docstring)))
                     (when (and process-docstring docstring)
                       `(:docstring ,docstring)))))))
+
+
+;;;; @CLASSES
+
+(defmacro autoload-class (class-name system-name &key docstring)
+  (check-loaddef class-name :class system-name)
+  `(when (or (null (find-class ',class-name nil))
+             (autoload-class-p ',class-name))
+     (defclass ,class-name (autoload-dummy-class)
+       ()
+       ,@(when docstring
+           `((:documentation ,docstring))))
+     (defmethod closer-mop:finalize-inheritance :around
+         ((class (eql (find-class ',class-name))))
+       (cond ((autoloadp ',class-name :class)
+              (autoload-system-for ',system-name ',class-name :class)
+              ;; We can only remove the hook if the loaddef was
+              ;; resolved (i.e. AUTOLOAD-SYSTEM-FOR didn't fail).
+              (remove-finalize-inheritance-hook ',class-name)
+              ;; The autoloaded definition could have changed the
+              ;; effective methods, so we cannot use CALL-NEXT-METHOD.
+              (closer-mop:finalize-inheritance (find-class ',class-name)))
+             (t
+              ;; This branch prevents infinite recursion if the loaded
+              ;; system redefines CLASS-NAME and it is finalized
+              ;; during the load.
+              (call-next-method))))
+     (setf (state ',class-name :class) (find-class ',class-name))
+     ',class-name))
+
+(defun remove-finalize-inheritance-hook (class-name)
+  (let ((gf #'closer-mop:finalize-inheritance))
+    (remove-method gf (find-method gf '(:around)
+                                   `((eql ,(find-class class-name nil)))))))
+
+(defun autoload-class-p (class-designator)
+  (let ((class (if (symbolp class-designator)
+                   (find-class class-designator nil)
+                   class-designator)))
+    (when (and (typep class 'class)
+               ;; It can be a different object if there was an
+               ;; intervening (SETF (FIND-CLASS ...) NIL).
+               (eq (state (class-name class) :class) class))
+      ;; The class object is unchanged. Check that it's still the same
+      ;; definition.
+      (let ((supers (closer-mop:class-direct-superclasses class)))
+        (and (= (length supers) 1)
+             (eq (class-name (first supers)) 'autoload-dummy-class))))))
+
+(defmacro defclass/autoloaded (name direct-superclasses direct-slots
+                               &rest options)
+  (maybe-record-autoload-info 'defclass/autoloaded name
+                              (find-docstring-in-body options))
+  `(progn
+     (maybe-signal-missing-loaddef ',name :class)
+     (defclass ,name ,direct-superclasses
+       ,direct-slots
+       ,@options)
+     (setf (state ',name :class) :resolved)))
 
 
 ;;;; @VARIABLES
