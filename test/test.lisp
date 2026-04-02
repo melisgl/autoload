@@ -111,7 +111,6 @@
           (ignore-errors (setf (find-class 'test-class) nil))
           (ignore-errors (setf (find-class 'test-subclass) nil))
           ,@body)
-     (ignore-errors (autoload::remove-autoload-class-hooks 'test-class))
      (ignore-errors (setf (find-class 'test-class) nil))
      (ignore-errors (setf (find-class 'test-subclass) nil))))
 
@@ -530,7 +529,7 @@
     (if subclassp
         (closer-mop:class-direct-superclasses class)
         (is (equal (closer-mop:class-direct-superclasses class)
-                   (list (find-class 'autoload::autoload-class)))))
+                   (list (find-class 'autoload::%autoload-class)))))
     (is (endp (closer-mop:class-direct-subclasses class)))
     (is (endp (closer-mop:class-direct-default-initargs class)))
     (fmakunbound 'test-class-gf)
@@ -585,7 +584,7 @@
               (error "CoMpILe ErRoR"))))
       (signals (error :pred "CoMpILe ErRoR")
         (make-instance 'test-class))
-      (autoload::autoload-class-p 'test-class))))
+      (autoload-class-p 'test-class))))
 
 
 (deftest test-autodeps ()
