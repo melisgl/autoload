@@ -316,50 +316,60 @@
 
 ;;;; @CLASSES
 
+(defclass autoload-class () ())
+
 (defmacro autoload-class (class-name system-name &key docstring)
   (check-loaddef class-name :class system-name)
-  `(when (or (null (find-class ',class-name nil))
-             (autoload-class-p ',class-name))
-     (defclass ,class-name (autoload-dummy-class)
-       ()
-       ,@(when docstring
-           `((:documentation ,docstring))))
-     (defmethod closer-mop:finalize-inheritance :around
-         ((class (eql (find-class ',class-name))))
-       (cond ((autoloadp ',class-name :class)
-              (autoload-system-for ',system-name ',class-name :class)
-              ;; We can only remove the hook if the loaddef was
-              ;; resolved (i.e. AUTOLOAD-SYSTEM-FOR didn't fail).
-              (remove-finalize-inheritance-hook ',class-name)
-              ;; The autoloaded definition could have changed the
-              ;; effective methods, so we cannot use CALL-NEXT-METHOD.
-              (closer-mop:finalize-inheritance (find-class ',class-name)))
-             (t
-              ;; This branch prevents infinite recursion if the loaded
-              ;; system redefines CLASS-NAME and it is finalized
-              ;; during the load.
-              (call-next-method))))
-     (setf (state ',class-name :class) (find-class ',class-name))
-     ',class-name))
+  `(eval-when (:compile-toplevel :load-toplevel :execute)
+     (when (or (null (find-class ',class-name nil))
+               (autoload-class-p ',class-name))
+       (defclass ,class-name (autoload-class)
+         ()
+         ,@(when docstring
+             `((:documentation ,docstring))))
+       (locally
+           (declare #+sbcl (sb-ext:muffle-conditions style-warning))
+         (defmethod initialize-instance :around ((instance ,class-name)
+                                                 &rest initargs
+                                                 &key &allow-other-keys)
+           (cond ((autoload-class-p ',class-name)
+                  (autoload-system-for ',system-name ',class-name :class)
+                  ;; We can remove the hook only if the loaddef was
+                  ;; resolved (i.e. AUTOLOAD-SYSTEM-FOR didn't fail).
+                  (remove-autoload-class-hooks ',class-name)
+                  ;; The class is redefined. Instead of
+                  ;; CALL-NEXT-METHOD, invoke INITIALIZE-INSTANCE
+                  ;; again to recompute the effective methods.
+                  (apply #'initialize-instance instance initargs))
+                 (t
+                  ;; This branch prevents infinite recursion if the
+                  ;; loaded system redefines CLASS-NAME and creates
+                  ;; and instance during the AUTOLOAD-SYSTEM-FOR
+                  ;; above.
+                  (call-next-method)))))
+       (setf (state ',class-name :class) (find-class ',class-name))
+       ',class-name)))
 
-(defun remove-finalize-inheritance-hook (class-name)
-  (let ((gf #'closer-mop:finalize-inheritance))
-    (remove-method gf (find-method gf '(:around)
-                                   `((eql ,(find-class class-name nil)))))))
+(defun remove-autoload-class-hooks (class-name)
+  (let* ((class (find-class class-name nil))
+         (method (and class (find-method #'initialize-instance '(:around)
+                                         `(,class) nil))))
+    (when method
+      (remove-method #'initialize-instance method))))
 
 (defun autoload-class-p (class-designator)
   (let ((class (if (symbolp class-designator)
                    (find-class class-designator nil)
                    class-designator)))
     (when (and (typep class 'class)
-               ;; It can be a different object if there was an
+               ;; It can be a different class object if there was an
                ;; intervening (SETF (FIND-CLASS ...) NIL).
                (eq (state (class-name class) :class) class))
-      ;; The class object is unchanged. Check that it's still the same
-      ;; definition.
+      ;; The class object is unchanged, but it may still be a
+      ;; redefined.
       (let ((supers (closer-mop:class-direct-superclasses class)))
         (and (= (length supers) 1)
-             (eq (class-name (first supers)) 'autoload-dummy-class))))))
+             (eq (class-name (first supers)) 'autoload-class))))))
 
 (defmacro defclass/autoloaded (name direct-superclasses direct-slots
                                &rest options)
