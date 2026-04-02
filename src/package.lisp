@@ -6,7 +6,7 @@
    #:autoload #:autoload-fbound-p
    #:defun/autoloaded #:defgeneric/autoloaded #:define-autoloaded-function
    ;;; Classes
-   #:autoload-class #:defclass/autoloaded
+   #:autoload-class #:autoload-class-p #:defclass/autoloaded
    ;;; Variables
    #:defvar/autoloaded
    ;;; Packages

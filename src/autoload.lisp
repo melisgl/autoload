@@ -10,9 +10,9 @@
 ;;; indicator on SYMBOL-PLISTs.
 (defun kind-to-indicator (kind)
   (ecase kind
-    ((:function) 'autoload-function)
-    ((:class) 'autoload-class)
-    ((:defvar) 'autoload-variable)))
+    ((:function) '%autoload-function)
+    ((:class) '%autoload-class)
+    ((:defvar) '%autoload-variable)))
 
 (defun state (name kind)
   (multiple-value-bind (name setf*) (unpack-function-name name)
@@ -316,52 +316,46 @@
 
 ;;;; @CLASSES
 
-(defclass autoload-class () ())
-
 (defmacro autoload-class (class-name system-name &key docstring)
   (check-loaddef class-name :class system-name)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (when (or (null (find-class ',class-name nil))
                (autoload-class-p ',class-name))
-       (defclass ,class-name (autoload-class)
-         ()
-         ,@(when docstring
-             `((:documentation ,docstring))))
-       (locally
-           (declare #+sbcl (sb-ext:muffle-conditions style-warning))
-         (defmethod initialize-instance :around ((instance ,class-name)
-                                                 &rest initargs
-                                                 &key &allow-other-keys)
-           (cond ((autoload-class-p ',class-name)
-                  (autoload-system-for ',system-name ',class-name :class)
-                  ;; We can remove the hook only if the loaddef was
-                  ;; resolved (i.e. AUTOLOAD-SYSTEM-FOR didn't fail).
-                  (remove-autoload-class-hooks ',class-name)
-                  ;; The class is redefined. Instead of
-                  ;; CALL-NEXT-METHOD, invoke INITIALIZE-INSTANCE
-                  ;; again to recompute the effective methods.
-                  (apply #'initialize-instance instance initargs))
-                 (t
-                  ;; This branch prevents infinite recursion if the
-                  ;; loaded system redefines CLASS-NAME and creates
-                  ;; and instance during the AUTOLOAD-SYSTEM-FOR
-                  ;; above.
-                  (call-next-method)))))
-       (setf (state ',class-name :class) (find-class ',class-name))
-       ',class-name)))
+       (prog1
+           (defclass ,class-name (%autoload-class)
+             ()
+             (:documentation
+              ,(or docstring
+                   (let ((*package* (find-package :keyword)))
+                     (format nil "~S in the ~A ASDF:SYSTEM." 'autoload-class
+                             (%escape-markdown system-name))))))
+         (setf (get ',class-name '%autoload-system) ',system-name)
+         (setf (state ',class-name :class) (find-class ',class-name))))))
 
-(defun remove-autoload-class-hooks (class-name)
-  (let* ((class (find-class class-name nil))
-         (method (and class (find-method #'initialize-instance '(:around)
-                                         `(,class) nil))))
-    (when method
-      (remove-method #'initialize-instance method))))
+(defclass %autoload-class () ())
+
+(defmethod initialize-instance :around ((instance %autoload-class)
+                                        &rest initargs
+                                        &key &allow-other-keys)
+  (let ((stub-class (find-if #'autoload-class-p
+                             (closer-mop:class-precedence-list
+                              (class-of instance)))))
+    (assert stub-class)
+    (let* ((stub-name (class-name stub-class))
+           (system-name (get stub-name '%autoload-system)))
+      (autoload-system-for system-name stub-name :class)
+      ;; The class is redefined. Instead of CALL-NEXT-METHOD,
+      ;; invoke INITIALIZE-INSTANCE again to recompute the
+      ;; effective methods. If there are other
+      ;; AUTOLOAD-CLASS-Ps in the class precedence list, the
+      ;; next one will be picked up here.
+      (apply #'initialize-instance instance initargs))))
 
 (defun autoload-class-p (class-designator)
   (let ((class (if (symbolp class-designator)
                    (find-class class-designator nil)
                    class-designator)))
-    (when (and (typep class 'class)
+    (when (and class
                ;; It can be a different class object if there was an
                ;; intervening (SETF (FIND-CLASS ...) NIL).
                (eq (state (class-name class) :class) class))
@@ -369,7 +363,7 @@
       ;; redefined.
       (let ((supers (closer-mop:class-direct-superclasses class)))
         (and (= (length supers) 1)
-             (eq (class-name (first supers)) 'autoload-class))))))
+             (eq (class-name (first supers)) '%autoload-class))))))
 
 (defmacro defclass/autoloaded (name direct-superclasses direct-slots
                                &rest options)
