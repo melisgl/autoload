@@ -2,14 +2,6 @@
 
 (named-readtables:in-readtable pythonic-string-reader:pythonic-string-syntax)
 
-(eval-when (:compile-toplevel :load-toplevel :execute)
-  (shadowing-import '(pax:docstring))
-  (import '(pax:clhs pax:macro pax:section pax:defsection
-            pax:glossary-term pax:note
-            pax:reader pax:define-glossary-term pax:make-github-source-uri-fn
-            pax:register-doc-in-pax-world dref:define-restart)
-          :autoload))
-
 (defsection @autoload-manual (:title "Autoload Manual")
   (@links-and-systems section)
   (@introduction section)
@@ -128,72 +120,7 @@
   ```
   """)
 
-(defsection @basics (:title "Basics")
-  (@autoload glossary-term)
-  (@loaddef glossary-term)
-  (@auto glossary-term)
-  (@loading-systems section)
-  (@conditions section)
-  (@functions section)
-  (@variables section)
-  (@packages section))
-
-(define-glossary-term @autoload (:title "autoload")
-  "An autoload definition defines a stub that, when used, triggers
-  loading of an ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.")
-
-(define-glossary-term @loaddef (:title "loaddef")
-  "A loaddef is either an @AUTOLOAD or some other Lisp form that
-  foreshadows a definition without setting up autoloading of an
-  ASDF:SYSTEM. See DEFVAR/AUTO and DEFPACKAGE/AUTO.")
-
-(define-glossary-term @auto (:title "auto")
-  "An auto definition, such as DEFUN/AUTO, DEFGENERIC/AUTO,
-  DEFCLASS/AUTO, DEFPACKAGE/AUTO, marks the definition for
-  @AUTOMATIC-LOADDEFS and signals an AUTOLOAD-WARNING if there was no
-  corresponding @LOADDEF.")
-
-(defsection @loading-systems (:title "Loading Systems")
-  """[autoload-system-for function][docstring]""")
-
-(defsection @conditions (:title "Conditions")
-  (autoload-error condition)
-  (autoload-warning condition))
-
-(defsection @functions (:title "Functions")
-  (autoload macro)
-  (autoload-fbound-p function)
-  (defun/auto macro)
-  (defgeneric/auto macro))
-
-(defsection @classes (:title "Classes")
-  (autoload-class macro)
-  (autoload-class-p function)
-  (defclass/auto macro))
-
-(defsection @variables (:title "Variables")
-  (defvar/auto macro))
-
-(defsection @packages (:title "Packages")
-  (defpackage/auto macro))
-
-(defsection @asdf-integration (:title "ASDF Integration")
-  (autoload-system class)
-  (autoload-cl-source-file class)
-  (system-auto-depends-on (reader autoload-system))
-  (system-auto-loaddefs (reader autoload-system))
-  (autodeps function)
-  (@automatic-loaddefs section))
-
-(defsection @automatic-loaddefs
-    (:title "Automatically Generating Loaddefs")
-  (extract-loaddefs function)
-  (write-loaddefs function)
-  (record-loaddefs function)
-  (check-loaddefs function)
-  (record-loaddefs restart))
-
-(define-restart record-loaddefs ()
+(dref:define-restart record-loaddefs ()
   "Provided by CHECK-LOADDEFS and also when the compilation of the
   loaddefs file declared in @AUTO-LOADDEFS fails. The function
   RECORD-LOADDEFS can be used as a condition handler to invoke this
