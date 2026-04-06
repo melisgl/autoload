@@ -130,32 +130,64 @@ in deployment):
 
 ### scaffolding
 
+- [glossary-term] autoload
+
+    An autoload is a definition that, when used, triggers loading of an
+    ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.
+
+- [glossary-term] loaddef
+
+    A loaddef is either an autoload or some other Lisp form that
+    foreshadows a definition without setting up autoloading. See
+    DEFVAR/AUTOLOADED and DEFPACKAGE/AUTOLOADED.
+
+- [glossary-term] autoloaded
+
+    Autoloaded definitions mark the definition for Automatically Generating Loaddefs
+    and signal an AUTOLOAD-WARNING if there was no corresponding
+    loaddef. See DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED,
+    DEFCLASS/AUTOLOADED, DEFPACKAGE/AUTOLOADED.
+
 #### Loading Systems
 
-FIXME: Whenever 
+Autoloads trigger the loading of ASDF:SYSTEMs. Unlike
+normal ASDF dependencies (declared in :DEPENDS-ON), autoload
+dependencies (may be declared in :AUTO-DEPENDS-ON) are allowed to be
+circular. The rules for loading are as follows.
 
-1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
+1. It is an AUTOLOAD-ERROR if loading is triggered during compile
+   time or during a LOAD of either a source file or a
+   compiled file. This is to prevent infinite autoload
+   recursion.
 
-2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
+2. It is an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
+
+3. SYSTEM-NAME is loaded under WITH-COMPILATION-UNIT :OVERRIDE T and
    WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
    non-portable measures may be taken to standardize the dynamic
-   environment.
+   environment. Errors signalled during the load are not handled or
+   resignalled by the Autoload library.
 
-3. FIXME: It checks that the function with NAME has been redefined as a
-   normal function or was FMAKUNBOUND (i.e. it is not
-   AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR.
+4. It is an AUTOLOAD-ERROR if the definition of NAME established by
+   the autoload has been redefined by the loaded system as a
+   non-autoload definition or deleted.
+
+    For AUTOLOAD, this means that the autoload function stub must
+     be redefined as a normal function (e.g. by DEFUN,
+     DEFUN/AUTOLOADED) or made FMAKUNBOUND. For AUTOLOAD-CLASS, the
+     class stub must be redefined with DEFCLASS, DEFCLASS/AUTOLOADED
+     or deleted with (SETF (FIND-CLASS ...) NIL).
 
 #### Conditions
 
 - [condition] AUTOLOAD-ERROR ERROR
 
-    Signalled by the stub defined by AUTOLOAD if
-    autoloading fails.
+    Signalled for some failures during Loading Systems.
 
 - [condition] AUTOLOAD-WARNING SIMPLE-WARNING
 
-    Signalled when inconsistencies are detected by e.g.
-    AUTOLOAD and DEFVAR/AUTOLOADED.
+    See AUTOLOAD, autoloadeds and :AUTO-DEPENDS-ON for
+    when this is signalled.
 
 ### Functions
 
@@ -327,8 +359,10 @@ FIXME: Whenever
 
     This is the list of the names of systems that this
     system may autoload. The names are canonicalized with
-    ASDF:COERCE-NAME. This is used by EXTRACT-LOADDEFS and affects
-    the checks performed by the AUTOLOAD macro.
+    ASDF:COERCE-NAME. It is an AUTOLOAD-WARNING if an autoload
+    refers to a system not listed here. This is also used by
+    EXTRACT-LOADDEFS and affects the checks performed by the AUTOLOAD
+    macro.
 
 - [reader] SYSTEM-AUTO-LOADDEFS AUTOLOAD-SYSTEM (:AUTO-LOADDEFS = NIL)
 

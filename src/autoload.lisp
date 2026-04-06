@@ -48,26 +48,41 @@
 (defvar *test-load-system* nil)
 
 (defun autoload-system-for (system-name name kind)
-  "FIXME: Whenever 
+  "[Autoloads][@AUTOLOAD] trigger the loading of ASDF:SYSTEMs. Unlike
+  normal ASDF dependencies (declared in :DEPENDS-ON), autoload
+  dependencies (may be declared in @AUTO-DEPENDS-ON) are allowed to be
+  circular. The rules for loading are as follows.
 
-  1. It signals an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
+  1. It is an AUTOLOAD-ERROR if loading is triggered during [compile
+     time][clhs] or during a LOAD of either a [source file][clhs] or a
+     [compiled file][clhs]. This is to prevent infinite autoload
+     recursion.
+
+  2. It is an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
      asdf:find-system].
 
-  2. It loads SYSTEM-NAME under WITH-COMPILATION-UNIT :OVERRIDE T and
+  3. SYSTEM-NAME is loaded under WITH-COMPILATION-UNIT :OVERRIDE T and
      WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
      non-portable measures may be taken to standardize the dynamic
-     environment.
+     environment. Errors signalled during the load are not handled or
+     resignalled by the Autoload library.
 
-  3. FIXME: It checks that the function with NAME has been redefined as a
-     normal function or was FMAKUNBOUND (i.e. it is not
-     AUTOLOAD-FBOUND-P), else it signals an AUTOLOAD-ERROR."
+  4. It is an AUTOLOAD-ERROR if the definition of NAME established by
+     the @AUTOLOAD has been redefined by the loaded system as a
+     non-autoload definition or deleted.
+
+       For AUTOLOAD, this means that the autoload function stub must
+       be redefined as a normal function (e.g. by DEFUN,
+       DEFUN/AUTOLOADED) or made FMAKUNBOUND. For AUTOLOAD-CLASS, the
+       class stub must be redefined with DEFCLASS, DEFCLASS/AUTOLOADED
+       or deleted with `(SETF (FIND-CLASS ...) NIL)`."
+  (when (or *compile-file-pathname* *load-pathname*)
+    (error 'autoload-error :name name :kind kind
+           :system-name system-name :cause :during-compile-or-load))
   (when (and (null *test-load-system*)
              (null (asdf:find-system system-name nil)))
     (error 'autoload-error :name name :kind kind
            :system-name system-name :cause :system-not-found))
-  ;; FIXME: It's an error (or warning?) if autoloading happens during
-  ;; file compilation or loading. This is to prevent circular
-  ;; autoloads.
   (with-compilation-unit
       ;; Combined with :OVERRIDE T, this switches to the default policy.
       #+sbcl (:override t :policy '(optimize))
@@ -109,8 +124,8 @@
 
 (define-condition autoload-warning (simple-warning)
   ()
-  (:documentation "Signalled when inconsistencies are detected by e.g.
-  AUTOLOAD and DEFVAR/AUTOLOADED."))
+  (:documentation "See AUTOLOAD, @AUTOLOADEDs and @AUTO-DEPENDS-ON for
+  when this is signalled."))
 
 (defun signal-autoload-warning (format-control &rest format-args)
   (warn 'autoload-warning :format-control format-control
@@ -157,8 +172,7 @@
                   (format stream "~@<Autoload failure for ~A ~S in ~
                           ASDF:SYSTEM ~S.~:@>"
                           kind name system-name))))))
-  (:documentation "Signalled by the stub defined by AUTOLOAD if
-  autoloading fails."))
+  (:documentation "Signalled for some failures during @LOADING-SYSTEMS."))
 
 
 ;;;; @FUNCTIONS
@@ -904,8 +918,10 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
     :reader system-auto-depends-on
     :documentation "This is the list of the names of systems that this
      system may autoload. The names are canonicalized with
-     ASDF:COERCE-NAME. This is used by EXTRACT-LOADDEFS and affects
-     the checks performed by the AUTOLOAD macro.")
+     ASDF:COERCE-NAME. It is an AUTOLOAD-WARNING if an @AUTOLOAD
+     refers to a system not listed here. This is also used by
+     EXTRACT-LOADDEFS and affects the checks performed by the AUTOLOAD
+     macro.")
    (auto-loaddefs
     :initform nil
     :initarg :auto-loaddefs

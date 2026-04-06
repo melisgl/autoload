@@ -4,7 +4,7 @@
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (import '(pax:clhs pax:macro pax:docstring
-            pax:section pax:defsection pax:note
+            pax:section pax:defsection pax:glossary-term pax:note
             pax:reader pax:define-glossary-term pax:make-github-source-uri-fn
             pax:register-doc-in-pax-world dref:define-restart)
           :autoload))
@@ -134,8 +134,26 @@
   (@packages section))
 
 (defsection @scaffolding (:title "scaffolding")
+  (@autoload glossary-term)
+  (@loaddef glossary-term)
+  (@autoloaded glossary-term)
   (@loading-systems section)
   (@conditions section))
+
+(define-glossary-term @autoload (:title "autoload")
+  "An autoload is a definition that, when used, triggers loading of an
+  ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.")
+
+(define-glossary-term @loaddef (:title "loaddef")
+  "A loaddef is either an @AUTOLOAD or some other Lisp form that
+  foreshadows a definition without setting up autoloading. See
+  DEFVAR/AUTOLOADED and DEFPACKAGE/AUTOLOADED.")
+
+(define-glossary-term @autoloaded (:title "autoloaded")
+  "Autoloaded definitions mark the definition for @AUTOMATIC-LOADDEFS
+  and signal an AUTOLOAD-WARNING if there was no corresponding
+  @LOADDEF. See DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED,
+  DEFCLASS/AUTOLOADED, DEFPACKAGE/AUTOLOADED.")
 
 (defsection @loading-systems (:title "Loading Systems")
   """[autoload-system-for function][docstring]""")
