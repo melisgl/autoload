@@ -78,7 +78,7 @@ However, manually keeping the loaddefs (e.g. the AUTOLOAD form
 above) in sync with the definitions is fragile, so instead we mark
 autoloaded functions in the my-lib/full system:
 
-    (defun/autoloaded foo (x)
+    (defun/auto foo (x)
       "doc"
       (1+ x))
 
@@ -104,7 +104,7 @@ Then, the loaddefs can be extracted:
     => ((autoload foo "my-lib/full" :arglist "(x)" :docstring "doc"))
 
 This is implemented by loading the :AUTO-DEPENDS-ON of my-lib and
-recording DEFUN/AUTOLOADEDs. EXTRACT-LOADDEFS is a low-level utility
+recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility
 used by RECORD-LOADDEFS, which writes its results to
 the system's :AUTO-LOADDEFS, "loaddefs.lisp" in the above example.
 So, all we need to do is call it to regenerate the loaddefs file:
@@ -128,27 +128,25 @@ in deployment):
 
 ## Basics
 
-### scaffolding
-
 - [glossary-term] autoload
 
-    An autoload is a definition that, when used, triggers loading of an
-    ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.
+    An autoload definition defines a stub that, when used, triggers
+    loading of an ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.
 
 - [glossary-term] loaddef
 
     A loaddef is either an autoload or some other Lisp form that
-    foreshadows a definition without setting up autoloading. See
-    DEFVAR/AUTOLOADED and DEFPACKAGE/AUTOLOADED.
+    foreshadows a definition without setting up autoloading of an
+    ASDF:SYSTEM. See DEFVAR/AUTO and DEFPACKAGE/AUTO.
 
-- [glossary-term] autoloaded
+- [glossary-term] auto
 
-    Autoloaded definitions mark the definition for Automatically Generating Loaddefs
-    and signal an AUTOLOAD-WARNING if there was no corresponding
-    loaddef. See DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED,
-    DEFCLASS/AUTOLOADED, DEFPACKAGE/AUTOLOADED.
+    An auto definition, such as DEFUN/AUTO, DEFGENERIC/AUTO,
+    DEFCLASS/AUTO, DEFPACKAGE/AUTO, marks the definition for
+    Automatically Generating Loaddefs and signals an AUTOLOAD-WARNING if there was no
+    corresponding loaddef.
 
-#### Loading Systems
+### Loading Systems
 
 Autoloads trigger the loading of ASDF:SYSTEMs. Unlike
 normal ASDF dependencies (declared in :DEPENDS-ON), autoload
@@ -173,12 +171,12 @@ circular. The rules for loading are as follows.
    non-autoload definition or deleted.
 
     For AUTOLOAD, this means that the autoload function stub must
-     be redefined as a normal function (e.g. by DEFUN,
-     DEFUN/AUTOLOADED) or made FMAKUNBOUND. For AUTOLOAD-CLASS, the
-     class stub must be redefined with DEFCLASS, DEFCLASS/AUTOLOADED
-     or deleted with (SETF (FIND-CLASS ...) NIL).
+     be redefined as a normal function (e.g. by DEFUN, DEFUN/AUTO)
+     or made FMAKUNBOUND. For AUTOLOAD-CLASS, the class stub must be
+     redefined with DEFCLASS, DEFCLASS/AUTO or deleted with (SETF
+     (FIND-CLASS ...) NIL).
 
-#### Conditions
+### Conditions
 
 - [condition] AUTOLOAD-ERROR ERROR
 
@@ -186,8 +184,8 @@ circular. The rules for loading are as follows.
 
 - [condition] AUTOLOAD-WARNING SIMPLE-WARNING
 
-    See AUTOLOAD, autoloadeds and :AUTO-DEPENDS-ON for
-    when this is signalled.
+    See AUTOLOAD, autos and :AUTO-DEPENDS-ON for when
+    this is signalled.
 
 ### Functions
 
@@ -228,7 +226,7 @@ circular. The rules for loading are as follows.
     See if NAME's function definition is an autoloader function
     established by AUTOLOAD.
 
-- [macro] DEFUN/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
+- [macro] DEFUN/AUTO NAME LAMBDA-LIST &BODY BODY
 
     Like DEFUN, but mark the function for Automatically Generating Loaddefs and
     silence redefinition warnings. See EXTRACT-LOADDEFS for the
@@ -236,22 +234,22 @@ circular. The rules for loading are as follows.
 
     Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
 
-- [macro] DEFGENERIC/AUTOLOADED NAME LAMBDA-LIST &BODY BODY
+- [macro] DEFGENERIC/AUTO NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN/AUTOLOADED, but define NAME with DEFGENERIC.
+    Like DEFUN/AUTO, but define NAME with DEFGENERIC.
 
-- [macro] DEFINE-AUTOLOADED-FUNCTION DEFINER NAME LAMBDA-LIST &BODY BODY
+- [macro] DEFINE-AUTO-FUNCTION DEFINER NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN/AUTOLOADED, but establish a function binding for NAME
-    with DEFINER. For example, the autoloaded counterpart to UIOP:DEFUN*
-    can be defined as
+    Like DEFUN/AUTO, but establish a function binding for NAME with
+    DEFINER. For example, the autoloaded counterpart to UIOP:DEFUN* can
+    be defined as
 
-        (defmacro defun*/autoloaded (name lambda-list &body body)
-          `(define-autoloaded-function uiop:defun* ,name ,lambda-list ,@body))
+        (defmacro defun*/auto (name lambda-list &body body)
+          `(define-auto-function uiop:defun* ,name ,lambda-list ,@body))
 
 ### Variables
 
-- [macro] DEFVAR/AUTOLOADED VAR &OPTIONAL (VAL NIL) DOC
+- [macro] DEFVAR/AUTO VAR &OPTIONAL (VAL NIL) DOC
 
     Like DEFVAR, but mark the variable for Automatically Generating Loaddefs. See
     EXTRACT-LOADDEFS for the corresponding loaddef.
@@ -265,7 +263,7 @@ circular. The rules for loading are as follows.
         (declaim (special *x*))
         (let ((*x* 1))
           ;; Imagine that the system that defines *X* is autoloaded here.
-          (defvar/autoloaded *x* 2)
+          (defvar/auto *x* 2)
           *x*)
         => 1
 
@@ -273,12 +271,12 @@ circular. The rules for loading are as follows.
     loaddef and the first evaluation of this form,
     VAL is evaluated for side effect.
 
-    DEFVAR/AUTOLOADED warns if VAR does not have a loaddef in
+    DEFVAR/AUTO warns if VAR does not have a loaddef in
     :AUTO-LOADDEFS.
 
 ### Packages
 
-- [macro] DEFPACKAGE/AUTOLOADED NAME &REST OPTIONS
+- [macro] DEFPACKAGE/AUTO NAME &REST OPTIONS
 
     Like DEFPACKAGE, but mark the package for Automatically Generating Loaddefs and
     extend the existing definition additively. See EXTRACT-LOADDEFS for
@@ -288,10 +286,10 @@ circular. The rules for loading are as follows.
     definition or signaling errors on redefinition, it expands into
     individual package-altering operations such as SHADOW, USE-PACKAGE
     and EXPORT. This allows the package state to be built incrementally.
-    DEFPACKAGE/AUTOLOADED may be used on the same package multiple
+    DEFPACKAGE/AUTO may be used on the same package multiple
     times.
 
-    In addition, DEFPACKAGE/AUTOLOADED deviates from DEFPACKAGE in the
+    In addition, DEFPACKAGE/AUTO deviates from DEFPACKAGE in the
     following ways.
 
     - The default :USE list is empty.
@@ -300,7 +298,7 @@ circular. The rules for loading are as follows.
 
     - Implementation-specific extensions such as :LOCAL-NICKNAMES are
       not supported. Use ADD-PACKAGE-LOCAL-NICKNAME after the
-      DEFPACKAGE/AUTOLOADED.
+      DEFPACKAGE/AUTO.
 
     Alternatively, one may use, for example, DEFPACKAGE or
     UIOP:DEFINE-PACKAGE and arrange for Automatically Generating Loaddefs for the
@@ -336,7 +334,7 @@ circular. The rules for loading are as follows.
 
     If the package definitions are also generated with
     RECORD-LOADDEFS (e.g. because there is a
-    DEFPACKAGE/AUTOLOADED in dyndep or :AUTO-LOADDEFS specifies
+    DEFPACKAGE/AUTO in dyndep or :AUTO-LOADDEFS specifies
     :PACKAGES), then we can do without the package.lisp file:
 
         (asdf:defsystem "my-system"
@@ -419,7 +417,7 @@ circular. The rules for loading are as follows.
 - [function] EXTRACT-LOADDEFS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
 
     Return a list of so-called loaddef forms that set up autoloading
-    for definitions such as DEFUN/AUTOLOADED in :AUTO-DEPENDS-ON of
+    for definitions such as DEFUN/AUTO in :AUTO-DEPENDS-ON of
     SYSTEM.
 
     There is rarely a need to call this function directly, as
@@ -429,30 +427,32 @@ circular. The rules for loading are as follows.
     Note that this is an expensive operation, as it loads or reloads the
     direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
     records the association with the system and the autoloaded
-    definitions such as DEFUN/AUTOLOADED.
+    definitions such as DEFUN/AUTO.
 
-    - For function definitions such as DEFUN/AUTOLOADED, an AUTOLOAD
-    form is emitted.
+    - For function definitions such as DEFUN/AUTO, an AUTOLOAD loaddef
+    is emitted.
 
         If PROCESS-ARGLIST is T, then the autoload forms will pass the
-        ARGLIST argument of the corresponding DEFUN/AUTOLOADED to
-        AUTOLOAD. If it is NIL, then ARGLIST will not be passed to
-        AUTOLOAD.
+        ARGLIST argument of the corresponding DEFUN/AUTO to AUTOLOAD. If
+        it is NIL, then ARGLIST will not be passed to AUTOLOAD.
 
-    - For DEFVAR/AUTOLOADED, the emitted loaddefs declaim the variable
-    special and maybe set its initial value and docstring.
+    - For class definitions such as DEFCLASS/AUTO, an AUTOLOAD-CLASS
+    loaddef is emitted.
 
-        If the initial value form in DEFVAR/AUTOLOADED is detected as a
-        simple constant form, then it is evaluated and its value is
-        assigned to the variable as in DEFVAR. Simple constant forms are
-        strings, numbers, characters, keywords, constants in the CL
-        package, and QUOTEd nested lists containing any of the previous
-        or any symbol from the CL package.
+    - For DEFVAR/AUTO, the emitted loaddef declaims the variable
+    special and maybe sets its initial value and docstring.
 
-    - For DEFPACKAGE/AUTOLOADED and the provided PACKAGES,
-    individual package-altering operations are emitted.
+        If the initial value form in DEFVAR/AUTO is detected as a simple
+        constant form, then it is evaluated and its value is assigned to
+        the variable as in DEFVAR. Simple constant forms are strings,
+        numbers, characters, keywords, constants in the CL package, and
+        QUOTEd nested lists containing any of the previous or any symbol
+        from the CL package.
 
-        As in the expansion of DEFPACKAGE/AUTOLOADED itself, these
+    - For DEFPACKAGE/AUTO and the provided PACKAGES,
+    individual package-altering loaddefs are emitted.
+
+        As in the expansion of DEFPACKAGE/AUTO itself, these
         operations are additive. To handle circular dependencies, first
         all packages are created, then their state is reconstructed in
         phases following DEFPACKAGE.
@@ -461,12 +461,11 @@ circular. The rules for loading are as follows.
         in non-existent packages (e.g. :IMPORT-FROM) is silently
         skipped.
 
-    - If PROCESS-DOCSTRING, then the docstrings extracted from
-      DEFUN/AUTOLOADED or DEFVAR/AUTOLOADED will be associated with the
-      definition.
+    - If PROCESS-DOCSTRING, then the docstrings extracted from auto
+      definitions will be associated with the definition.
 
-    Note that if a function is not defined with DEFUN/AUTOLOADED or its
-    kin in Basics, then EXTRACT-LOADDEFS will not detect it. For such
+    Note that if a function is not defined with DEFUN/AUTO or its kin in
+    Basics, then EXTRACT-LOADDEFS will not detect it. For such
     functions, AUTOLOAD forms must be written manually. Similar
     considerations apply to variables and packages.
 

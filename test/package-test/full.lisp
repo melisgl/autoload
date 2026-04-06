@@ -4,7 +4,7 @@
   (:export #:missing #:shadow-target #:plain-import-target)
   (:use :cl))
 
-(autoload:defpackage/autoloaded :%package-test
+(autoload:defpackage/auto :%package-test
   (:nicknames :%ptest :%ptest-alt)
   (:use :cl)
   (:shadow #:cons)

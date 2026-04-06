@@ -24,7 +24,7 @@
   (fmakunbound 'test-fun)
   (setf (autoload::state 'test-fun :function) nil)
   (signals (autoload-warning :handler #'muffle-warning)
-    (eval '(defun/autoloaded test-fun (x) "doc" x)))
+    (eval '(defun/auto test-fun (x) "doc" x)))
   (is (eq (autoload::state 'test-fun :function) :resolved))
   (let ((dref (dref:dref 'test-fun 'function)))
     #-ccl
@@ -40,7 +40,7 @@
   (makunbound '*test-var*)
   (setf (autoload::state '*test-var* :defvar) nil)
   (signals (autoload-warning :handler #'muffle-warning)
-    (eval '(autoload:defvar/autoloaded *test-var* 1 "doc")))
+    (eval '(autoload:defvar/auto *test-var* 1 "doc")))
   (let ((dref (dref:dref '*test-var* 'variable)))
     (is (equal (dref:docstring dref) "doc"))
     (is (eq (autoload::state '*test-var* :defvar) :resolved))
@@ -58,16 +58,16 @@
   (is (eq (autoload::state '*test-var* :defvar) :declared))
   (set '*test-var* 1)
   (let ((*defvar-init-evaluatedp* nil))
-    (eval '(defvar/autoloaded *test-var* (setq *defvar-init-evaluatedp* t)))
+    (eval '(defvar/auto *test-var* (setq *defvar-init-evaluatedp* t)))
     (is (eq (autoload::state '*test-var* :defvar) :resolved))
     (is (eql (symbol-value '*test-var*) 1))
     (is *defvar-init-evaluatedp*)))
 
-(deftest test-defpackage/autoloaded-rename ()
+(deftest test-defpackage/auto-rename ()
   (unwind-protect
        (progn
-         (eval '(defpackage/autoloaded :%xxx (:nicknames :%yyy)))
-         (eval '(defpackage/autoloaded :%yyy (:nicknames :%zzz)))
+         (eval '(defpackage/auto :%xxx (:nicknames :%yyy)))
+         (eval '(defpackage/auto :%yyy (:nicknames :%zzz)))
          (is (equal (package-name :%xxx) (string :%yyy)))
          (is (try:same-set-p (package-nicknames :%yyy)
                              (list (string :%xxx) (string :%zzz))
@@ -306,7 +306,7 @@
                 (funcall missing-fn))
               (is (asdf:component-loaded-p "%simple-test/full"))
               (is (autoload-fbound-p missing-fn))))
-          (with-test ("DEFINE-AUTOLOADED-FUNCTION")
+          (with-test ("DEFINE-AUTO-FUNCTION")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
@@ -394,10 +394,10 @@
          (write-full (foo-p *foo*-p bar-p)
            (autoload::with-file-superseded (stream (test-file "full.lisp"))
              (when foo-p
-               (write-line "(autoload:defun/autoloaded %test-system::foo ())"
+               (write-line "(autoload:defun/auto %test-system::foo ())"
                            stream))
              (when *foo*-p
-               (write-line "(autoload:defvar/autoloaded %test-system::*foo*)"
+               (write-line "(autoload:defvar/auto %test-system::*foo*)"
                            stream))
              (when bar-p
                (format stream "(cl:fmakunbound '%test-system::bar)~%~
@@ -520,7 +520,7 @@
   (with-test-class
     (autoload-class test-class "non-existent")
     (check-direct-accessors (find-class 'test-class) nil)
-    (eval '(defclass/autoloaded test-class () ()))
+    (eval '(defclass/auto test-class () ()))
     (is (eq (autoload::state 'test-class :class) :resolved))
     (is (not (autoload::autoloadp 'test-class :class)))))
 
@@ -549,7 +549,7 @@
     (autoload-class test-class "non-existent")
     (defclass test-subclass (test-class) ())
     (check-direct-accessors (find-class 'test-subclass) t)
-    (eval '(defclass/autoloaded test-class () ()))
+    (eval '(defclass/auto test-class () ()))
     (is (eq (autoload::state 'test-class :class) :resolved))
     (is (not (autoload::autoloadp 'test-class :class)))))
 
@@ -559,7 +559,7 @@
     (let ((autoload::*test-load-system*
             (lambda (system-name)
               (is (equal system-name "xxx"))
-              (eval '(defclass/autoloaded test-class () ()))
+              (eval '(defclass/auto test-class () ()))
               (make-instance 'test-class))))
       (let ((instance (make-instance 'test-class)))
         (is (eval `(typep ,instance 'test-class)))
@@ -619,7 +619,7 @@
   (test-defun-state)
   (test-defvar-state)
   (test-defvar-init)
-  (test-defpackage/autoloaded-rename)
+  (test-defpackage/auto-rename)
   (let ((*compile-verbose* nil))
     (test-simple)
     (test-package)

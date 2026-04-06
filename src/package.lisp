@@ -4,13 +4,13 @@
    ;; Basics
    ;;; Functions
    #:autoload #:autoload-fbound-p
-   #:defun/autoloaded #:defgeneric/autoloaded #:define-autoloaded-function
+   #:defun/auto #:defgeneric/auto #:define-auto-function
    ;;; Classes
-   #:autoload-class #:autoload-class-p #:defclass/autoloaded
+   #:autoload-class #:autoload-class-p #:defclass/auto
    ;;; Variables
-   #:defvar/autoloaded
+   #:defvar/auto
    ;;; Packages
-   #:defpackage/autoloaded
+   #:defpackage/auto
    ;;; Conditions
    #:autoload-error #:autoload-warning
    ;; ASDF integration
