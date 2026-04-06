@@ -234,18 +234,12 @@ circular. The rules for loading are as follows.
 
     Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
 
+    NAME may be of the form (DEFINER NAME). In that case, instead of
+    DEFUN, DEFINER is used.
+
 - [macro] DEFGENERIC/AUTO NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN/AUTO, but define NAME with DEFGENERIC.
-
-- [macro] DEFINE-AUTO-FUNCTION DEFINER NAME LAMBDA-LIST &BODY BODY
-
-    Like DEFUN/AUTO, but establish a function binding for NAME with
-    DEFINER. For example, the autoloaded counterpart to UIOP:DEFUN* can
-    be defined as
-
-        (defmacro defun*/auto (name lambda-list &body body)
-          `(define-auto-function uiop:defun* ,name ,lambda-list ,@body))
+    A shorthand for ( DEFUN/AUTO (DEFGENERIC NAME) ...).
 
 ### Variables
 
@@ -274,6 +268,9 @@ circular. The rules for loading are as follows.
     DEFVAR/AUTO warns if VAR does not have a loaddef in
     :AUTO-LOADDEFS.
 
+    VAR may be of the form (DEFINER VAR). In that case, instead of
+    DEFVAR, DEFINER is used.
+
 ### Packages
 
 - [macro] DEFPACKAGE/AUTO NAME &REST OPTIONS
@@ -285,9 +282,9 @@ circular. The rules for loading are as follows.
     The additivity means that instead of replacing the package
     definition or signaling errors on redefinition, it expands into
     individual package-altering operations such as SHADOW, USE-PACKAGE
-    and EXPORT. This allows the package state to be built incrementally.
-    DEFPACKAGE/AUTO may be used on the same package multiple
-    times.
+    and EXPORT. This allows the package state to be built incrementally,
+    but the (DEFINER NAME) syntax is not supported. DEFPACKAGE/AUTO
+    may be used on the same package multiple times.
 
     In addition, DEFPACKAGE/AUTO deviates from DEFPACKAGE in the
     following ways.

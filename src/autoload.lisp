@@ -281,39 +281,43 @@
         (funcall symbol string)
         string)))
 
+(defun unpack-name-with-definer (name &optional default-definer)
+  (if (and (consp name)
+           (consp (cdr name))
+           (null (cddr name))
+           (symbolp (first name))
+           (not (eq (first name) 'setf)))
+      (values (first name) (second name))
+      (values default-definer name)))
+
 (defmacro defun/auto (name lambda-list &body body)
   "Like DEFUN, but mark the function for @AUTOMATIC-LOADDEFS and
   silence redefinition warnings. See EXTRACT-LOADDEFS for the
   corresponding loaddef.
 
-  Also, warn if NAME has never been AUTOLOAD-FBOUND-P."
-  `(define-auto-function defun ,name ,lambda-list ,@body))
+  Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
+
+  NAME may be of the form (DEFINER NAME). In that case, instead of
+  DEFUN, DEFINER is used."
+  (multiple-value-bind (definer name) (unpack-name-with-definer name 'defun)
+    (maybe-record-autoload-info 'defun/auto name lambda-list
+                                (find-docstring-in-body body))
+    `(progn
+       (maybe-signal-missing-loaddef ',name :function)
+       ;; We don't want to FMAKUNBOUND a generic function and lose its
+       ;; methods.
+       (when (autoload-fbound-p ',name)
+         ;; This prevents redefinition warnings and allows DEFINER to
+         ;; be a DEFGENERIC without running into an error when trying
+         ;; to redefine a DEFUN (the autoload stub).
+         (fmakunbound ',name))
+       (,definer ,name ,lambda-list ,@body)
+       (setf (state ',name :function) :resolved)
+       ',name)))
 
 (defmacro defgeneric/auto (name lambda-list &body body)
-  "Like DEFUN/AUTO, but define NAME with DEFGENERIC."
-  `(define-auto-function defgeneric ,name ,lambda-list ,@body))
-
-(defmacro define-auto-function (definer name lambda-list &body body)
-  "Like DEFUN/AUTO, but establish a function binding for NAME with
-  DEFINER. For example, the autoloaded counterpart to UIOP:DEFUN* can
-  be defined as
-
-      (defmacro defun*/auto (name lambda-list &body body)
-        `(define-auto-function uiop:defun* ,name ,lambda-list ,@body))"
-  (maybe-record-autoload-info 'defun/auto name lambda-list
-                              (find-docstring-in-body body))
-  `(progn
-     (maybe-signal-missing-loaddef ',name :function)
-     ;; We don't want to FMAKUNBOUND a generic function and lose its
-     ;; methods.
-     (when (autoload-fbound-p ',name)
-       ;; This prevents redefinition warnings and allows DEFINER to be
-       ;; a DEFGENERIC without running into an error when trying to
-       ;; redefine a DEFUN (the autoload stub).
-       (fmakunbound ',name))
-     (,definer ,name ,lambda-list ,@body)
-     (setf (state ',name :function) :resolved)
-     ',name))
+  "A shorthand for `(` DEFUN/AUTO `(DEFGENERIC NAME) ...)`."
+  `(defun/auto (defgeneric ,name) ,lambda-list ,@body))
 
 (defun defun/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
@@ -410,20 +414,23 @@
         (and (= (length supers) 1)
              (eq (class-name (first supers)) '%autoload-class))))))
 
-(defmacro defclass/auto (name direct-superclasses direct-slots
-                               &rest options)
+(defmacro defclass/auto (name direct-superclasses direct-slots &rest options)
   "Like DEFCLASS, but mark the function for @AUTOMATIC-LOADDEFS. See
   EXTRACT-LOADDEFS for the corresponding loaddef.
 
-  Also, warn if NAME has never been AUTOLOAD-CLASS-P."
-  (maybe-record-autoload-info 'defclass/auto name
-                              (find-docstring-in-body options))
-  `(progn
-     (maybe-signal-missing-loaddef ',name :class)
-     (defclass ,name ,direct-superclasses
-       ,direct-slots
-       ,@options)
-     (setf (state ',name :class) :resolved)))
+  Also, warn if NAME has never been AUTOLOAD-CLASS-P.
+
+  NAME may be of the form (DEFINER NAME). In that case, instead of
+  DEFCLASS, DEFINER is used."
+  (multiple-value-bind (definer name) (unpack-name-with-definer name 'defclass)
+    (maybe-record-autoload-info 'defclass/auto name
+                                (find-docstring-in-body options))
+    `(progn
+       (maybe-signal-missing-loaddef ',name :class)
+       (,definer ,name ,direct-superclasses
+                 ,direct-slots
+                 ,@options)
+       (setf (state ',name :class) :resolved))))
 
 (defun defclass/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
@@ -479,22 +486,26 @@
   VAL is evaluated for side effect.
 
   DEFVAR/AUTO warns if VAR does not have a loaddef in
-  @AUTO-LOADDEFS."
-  (maybe-record-autoload-info 'defvar/auto var val valp doc)
-  `(progn
-     (maybe-signal-missing-loaddef ',var :defvar)
-     (defvar ,var)
-     ;; Only evaluate VAL if necessary to mimic the semantics of
-     ;; DEFVAR, but
-     ,@(when valp
-         `((cond ((not (symbol-globally-boundp ',var))
-                  (setf (symbol-global-value ',var) ,val))
-                 ((eq (state ',var :defvar) :declared)
-                  ,val))))
-     ,@(when doc
-         `((setf (documentation ',var 'variable) ,doc)))
-     (setf (state ',var :defvar) :resolved)
-     ',var))
+  @AUTO-LOADDEFS.
+
+  VAR may be of the form (DEFINER VAR). In that case, instead of
+  DEFVAR, DEFINER is used."
+  (multiple-value-bind (definer var) (unpack-name-with-definer var 'defvar)
+    (maybe-record-autoload-info 'defvar/auto var val valp doc)
+    `(progn
+       (maybe-signal-missing-loaddef ',var :defvar)
+       (,definer ,var)
+       ;; Only evaluate VAL if necessary to mimic the semantics of
+       ;; DEFVAR, but
+       ,@(when valp
+           `((cond ((not (symbol-globally-boundp ',var))
+                    (setf (symbol-global-value ',var) ,val))
+                   ((eq (state ',var :defvar) :declared)
+                    ,val))))
+       ,@(when doc
+           `((setf (documentation ',var 'variable) ,doc)))
+       (setf (state ',var :defvar) :resolved)
+       ',var)))
 
 (defun defvar/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
@@ -536,9 +547,9 @@
   The additivity means that instead of replacing the package
   definition or signaling errors on redefinition, it expands into
   individual package-altering operations such as SHADOW, USE-PACKAGE
-  and EXPORT. This allows the package state to be built incrementally.
-  DEFPACKAGE/AUTO may be used on the same package multiple
-  times.
+  and EXPORT. This allows the package state to be built incrementally,
+  but the `(DEFINER NAME)` syntax is not supported. DEFPACKAGE/AUTO
+  may be used on the same package multiple times.
 
   In addition, DEFPACKAGE/AUTO deviates from DEFPACKAGE in the
   following ways.

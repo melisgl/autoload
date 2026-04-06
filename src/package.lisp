@@ -2,20 +2,29 @@
   (:use #:common-lisp)
   (:export
    ;; Basics
+   #:autoload-error
+   #:autoload-warning
    ;;; Functions
-   #:autoload #:autoload-fbound-p
-   #:defun/auto #:defgeneric/auto #:define-auto-function
+   #:autoload
+   #:autoload-fbound-p
+   #:defun/auto
+   #:defgeneric/auto
    ;;; Classes
-   #:autoload-class #:autoload-class-p #:defclass/auto
+   #:autoload-class
+   #:autoload-class-p
+   #:defclass/auto
    ;;; Variables
    #:defvar/auto
    ;;; Packages
    #:defpackage/auto
-   ;;; Conditions
-   #:autoload-error #:autoload-warning
    ;; ASDF integration
-   #:autoload-system #:autoload-cl-source-file
-   #:system-auto-depends-on #:system-auto-loaddefs #:autodeps
+   #:autoload-system
+   #:autoload-cl-source-file
+   #:system-auto-depends-on
+   #:system-auto-loaddefs
+   #:autodeps
    ;;; Automatically generating loaddefs
-   #:extract-loaddefs #:write-loaddefs
-   #:record-loaddefs #:check-loaddefs))
+   #:extract-loaddefs
+   #:write-loaddefs
+   #:record-loaddefs
+   #:check-loaddefs))
