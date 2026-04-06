@@ -10,8 +10,9 @@
     - [3.1 Loading Systems][ddfa]
     - [3.2 Conditions][f43d]
     - [3.3 Functions][4b04]
-    - [3.4 Variables][f490]
-    - [3.5 Packages][643f]
+    - [3.4 Classes][38fe]
+    - [3.5 Variables][f490]
+    - [3.6 Packages][643f]
 - [4 ASDF Integration][0c5c]
     - [4.1 Automatically Generating Loaddefs][c1d4]
 
@@ -169,7 +170,7 @@ in deployment):
 - [glossary-term] **autoload**
 
     An autoload definition defines a stub that, when used, triggers
-    loading of an `ASDF:SYSTEM`. See [`AUTOLOAD`][7da0] and `AUTOLOAD-CLASS`.
+    loading of an `ASDF:SYSTEM`. See [`AUTOLOAD`][7da0] and [`AUTOLOAD-CLASS`][9d6b].
 
 <a id="x-28AUTOLOAD-3A-40LOADDEF-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
 
@@ -184,7 +185,7 @@ in deployment):
 - [glossary-term] **auto**
 
     An auto definition, such as [`DEFUN/AUTO`][a825], [`DEFGENERIC/AUTO`][5b87],
-    `DEFCLASS/AUTO`, [`DEFPACKAGE/AUTO`][aa0e], marks the definition for
+    [`DEFCLASS/AUTO`][ee20], [`DEFPACKAGE/AUTO`][aa0e], marks the definition for
     [Automatically Generating Loaddefs][c1d4] and signals an [`AUTOLOAD-WARNING`][da95] if there was no
     corresponding [loaddef][e4a5].
 
@@ -192,32 +193,33 @@ in deployment):
 
 ### 3.1 Loading Systems
 
-[Autoloads][c7d6] trigger the loading of `ASDF:SYSTEM`s. Unlike
-normal ASDF dependencies (declared in `:DEPENDS-ON`), autoload
-dependencies (may be declared in [`:AUTO-DEPENDS-ON`][9b08]) are allowed to be
-circular. The rules for loading are as follows.
+When an [autoload][c7d6] definition is used, it triggers the loading of
+`ASDF:SYSTEM`s. Unlike normal ASDF dependencies (declared in
+`:DEPENDS-ON`), autoload dependencies
+(may be declared in [`:AUTO-DEPENDS-ON`][9b08]) are allowed to be circular.
+The rules for loading are as follows.
 
 1. It is an [`AUTOLOAD-ERROR`][a515] if loading is triggered during [compile
    time][27c6] or during a [`LOAD`][b5ec] of either a [source file][e8f2] or a
    [compiled file][53ee]. This is to prevent infinite autoload
    recursion.
 
-2. It is an `AUTOLOAD-ERROR` if `SYSTEM-NAME` does not exist.
+2. It is an `AUTOLOAD-ERROR` if the system does not exist.
 
-3. `SYSTEM-NAME` is loaded under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
+3. The system is loaded under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
    [`WITH-STANDARD-IO-SYNTAX`][39df] but with [`*PRINT-READABLY*`][8aca] `NIL`. Other
    non-portable measures may be taken to standardize the dynamic
    environment. Errors signalled during the load are not handled or
    resignalled by the Autoload library.
 
-4. It is an `AUTOLOAD-ERROR` if the definition of `NAME` established by
-   the [autoload][c7d6] has been redefined by the loaded system as a
-   non-autoload definition or deleted.
+4. It is an `AUTOLOAD-ERROR` if the definition established by the
+   [autoload][c7d6] is not redefined as a non-autoload definition or
+   deleted by the loaded system.
 
     For [`AUTOLOAD`][7da0], this means that the autoload function stub must
      be redefined as a normal function (e.g. by [`DEFUN`][f472], [`DEFUN/AUTO`][a825])
-     or made [`FMAKUNBOUND`][609c]. For `AUTOLOAD-CLASS`, the class stub must be
-     redefined with [`DEFCLASS`][ead6], `DEFCLASS/AUTO` or deleted with `(SETF
+     or made [`FMAKUNBOUND`][609c]. For [`AUTOLOAD-CLASS`][9d6b], the class stub must be
+     redefined with [`DEFCLASS`][ead6], [`DEFCLASS/AUTO`][ee20] or deleted with `(SETF
      (FIND-CLASS ...) NIL)`.
 
 
@@ -302,9 +304,61 @@ circular. The rules for loading are as follows.
 
     A shorthand for `(` [`DEFUN/AUTO`][a825] `(DEFGENERIC NAME) ...)`.
 
+<a id="x-28AUTOLOAD-3A-40CLASSES-20MGL-PAX-3ASECTION-29"></a>
+
+### 3.4 Classes
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-CLASS-20MGL-PAX-3AMACRO-29"></a>
+
+- [macro] **AUTOLOAD-CLASS** *CLASS-NAME SYSTEM-NAME &KEY DOCSTRING*
+
+    Define a dummy class with `CLASS-NAME` and arrange for `SYSTEM-NAME` to
+    be [loaded][ddfa] when it or any of its subclasses are
+    [instantiated][dddd]. Return the class object. The
+    arguments are not evaluated. If `CLASS-NAME` [denotes][51fe] a [`CLASS`][1f37] and it is not [`AUTOLOAD-CLASS-P`][37fc], then do nothing and
+    return `NIL`.
+    
+    - `DOCSTRING`, if non-`NIL`, will be the stub's docstring. If `NIL`, then
+      a generic docstring that says what system it autoloads will be
+      used.
+    
+    The dummy class is defined at [compile time][27c6] too to
+    approximate the semantics of [`DEFCLASS`][ead6]. The dummy class is a
+    [`STANDARD-CLASS`][c77f] with no superclasses or slots. These are visible
+    through introspection e.g. via `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`.
+    Introspection does not trigger autoloading.
+    
+    When `AUTOLOAD-CLASS` is macroexpanded during the compilation or
+    loading of an [`AUTOLOAD-SYSTEM`][cd2d], it signals an [`AUTOLOAD-WARNING`][da95] if
+    `SYSTEM-NAME` is not among those declared in [`:AUTO-DEPENDS-ON`][9b08].
+    
+    Note that [`INITIALIZE-INSTANCE`][1466] `:AROUND` methods specialized on a
+    subclass of `CLASS-NAME` may run twice in the context of the
+    `MAKE-INSTANCE` that triggers autoloading.
+
+<a id="x-28AUTOLOAD-3AAUTOLOAD-CLASS-P-20FUNCTION-29"></a>
+
+- [function] **AUTOLOAD-CLASS-P** *CLASS-DESIGNATOR*
+
+    See if the class denoted by `CLASS-DESIGNATOR` was declared as an
+    [`AUTOLOAD-CLASS`][9d6b] and was not redefined or deleted since. Subclasses do
+    not inherit this property.
+
+<a id="x-28AUTOLOAD-3ADEFCLASS-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
+
+- [macro] **DEFCLASS/AUTO** *NAME DIRECT-SUPERCLASSES DIRECT-SLOTS &REST OPTIONS*
+
+    Like [`DEFCLASS`][ead6], but mark the class for [Automatically Generating Loaddefs][c1d4]. See
+    [`EXTRACT-LOADDEFS`][dd7e] for the corresponding [loaddef][e4a5].
+    
+    Also, warn if `NAME` has never been [`AUTOLOAD-CLASS-P`][37fc].
+    
+    `NAME` may be of the form (`DEFINER` `NAME`). In that case, instead of
+    `DEFCLASS`, `DEFINER` is used.
+
 <a id="x-28AUTOLOAD-3A-40VARIABLES-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.4 Variables
+### 3.5 Variables
 
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
@@ -341,7 +395,7 @@ circular. The rules for loading are as follows.
 
 <a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
 
-### 3.5 Packages
+### 3.6 Packages
 
 <a id="x-28AUTOLOAD-3ADEFPACKAGE-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
@@ -525,7 +579,7 @@ circular. The rules for loading are as follows.
         `ARGLIST` argument of the corresponding `DEFUN/AUTO` to `AUTOLOAD`. If
         it is `NIL`, then `ARGLIST` will not be passed to `AUTOLOAD`.
     
-    - For class definitions such as `DEFCLASS/AUTO`, an `AUTOLOAD-CLASS`
+    - For class definitions such as [`DEFCLASS/AUTO`][ee20], an [`AUTOLOAD-CLASS`][9d6b]
     [loaddef][e4a5] is emitted.
     
     - For [`DEFVAR/AUTO`][3cff], the emitted [loaddef][e4a5] declaims the variable
@@ -619,14 +673,19 @@ circular. The rules for loading are as follows.
   [0c4f]: http://www.lispworks.com/documentation/HyperSpec/Body/f_export.htm "EXPORT (MGL-PAX:CLHS FUNCTION)"
   [0c5c]: #x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29 "ASDF Integration"
   [119e]: http://www.lispworks.com/documentation/HyperSpec/Body/t_fn.htm "FUNCTION (MGL-PAX:CLHS CLASS)"
+  [1466]: http://www.lispworks.com/documentation/HyperSpec/Body/f_init_i.htm "INITIALIZE-INSTANCE (MGL-PAX:CLHS GENERIC-FUNCTION)"
+  [1f37]: http://www.lispworks.com/documentation/HyperSpec/Body/t_class.htm "CLASS (MGL-PAX:CLHS CLASS)"
   [2264]: http://www.lispworks.com/documentation/HyperSpec/Body/f_use_pk.htm "USE-PACKAGE (MGL-PAX:CLHS FUNCTION)"
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
+  [37fc]: #x-28AUTOLOAD-3AAUTOLOAD-CLASS-P-20FUNCTION-29 "AUTOLOAD:AUTOLOAD-CLASS-P FUNCTION"
+  [38fe]: #x-28AUTOLOAD-3A-40CLASSES-20MGL-PAX-3ASECTION-29 "Classes"
   [39df]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_std_.htm "WITH-STANDARD-IO-SYNTAX (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [3cff]: #x-28AUTOLOAD-3ADEFVAR-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFVAR/AUTO MGL-PAX:MACRO"
   [3d01]: #x-28AUTOLOAD-3ARECORD-LOADDEFS-20RESTART-29 "AUTOLOAD:RECORD-LOADDEFS RESTART"
   [451b]: #x-28AUTOLOAD-3ACHECK-LOADDEFS-20FUNCTION-29 "AUTOLOAD:CHECK-LOADDEFS FUNCTION"
   [471f]: #x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29 "Introduction"
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"
+  [51fe]: http://www.lispworks.com/documentation/HyperSpec/Body/f_find_c.htm "FIND-CLASS (MGL-PAX:CLHS FUNCTION)"
   [53ee]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compiled_file "\"compiled file\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [570e]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpar.htm "DEFPARAMETER (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
@@ -645,6 +704,7 @@ circular. The rules for loading are as follows.
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [9b08]: #x-28AUTOLOAD-3ASYSTEM-AUTO-DEPENDS-ON-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTO-DEPENDS-ON (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [9b43]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpkg.htm "DEFPACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
+  [9d6b]: #x-28AUTOLOAD-3AAUTOLOAD-CLASS-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD-CLASS MGL-PAX:MACRO"
   [a159]: #x-28AUTOLOAD-3A-40AUTO-20MGL-PAX-3AGLOSSARY-TERM-29 "auto"
   [a515]: #x-28AUTOLOAD-3AAUTOLOAD-ERROR-20CONDITION-29 "AUTOLOAD:AUTOLOAD-ERROR CONDITION"
   [a825]: #x-28AUTOLOAD-3ADEFUN-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFUN/AUTO MGL-PAX:MACRO"
@@ -652,6 +712,7 @@ circular. The rules for loading are as follows.
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c1d4]: #x-28AUTOLOAD-3A-40AUTOMATIC-LOADDEFS-20MGL-PAX-3ASECTION-29 "Automatically Generating Loaddefs"
+  [c77f]: http://www.lispworks.com/documentation/HyperSpec/Body/t_std_cl.htm "STANDARD-CLASS (MGL-PAX:CLHS CLASS)"
   [c7d6]: #x-28AUTOLOAD-3A-40AUTOLOAD-20MGL-PAX-3AGLOSSARY-TERM-29 "autoload"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
@@ -661,6 +722,7 @@ circular. The rules for loading are as follows.
   [d811]: http://www.lispworks.com/documentation/HyperSpec/Body/f_apply.htm "APPLY (MGL-PAX:CLHS FUNCTION)"
   [da95]: #x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29 "AUTOLOAD:AUTOLOAD-WARNING CONDITION"
   [dd7e]: #x-28AUTOLOAD-3AEXTRACT-LOADDEFS-20FUNCTION-29 "AUTOLOAD:EXTRACT-LOADDEFS FUNCTION"
+  [dddd]: http://www.lispworks.com/documentation/HyperSpec/Body/f_mk_ins.htm "MAKE-INSTANCE (MGL-PAX:CLHS GENERIC-FUNCTION)"
   [ddfa]: #x-28AUTOLOAD-3A-40LOADING-SYSTEMS-20MGL-PAX-3ASECTION-29 "Loading Systems"
   [e4a5]: #x-28AUTOLOAD-3A-40LOADDEF-20MGL-PAX-3AGLOSSARY-TERM-29 "loaddef"
   [e8f2]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_s.htm#source_file "\"source file\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
@@ -668,6 +730,7 @@ circular. The rules for loading are as follows.
   [ea6a]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#condition_handler "\"condition handler\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [ead6]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defcla.htm "DEFCLASS (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
+  [ee20]: #x-28AUTOLOAD-3ADEFCLASS-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFCLASS/AUTO MGL-PAX:MACRO"
   [eea4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fdefin.htm "FDEFINITION (MGL-PAX:CLHS FUNCTION)"
   [f43d]: #x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29 "Conditions"
   [f472]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defun.htm "DEFUN (MGL-PAX:CLHS MGL-PAX:MACRO)"

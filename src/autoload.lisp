@@ -7,6 +7,7 @@
   (@loading-systems section)
   (@conditions section)
   (@functions section)
+  (@classes section)
   (@variables section)
   (@packages section))
 
@@ -36,28 +37,29 @@
 (defvar *test-load-system* nil)
 
 (defun autoload-system-for (system-name name kind)
-  "[Autoloads][@AUTOLOAD] trigger the loading of ASDF:SYSTEMs. Unlike
-  normal ASDF dependencies (declared in :DEPENDS-ON), autoload
-  dependencies (may be declared in @AUTO-DEPENDS-ON) are allowed to be
-  circular. The rules for loading are as follows.
+  "When an @AUTOLOAD definition is used, it triggers the loading of
+  ASDF:SYSTEMs. Unlike normal ASDF dependencies (declared in
+  :DEPENDS-ON), autoload dependencies
+  (may be declared in @AUTO-DEPENDS-ON) are allowed to be circular.
+  The rules for loading are as follows.
 
   1. It is an AUTOLOAD-ERROR if loading is triggered during [compile
      time][clhs] or during a LOAD of either a [source file][clhs] or a
      [compiled file][clhs]. This is to prevent infinite autoload
      recursion.
 
-  2. It is an AUTOLOAD-ERROR if SYSTEM-NAME does not [exist][
+  2. It is an AUTOLOAD-ERROR if the system does not [exist][
      asdf:find-system].
 
-  3. SYSTEM-NAME is loaded under WITH-COMPILATION-UNIT :OVERRIDE T and
+  3. The system is loaded under WITH-COMPILATION-UNIT :OVERRIDE T and
      WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
      non-portable measures may be taken to standardize the dynamic
      environment. Errors signalled during the load are not handled or
      resignalled by the Autoload library.
 
-  4. It is an AUTOLOAD-ERROR if the definition of NAME established by
-     the @AUTOLOAD has been redefined by the loaded system as a
-     non-autoload definition or deleted.
+  4. It is an AUTOLOAD-ERROR if the definition established by the
+     @AUTOLOAD is not redefined as a non-autoload definition or
+     deleted by the loaded system.
 
        For AUTOLOAD, this means that the autoload function stub must
        be redefined as a normal function (e.g. by DEFUN, DEFUN/AUTO)

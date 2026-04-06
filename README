@@ -148,27 +148,28 @@ in deployment):
 
 ### Loading Systems
 
-Autoloads trigger the loading of ASDF:SYSTEMs. Unlike
-normal ASDF dependencies (declared in :DEPENDS-ON), autoload
-dependencies (may be declared in :AUTO-DEPENDS-ON) are allowed to be
-circular. The rules for loading are as follows.
+When an autoload definition is used, it triggers the loading of
+ASDF:SYSTEMs. Unlike normal ASDF dependencies (declared in
+:DEPENDS-ON), autoload dependencies
+(may be declared in :AUTO-DEPENDS-ON) are allowed to be circular.
+The rules for loading are as follows.
 
 1. It is an AUTOLOAD-ERROR if loading is triggered during compile
    time or during a LOAD of either a source file or a
    compiled file. This is to prevent infinite autoload
    recursion.
 
-2. It is an AUTOLOAD-ERROR if SYSTEM-NAME does not exist.
+2. It is an AUTOLOAD-ERROR if the system does not exist.
 
-3. SYSTEM-NAME is loaded under WITH-COMPILATION-UNIT :OVERRIDE T and
+3. The system is loaded under WITH-COMPILATION-UNIT :OVERRIDE T and
    WITH-STANDARD-IO-SYNTAX but with *PRINT-READABLY* NIL. Other
    non-portable measures may be taken to standardize the dynamic
    environment. Errors signalled during the load are not handled or
    resignalled by the Autoload library.
 
-4. It is an AUTOLOAD-ERROR if the definition of NAME established by
-   the autoload has been redefined by the loaded system as a
-   non-autoload definition or deleted.
+4. It is an AUTOLOAD-ERROR if the definition established by the
+   autoload is not redefined as a non-autoload definition or
+   deleted by the loaded system.
 
     For AUTOLOAD, this means that the autoload function stub must
      be redefined as a normal function (e.g. by DEFUN, DEFUN/AUTO)
@@ -240,6 +241,50 @@ circular. The rules for loading are as follows.
 - [macro] DEFGENERIC/AUTO NAME LAMBDA-LIST &BODY BODY
 
     A shorthand for ( DEFUN/AUTO (DEFGENERIC NAME) ...).
+
+### Classes
+
+- [macro] AUTOLOAD-CLASS CLASS-NAME SYSTEM-NAME &KEY DOCSTRING
+
+    Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
+    be loaded when it or any of its subclasses are
+    instantiated. Return the class object. The
+    arguments are not evaluated. If CLASS-NAME denotes a CLASS and it is not AUTOLOAD-CLASS-P, then do nothing and
+    return NIL.
+
+    - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
+      a generic docstring that says what system it autoloads will be
+      used.
+
+    The dummy class is defined at compile time too to
+    approximate the semantics of DEFCLASS. The dummy class is a
+    STANDARD-CLASS with no superclasses or slots. These are visible
+    through introspection e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES.
+    Introspection does not trigger autoloading.
+
+    When AUTOLOAD-CLASS is macroexpanded during the compilation or
+    loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
+    SYSTEM-NAME is not among those declared in :AUTO-DEPENDS-ON.
+
+    Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
+    subclass of CLASS-NAME may run twice in the context of the
+    MAKE-INSTANCE that triggers autoloading.
+
+- [function] AUTOLOAD-CLASS-P CLASS-DESIGNATOR
+
+    See if the class denoted by CLASS-DESIGNATOR was declared as an
+    AUTOLOAD-CLASS and was not redefined or deleted since. Subclasses do
+    not inherit this property.
+
+- [macro] DEFCLASS/AUTO NAME DIRECT-SUPERCLASSES DIRECT-SLOTS &REST OPTIONS
+
+    Like DEFCLASS, but mark the class for Automatically Generating Loaddefs. See
+    EXTRACT-LOADDEFS for the corresponding loaddef.
+
+    Also, warn if NAME has never been AUTOLOAD-CLASS-P.
+
+    NAME may be of the form (DEFINER NAME). In that case, instead of
+    DEFCLASS, DEFINER is used.
 
 ### Variables
 
