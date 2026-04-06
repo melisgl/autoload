@@ -104,9 +104,9 @@ Then, the loaddefs can be extracted:
     => ((autoload foo "my-lib/full" :arglist "(x)" :docstring "doc"))
 
 This is implemented by loading the :AUTO-DEPENDS-ON of my-lib and
-recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility
-used by RECORD-LOADDEFS, which writes its results to
-the system's :AUTO-LOADDEFS, "loaddefs.lisp" in the above example.
+recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility used
+by RECORD-LOADDEFS, which writes its results to the
+system's :AUTO-LOADDEFS, "loaddefs.lisp" in the above example.
 So, all we need to do is call it to regenerate the loaddefs file:
 
     (record-loaddefs "my-lib")
@@ -223,8 +223,8 @@ circular. The rules for loading are as follows.
 
 - [function] AUTOLOAD-FBOUND-P NAME
 
-    See if NAME's function definition is an autoloader function
-    established by AUTOLOAD.
+    See if NAME's function definition is an autoload stub established
+    by AUTOLOAD.
 
 - [macro] DEFUN/AUTO NAME LAMBDA-LIST &BODY BODY
 
@@ -261,7 +261,7 @@ circular. The rules for loading are as follows.
           *x*)
         => 1
 
-    In case the global binding has been set in between the corresponding
+    In case the global binding has been set between the corresponding
     loaddef and the first evaluation of this form,
     VAL is evaluated for side effect.
 
@@ -269,7 +269,8 @@ circular. The rules for loading are as follows.
     :AUTO-LOADDEFS.
 
     VAR may be of the form (DEFINER VAR). In that case, instead of
-    DEFVAR, DEFINER is used.
+    DEFVAR, DEFINER is used. Note that DEFPARAMETER is not a suitable
+    DEFINER, as it doesn't follow DEFVAR semantics.
 
 ### Packages
 
@@ -280,7 +281,7 @@ circular. The rules for loading are as follows.
     the corresponding loaddefs.
 
     The additivity means that instead of replacing the package
-    definition or signaling errors on redefinition, it expands into
+    definition or signalling errors on redefinition, it expands into
     individual package-altering operations such as SHADOW, USE-PACKAGE
     and EXPORT. This allows the package state to be built incrementally,
     but the (DEFINER NAME) syntax is not supported. DEFPACKAGE/AUTO
@@ -366,7 +367,7 @@ circular. The rules for loading are as follows.
     list of the form
 
         (loaddefs-file &key (process-arglist t) (process-docstring t)
-                            packages test)
+                            packages (test t))
 
     - LOADDEFS-FILE designates the pathname where RECORD-LOADDEFS writes the extracted loaddefs.
       The pathname is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of
@@ -413,7 +414,7 @@ circular. The rules for loading are as follows.
 
 - [function] EXTRACT-LOADDEFS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
 
-    Return a list of so-called loaddef forms that set up autoloading
+    Return a list of loaddef forms that set up autoloading
     for definitions such as DEFUN/AUTO in :AUTO-DEPENDS-ON of
     SYSTEM.
 
@@ -461,15 +462,15 @@ circular. The rules for loading are as follows.
     - If PROCESS-DOCSTRING, then the docstrings extracted from auto
       definitions will be associated with the definition.
 
-    Note that if a function is not defined with DEFUN/AUTO or its kin in
-    Basics, then EXTRACT-LOADDEFS will not detect it. For such
-    functions, AUTOLOAD forms must be written manually. Similar
-    considerations apply to variables and packages.
+    Note that if a function is not defined with DEFUN/AUTO, then
+    EXTRACT-LOADDEFS will not detect it. For such functions, AUTOLOAD
+    forms must be written manually. Similar considerations apply to
+    variables and packages.
 
-- [function] WRITE-LOADDEFS FORMS STREAM
+- [function] WRITE-LOADDEFS LOADDEFS STREAM
 
-    Write the autoload FORMS to STREAM so they can be LOADed or
-    included in an ASDF:DEFSYSTEM.
+    Write LOADDEFS to STREAM so they can be LOADed or included in an
+    ASDF:DEFSYSTEM.
 
 - [function] RECORD-LOADDEFS SYSTEM
 
