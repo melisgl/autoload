@@ -3,8 +3,9 @@
 (named-readtables:in-readtable pythonic-string-reader:pythonic-string-syntax)
 
 (eval-when (:compile-toplevel :load-toplevel :execute)
-  (import '(pax:clhs pax:macro pax:docstring
-            pax:section pax:defsection pax:glossary-term pax:note
+  (shadowing-import '(pax:docstring))
+  (import '(pax:clhs pax:macro pax:section pax:defsection
+            pax:glossary-term pax:note
             pax:reader pax:define-glossary-term pax:make-github-source-uri-fn
             pax:register-doc-in-pax-world dref:define-restart)
           :autoload))
@@ -66,7 +67,7 @@
   autoloaded functions in the `my-lib/full` system:
 
   ```
-  (defun/autoloaded foo (x)
+  (defun/auto foo (x)
     "doc"
     (1+ x))
   ```
@@ -98,7 +99,7 @@
   ```
 
   This is implemented by loading the :AUTO-DEPENDS-ON of `my-lib` and
-  recording DEFUN/AUTOLOADEDs. EXTRACT-LOADDEFS is a low-level utility
+  recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility
   used by [RECORD-LOADDEFS][ function], which writes its results to
   the system's @AUTO-LOADDEFS, `"loaddefs.lisp"` in the above example.
   So, all we need to do is call it to regenerate the loaddefs file:
@@ -128,32 +129,29 @@
   """)
 
 (defsection @basics (:title "Basics")
-  (@scaffolding section)
+  (@autoload glossary-term)
+  (@loaddef glossary-term)
+  (@auto glossary-term)
+  (@loading-systems section)
+  (@conditions section)
   (@functions section)
   (@variables section)
   (@packages section))
 
-(defsection @scaffolding (:title "scaffolding")
-  (@autoload glossary-term)
-  (@loaddef glossary-term)
-  (@autoloaded glossary-term)
-  (@loading-systems section)
-  (@conditions section))
-
 (define-glossary-term @autoload (:title "autoload")
-  "An autoload is a definition that, when used, triggers loading of an
-  ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.")
+  "An autoload definition defines a stub that, when used, triggers
+  loading of an ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.")
 
 (define-glossary-term @loaddef (:title "loaddef")
   "A loaddef is either an @AUTOLOAD or some other Lisp form that
-  foreshadows a definition without setting up autoloading. See
-  DEFVAR/AUTOLOADED and DEFPACKAGE/AUTOLOADED.")
+  foreshadows a definition without setting up autoloading of an
+  ASDF:SYSTEM. See DEFVAR/AUTO and DEFPACKAGE/AUTO.")
 
-(define-glossary-term @autoloaded (:title "autoloaded")
-  "Autoloaded definitions mark the definition for @AUTOMATIC-LOADDEFS
-  and signal an AUTOLOAD-WARNING if there was no corresponding
-  @LOADDEF. See DEFUN/AUTOLOADED, DEFGENERIC/AUTOLOADED,
-  DEFCLASS/AUTOLOADED, DEFPACKAGE/AUTOLOADED.")
+(define-glossary-term @auto (:title "auto")
+  "An auto definition, such as DEFUN/AUTO, DEFGENERIC/AUTO,
+  DEFCLASS/AUTO, DEFPACKAGE/AUTO, marks the definition for
+  @AUTOMATIC-LOADDEFS and signals an AUTOLOAD-WARNING if there was no
+  corresponding @LOADDEF.")
 
 (defsection @loading-systems (:title "Loading Systems")
   """[autoload-system-for function][docstring]""")
@@ -165,20 +163,20 @@
 (defsection @functions (:title "Functions")
   (autoload macro)
   (autoload-fbound-p function)
-  (defun/autoloaded macro)
-  (defgeneric/autoloaded macro)
-  (define-autoloaded-function macro))
+  (defun/auto macro)
+  (defgeneric/auto macro)
+  (define-auto-function macro))
 
 (defsection @classes (:title "Classes")
   (autoload-class macro)
   (autoload-class-p function)
-  (defclass/autoloaded macro))
+  (defclass/auto macro))
 
 (defsection @variables (:title "Variables")
-  (defvar/autoloaded macro))
+  (defvar/auto macro))
 
 (defsection @packages (:title "Packages")
-  (defpackage/autoloaded macro))
+  (defpackage/auto macro))
 
 (defsection @asdf-integration (:title "ASDF Integration")
   (autoload-system class)
