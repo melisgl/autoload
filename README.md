@@ -169,22 +169,61 @@ in deployment):
 
 ### 3.1 scaffolding
 
+<a id="x-28AUTOLOAD-3A-40AUTOLOAD-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
+
+- [glossary-term] **autoload**
+
+    An autoload is a definition that, when used, triggers loading of an
+    `ASDF:SYSTEM`. See [`AUTOLOAD`][7da0] and `AUTOLOAD-CLASS`.
+
+<a id="x-28AUTOLOAD-3A-40LOADDEF-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
+
+- [glossary-term] **loaddef**
+
+    A loaddef is either an [autoload][c7d6] or some other Lisp form that
+    foreshadows a definition without setting up autoloading. See
+    [`DEFVAR/AUTOLOADED`][453a] and [`DEFPACKAGE/AUTOLOADED`][990a].
+
+<a id="x-28AUTOLOAD-3A-40AUTOLOADED-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
+
+- [glossary-term] **autoloaded**
+
+    Autoloaded definitions mark the definition for [Automatically Generating Loaddefs][c1d4]
+    and signal an [`AUTOLOAD-WARNING`][da95] if there was no corresponding
+    [loaddef][e4a5]. See [`DEFUN/AUTOLOADED`][3b15], [`DEFGENERIC/AUTOLOADED`][8b6e],
+    `DEFCLASS/AUTOLOADED`, [`DEFPACKAGE/AUTOLOADED`][990a].
+
 <a id="x-28AUTOLOAD-3A-40LOADING-SYSTEMS-20MGL-PAX-3ASECTION-29"></a>
 
 #### 3.1.1 Loading Systems
 
-FIXME: Whenever 
+[Autoloads][c7d6] trigger the loading of `ASDF:SYSTEM`s. Unlike
+normal ASDF dependencies (declared in `:DEPENDS-ON`), autoload
+dependencies (may be declared in [`:AUTO-DEPENDS-ON`][9b08]) are allowed to be
+circular. The rules for loading are as follows.
 
-1. It signals an [`AUTOLOAD-ERROR`][a515] if `SYSTEM-NAME` does not exist.
+1. It is an [`AUTOLOAD-ERROR`][a515] if loading is triggered during [compile
+   time][27c6] or during a [`LOAD`][b5ec] of either a [source file][e8f2] or a
+   [compiled file][53ee]. This is to prevent infinite autoload
+   recursion.
 
-2. It loads `SYSTEM-NAME` under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
+2. It is an `AUTOLOAD-ERROR` if `SYSTEM-NAME` does not exist.
+
+3. `SYSTEM-NAME` is loaded under [`WITH-COMPILATION-UNIT`][6166] `:OVERRIDE` `T` and
    [`WITH-STANDARD-IO-SYNTAX`][39df] but with [`*PRINT-READABLY*`][8aca] `NIL`. Other
    non-portable measures may be taken to standardize the dynamic
-   environment.
+   environment. Errors signalled during the load are not handled or
+   resignalled by the Autoload library.
 
-3. FIXME: It checks that the function with `NAME` has been redefined as a
-   normal function or was [`FMAKUNBOUND`][609c] (i.e. it is not
-   [`AUTOLOAD-FBOUND-P`][8dd7]), else it signals an `AUTOLOAD-ERROR`.
+4. It is an `AUTOLOAD-ERROR` if the definition of `NAME` established by
+   the [autoload][c7d6] has been redefined by the loaded system as a
+   non-autoload definition or deleted.
+
+    For [`AUTOLOAD`][7da0], this means that the autoload function stub must
+     be redefined as a normal function (e.g. by [`DEFUN`][f472],
+     [`DEFUN/AUTOLOADED`][3b15]) or made [`FMAKUNBOUND`][609c]. For `AUTOLOAD-CLASS`, the
+     class stub must be redefined with [`DEFCLASS`][ead6], `DEFCLASS/AUTOLOADED`
+     or deleted with `(SETF (FIND-CLASS ...) NIL)`.
 
 
 <a id="x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29"></a>
@@ -195,15 +234,14 @@ FIXME: Whenever
 
 - [condition] **AUTOLOAD-ERROR** *[ERROR][d162]*
 
-    Signalled by the stub defined by [`AUTOLOAD`][7da0] if
-    autoloading fails.
+    Signalled for some failures during [Loading Systems][ddfa].
 
 <a id="x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29"></a>
 
 - [condition] **AUTOLOAD-WARNING** *[SIMPLE-WARNING][fc62]*
 
-    Signalled when inconsistencies are detected by e.g.
-    [`AUTOLOAD`][7da0] and [`DEFVAR/AUTOLOADED`][453a].
+    See [`AUTOLOAD`][7da0], [autoloaded][612e]s and [`:AUTO-DEPENDS-ON`][9b08] for
+    when this is signalled.
 
 <a id="x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29"></a>
 
@@ -409,8 +447,10 @@ FIXME: Whenever
 
     This is the list of the names of systems that this
     system may autoload. The names are canonicalized with
-    `ASDF:COERCE-NAME`. This is used by [`EXTRACT-LOADDEFS`][dd7e] and affects
-    the checks performed by the [`AUTOLOAD`][7da0] macro.
+    `ASDF:COERCE-NAME`. It is an [`AUTOLOAD-WARNING`][da95] if an [autoload][c7d6]
+    refers to a system not listed here. This is also used by
+    [`EXTRACT-LOADDEFS`][dd7e] and affects the checks performed by the [`AUTOLOAD`][7da0]
+    macro.
 
 <a id="x-28AUTOLOAD-3ASYSTEM-AUTO-LOADDEFS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
 
@@ -598,8 +638,10 @@ FIXME: Whenever
   [453a]: #x-28AUTOLOAD-3ADEFVAR-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFVAR/AUTOLOADED MGL-PAX:MACRO"
   [471f]: #x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29 "Introduction"
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"
+  [53ee]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compiled_file "\"compiled file\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
   [609c]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fmakun.htm "FMAKUNBOUND (MGL-PAX:CLHS FUNCTION)"
+  [612e]: #x-28AUTOLOAD-3A-40AUTOLOADED-20MGL-PAX-3AGLOSSARY-TERM-29 "autoloaded"
   [6166]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_comp.htm "WITH-COMPILATION-UNIT (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Packages"
   [6547]: http://www.lispworks.com/documentation/HyperSpec/Body/f_open.htm "OPEN (MGL-PAX:CLHS FUNCTION)"
@@ -609,6 +651,7 @@ FIXME: Whenever
   [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
   [81f7]: http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm "FUNCTION (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [8aca]: http://www.lispworks.com/documentation/HyperSpec/Body/v_pr_rda.htm "*PRINT-READABLY* (MGL-PAX:CLHS VARIABLE)"
+  [8b6e]: #x-28AUTOLOAD-3ADEFGENERIC-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFGENERIC/AUTOLOADED MGL-PAX:MACRO"
   [8dd7]: #x-28AUTOLOAD-3AAUTOLOAD-FBOUND-P-20FUNCTION-29 "AUTOLOAD:AUTOLOAD-FBOUND-P FUNCTION"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [990a]: #x-28AUTOLOAD-3ADEFPACKAGE-2FAUTOLOADED-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFPACKAGE/AUTOLOADED MGL-PAX:MACRO"
@@ -618,6 +661,7 @@ FIXME: Whenever
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c1d4]: #x-28AUTOLOAD-3A-40AUTOMATIC-LOADDEFS-20MGL-PAX-3ASECTION-29 "Automatically Generating Loaddefs"
+  [c7d6]: #x-28AUTOLOAD-3A-40AUTOLOAD-20MGL-PAX-3AGLOSSARY-TERM-29 "autoload"
   [c7f7]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defgen.htm "DEFGENERIC (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
@@ -629,8 +673,11 @@ FIXME: Whenever
   [da95]: #x-28AUTOLOAD-3AAUTOLOAD-WARNING-20CONDITION-29 "AUTOLOAD:AUTOLOAD-WARNING CONDITION"
   [dd7e]: #x-28AUTOLOAD-3AEXTRACT-LOADDEFS-20FUNCTION-29 "AUTOLOAD:EXTRACT-LOADDEFS FUNCTION"
   [ddfa]: #x-28AUTOLOAD-3A-40LOADING-SYSTEMS-20MGL-PAX-3ASECTION-29 "Loading Systems"
+  [e4a5]: #x-28AUTOLOAD-3A-40LOADDEF-20MGL-PAX-3AGLOSSARY-TERM-29 "loaddef"
+  [e8f2]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_s.htm#source_file "\"source file\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
   [e90c]: #x-28AUTOLOAD-3ARECORD-LOADDEFS-20FUNCTION-29 "AUTOLOAD:RECORD-LOADDEFS FUNCTION"
   [ea6a]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#condition_handler "\"condition handler\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
+  [ead6]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defcla.htm "DEFCLASS (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [ebea]: http://www.lispworks.com/documentation/HyperSpec/Body/m_declai.htm "DECLAIM (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [eea4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fdefin.htm "FDEFINITION (MGL-PAX:CLHS FUNCTION)"
   [f43d]: #x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29 "Conditions"
