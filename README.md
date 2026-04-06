@@ -38,19 +38,19 @@ for the latest version.
     - _Homepage:_ [https://github.com/melisgl/autoload](https://github.com/melisgl/autoload)
     - _Bug tracker:_ [https://github.com/melisgl/autoload/issues](https://github.com/melisgl/autoload/issues)
     - _Source control:_ [GIT](https://github.com/melisgl/autoload.git)
-    - *Depends on:* closer-mop
+    - *Depends on:* closer-mop, mgl-pax-bootstrap
 
 <a id="x-28-22autoload-doc-22-20ASDF-2FSYSTEM-3ASYSTEM-29"></a>
 
 - [system] **"autoload-doc"**
 
-    - _Description:_ Parts of [`autoload`][5968] that depend on
-        `mgl-pax`. Since `mgl-pax` depends on
-        [`autoload`][7da0], these parts get a separate system to break the
-        circularity. Note that `mgl-pax/navigate` and
-        `mgl-pax/document` depend on this system, which
-        renders most of this an implementation detail.
-    - *Depends on:* [autoload][5968], mgl-pax, named-readtables, pythonic-string-reader
+    - _Description:_ Parts of the Autoload library that depend on
+        `mgl-pax` are in this system to avoid the circular
+        dependencies that would arise because `mgl-pax`
+        depends on [`autoload`][5968]. Note that
+        `mgl-pax/navigate` and `mgl-pax/document` depend on this system, which renders most of this an
+        implementation detail.
+    - *Depends on:* [autoload][5968], dref, mgl-pax, named-readtables, pythonic-string-reader
 
 <a id="x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29"></a>
 

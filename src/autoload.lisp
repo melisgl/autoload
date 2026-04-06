@@ -1,6 +1,33 @@
 (in-package :autoload)
 
-;;;; @BASICS
+(defsection @basics (:title "Basics")
+  (@autoload glossary-term)
+  (@loaddef glossary-term)
+  (@auto glossary-term)
+  (@loading-systems section)
+  (@conditions section)
+  (@functions section)
+  (@variables section)
+  (@packages section))
+
+(define-glossary-term @autoload (:title "autoload")
+  "An autoload definition defines a stub that, when used, triggers
+  loading of an ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.")
+
+(define-glossary-term @loaddef (:title "loaddef")
+  "A loaddef is either an @AUTOLOAD or some other Lisp form that
+  foreshadows a definition without setting up autoloading of an
+  ASDF:SYSTEM. See DEFVAR/AUTO and DEFPACKAGE/AUTO.")
+
+(define-glossary-term @auto (:title "auto")
+  "An auto definition, such as DEFUN/AUTO, DEFGENERIC/AUTO,
+  DEFCLASS/AUTO, DEFPACKAGE/AUTO, marks the definition for
+  @AUTOMATIC-LOADDEFS and signals an AUTOLOAD-WARNING if there was no
+  corresponding @LOADDEF.")
+
+
+(defsection @loading-systems (:title "Loading Systems")
+  """[autoload-system-for function][docstring]""")
 
 ;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
 ;;; loaded
@@ -82,6 +109,11 @@
            system-name kind name deps 'system-auto-depends-on
            (asdf:component-name *autoload-system*)))))
     (maybe-gather-unresolved-loaddef name kind)))
+
+
+(defsection @conditions (:title "Conditions")
+  (autoload-error condition)
+  (autoload-warning condition))
 
 (define-condition autoload-warning (simple-warning)
   ()
@@ -180,7 +212,11 @@
 (defsetf state set-state)
 
 
-;;;; @FUNCTIONS
+(defsection @functions (:title "Functions")
+  (autoload macro)
+  (autoload-fbound-p function)
+  (defun/auto macro)
+  (defgeneric/auto macro))
 
 (defmacro autoload (name system-name &key (arglist nil arglistp) docstring)
   "Define a stub function with NAME that loads SYSTEM-NAME, expecting
@@ -344,7 +380,10 @@
                       `(:docstring ,docstring)))))))
 
 
-;;;; @CLASSES
+(defsection @classes (:title "Classes")
+  (autoload-class macro)
+  (autoload-class-p function)
+  (defclass/auto macro))
 
 (defmacro autoload-class (class-name system-name &key docstring)
   "Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
@@ -455,7 +494,8 @@
                             `(:docstring ,docstring)))))))
 
 
-;;;; @VARIABLES
+(defsection @variables (:title "Variables")
+  (defvar/auto macro))
 
 ;;; Be wary of changing this: although not exported, it is a loaddef.
 (defmacro foreshadow-defvar (var &key (init nil initp) docstring)
@@ -546,7 +586,8 @@
              `(:docstring ,docstring)))))))
 
 
-;;;; @PACKAGES
+(defsection @packages (:title "Packages")
+  (defpackage/auto macro))
 
 (defmacro defpackage/auto (name &rest options)
   "Like DEFPACKAGE, but mark the package for @AUTOMATIC-LOADDEFS and
@@ -882,55 +923,13 @@
          ,on-restart))))
 
 
-(defclass autoload-cl-source-file (asdf:cl-source-file)
-  ()
-  (:documentation "The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
-@ASDF-INTEGRATION relies on source files belonging to this class. When
-combining autoload with another ASDF extension that has its own
-ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
-both, and use that as :DEFAULT-COMPONENT-CLASS."))
-
-(defmacro with-autoload-system ((autoload-cl-source-file) &body body)
-  (let ((cl-file (gensym "CL-FILE"))
-        (loaddefs-file-p (gensym "LOADDEFS-FILE-P")))
-    `(let* ((,cl-file ,autoload-cl-source-file)
-            (*autoload-system* (asdf:component-system ,cl-file))
-            (,loaddefs-file-p (loaddefs-file-p ,cl-file)))
-       (loop
-         (with-record-loaddefs-restart
-             (return (progn ,@body))
-             :test ,loaddefs-file-p
-             :on-restart (record-loaddefs *autoload-system*))))))
-
-(defun loaddefs-file-p (autoload-cl-source-file)
-  (declare (type autoload-cl-source-file autoload-cl-source-file))
-  (let* ((f autoload-cl-source-file)
-         (f-file (asdf:component-pathname f))
-         (system (asdf:component-system f))
-         (loaddefs-file (ignore-errors (split-system-auto-loaddefs system)))
-         (loaddefs-file (when loaddefs-file
-                           (asdf:system-relative-pathname system
-                                                          loaddefs-file))))
-    (declare (type autoload-system system))
-    (uiop:pathname-equal f-file loaddefs-file)))
-
-(defmethod asdf:perform :around ((op asdf:compile-op)
-                                 (c autoload-cl-source-file))
-  (with-autoload-system (c)
-    (call-next-method)))
-
-(defmethod asdf:perform :around ((op asdf:load-op)
-                                 (c autoload-cl-source-file))
-  (with-autoload-system (c)
-    (call-next-method)))
-
-(defmethod asdf:perform :around ((op asdf:load-source-op)
-                                 (c autoload-cl-source-file))
-  (with-autoload-system (c)
-    (call-next-method)))
-
-
-;;;; @ASDF-INTEGRATION
+(defsection @asdf-integration (:title "ASDF Integration")
+  (autoload-system class)
+  (autoload-cl-source-file class)
+  (system-auto-depends-on (reader autoload-system))
+  (system-auto-loaddefs (reader autoload-system))
+  (autodeps function)
+  (@automatic-loaddefs section))
 
 (defclass autoload-system (asdf:system)
   ((auto-depends-on
@@ -1019,6 +1018,55 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
   (unless (slot-value system 'asdf::default-component-class)
     (setf (slot-value system 'asdf::default-component-class)
           'autoload-cl-source-file)))
+
+
+(defclass autoload-cl-source-file (asdf:cl-source-file)
+  ()
+  (:documentation "The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
+@ASDF-INTEGRATION relies on source files belonging to this class. When
+combining autoload with another ASDF extension that has its own
+ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
+both, and use that as :DEFAULT-COMPONENT-CLASS."))
+
+(defmacro with-autoload-system ((autoload-cl-source-file) &body body)
+  (let ((cl-file (gensym "CL-FILE"))
+        (loaddefs-file-p (gensym "LOADDEFS-FILE-P")))
+    `(let* ((,cl-file ,autoload-cl-source-file)
+            (*autoload-system* (asdf:component-system ,cl-file))
+            (,loaddefs-file-p (loaddefs-file-p ,cl-file)))
+       (loop
+         (with-record-loaddefs-restart
+             (return (progn ,@body))
+             :test ,loaddefs-file-p
+             :on-restart (record-loaddefs *autoload-system*))))))
+
+(defun loaddefs-file-p (autoload-cl-source-file)
+  (declare (type autoload-cl-source-file autoload-cl-source-file))
+  (let* ((f autoload-cl-source-file)
+         (f-file (asdf:component-pathname f))
+         (system (asdf:component-system f))
+         (loaddefs-file (ignore-errors (split-system-auto-loaddefs system)))
+         (loaddefs-file (when loaddefs-file
+                           (asdf:system-relative-pathname system
+                                                          loaddefs-file))))
+    (declare (type autoload-system system))
+    (uiop:pathname-equal f-file loaddefs-file)))
+
+(defmethod asdf:perform :around ((op asdf:compile-op)
+                                 (c autoload-cl-source-file))
+  (with-autoload-system (c)
+    (call-next-method)))
+
+(defmethod asdf:perform :around ((op asdf:load-op)
+                                 (c autoload-cl-source-file))
+  (with-autoload-system (c)
+    (call-next-method)))
+
+(defmethod asdf:perform :around ((op asdf:load-source-op)
+                                 (c autoload-cl-source-file))
+  (with-autoload-system (c)
+    (call-next-method)))
+
 
 ;;; ASDF:PERFORM is designed for side effects, and we can't just
 ;;; return stuff normally. LIST-AUTOLOADED-OP gathers systems here.
@@ -1082,7 +1130,12 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
     (reverse *listed-autodeps*)))
 
 
-;;;; @AUTOMATIC-LOADDEFS
+(defsection @automatic-loaddefs (:title "Automatically Generating Loaddefs")
+  (extract-loaddefs function)
+  (write-loaddefs function)
+  (record-loaddefs function)
+  (check-loaddefs function)
+  (record-loaddefs restart))
 
 (defvar *gathering-unresolved-from-system* nil)
 (defvar *gathered-unresolved-loaddefs*)

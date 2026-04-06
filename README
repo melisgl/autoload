@@ -28,18 +28,18 @@ for the latest version.
 
     - Source control: [GIT](https://github.com/melisgl/autoload.git)
 
-    - Depends on: closer-mop
+    - Depends on: closer-mop, mgl-pax-bootstrap
 
 - [system] "autoload-doc"
 
-    - Description: Parts of autoload that depend on
-    mgl-pax. Since mgl-pax depends on
-    autoload, these parts get a separate system to break the
-    circularity. Note that mgl-pax/navigate and
-    mgl-pax/document depend on this system, which
-    renders most of this an implementation detail.
+    - Description: Parts of the Autoload library that depend on
+    mgl-pax are in this system to avoid the circular
+    dependencies that would arise because mgl-pax
+    depends on autoload. Note that
+    mgl-pax/navigate and mgl-pax/document depend on this system, which renders most of this an
+    implementation detail.
 
-    - Depends on: autoload, mgl-pax, named-readtables, pythonic-string-reader
+    - Depends on: autoload, dref, mgl-pax, named-readtables, pythonic-string-reader
 
 ## Introduction
 
