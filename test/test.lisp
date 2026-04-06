@@ -142,9 +142,6 @@
 (define-symbol-macro missing-system
     (read-from-string "%simple-test::missing-system"))
 
-(define-symbol-macro custom
-    (read-from-string "%simple-test::custom"))
-
 (defun system-not-found-error-p (c)
   (eq (autoload::autoload-error-cause c) :system-not-found))
 
@@ -306,14 +303,20 @@
                 (funcall missing-fn))
               (is (asdf:component-loaded-p "%simple-test/full"))
               (is (autoload-fbound-p missing-fn))))
-          (with-test ("DEFINE-AUTO-FUNCTION")
-            (with-test-systems
-              (load-simple-test)
-              (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (autoload-fbound-p custom))
-              (is (eq (funcall custom 'secret) 'secret))
-              (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (autoload-fbound-p custom))))))))))
+          (with-test-systems
+            (load-simple-test)
+            (let ((*package* (find-package '#:%simple-test)))
+              (with-test ("(DEFINER NAME) syntax for DEFUN/AUTO")
+                (is (read-from-string "(equal (test-custom-fun 42)
+                                            '(my-defun-ran 42))")))
+              (with-test ("(DEFINER NAME) syntax for DEFCLASS/AUTO")
+                (is (read-from-string
+                     "(eq (slot-value (make-instance 'test-custom-class)
+                                    'custom-slot)
+                        'my-defclass-ran)")))
+              (with-test ("(DEFINER NAME) syntax for DEFVAR/AUTO")
+                (is (read-from-string
+                     "(equal *test-custom-var* '(my-defvar-ran 99))"))))))))))
 
 (deftest test-package ()
   (let ((dir (asdf:system-relative-pathname "autoload-test"

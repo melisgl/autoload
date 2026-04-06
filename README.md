@@ -292,23 +292,15 @@ circular. The rules for loading are as follows.
     corresponding loaddef.
     
     Also, warn if `NAME` has never been [`AUTOLOAD-FBOUND-P`][8dd7].
+    
+    `NAME` may be of the form (`DEFINER` `NAME`). In that case, instead of
+    `DEFUN`, `DEFINER` is used.
 
 <a id="x-28AUTOLOAD-3ADEFGENERIC-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFGENERIC/AUTO** *NAME LAMBDA-LIST &BODY BODY*
 
-    Like [`DEFUN/AUTO`][a825], but define `NAME` with [`DEFGENERIC`][c7f7].
-
-<a id="x-28AUTOLOAD-3ADEFINE-AUTO-FUNCTION-20MGL-PAX-3AMACRO-29"></a>
-
-- [macro] **DEFINE-AUTO-FUNCTION** *DEFINER NAME LAMBDA-LIST &BODY BODY*
-
-    Like [`DEFUN/AUTO`][a825], but establish a function binding for `NAME` with
-    `DEFINER`. For example, the autoloaded counterpart to `UIOP:DEFUN*` can
-    be defined as
-    
-        (defmacro defun*/auto (name lambda-list &body body)
-          `(define-auto-function uiop:defun* ,name ,lambda-list ,@body))
+    A shorthand for `(` [`DEFUN/AUTO`][a825] `(DEFGENERIC NAME) ...)`.
 
 <a id="x-28AUTOLOAD-3A-40VARIABLES-20MGL-PAX-3ASECTION-29"></a>
 
@@ -342,6 +334,9 @@ circular. The rules for loading are as follows.
     
     `DEFVAR/AUTO` warns if `VAR` does not have a loaddef in
     [`:AUTO-LOADDEFS`][0724].
+    
+    `VAR` may be of the form (`DEFINER` `VAR`). In that case, instead of
+    `DEFVAR`, `DEFINER` is used.
 
 <a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
 
@@ -358,9 +353,9 @@ circular. The rules for loading are as follows.
     The additivity means that instead of replacing the package
     definition or signaling errors on redefinition, it expands into
     individual package-altering operations such as [`SHADOW`][d0c4], [`USE-PACKAGE`][2264]
-    and [`EXPORT`][0c4f]. This allows the package state to be built incrementally.
-    `DEFPACKAGE/AUTO` may be used on the same package multiple
-    times.
+    and [`EXPORT`][0c4f]. This allows the package state to be built incrementally,
+    but the `(DEFINER NAME)` syntax is not supported. `DEFPACKAGE/AUTO`
+    may be used on the same package multiple times.
     
     In addition, `DEFPACKAGE/AUTO` deviates from `DEFPACKAGE` in the
     following ways.
@@ -656,7 +651,6 @@ circular. The rules for loading are as follows.
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c1d4]: #x-28AUTOLOAD-3A-40AUTOMATIC-LOADDEFS-20MGL-PAX-3ASECTION-29 "Automatically Generating Loaddefs"
   [c7d6]: #x-28AUTOLOAD-3A-40AUTOLOAD-20MGL-PAX-3AGLOSSARY-TERM-29 "autoload"
-  [c7f7]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defgen.htm "DEFGENERIC (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
   [d162]: http://www.lispworks.com/documentation/HyperSpec/Body/e_error.htm "ERROR (MGL-PAX:CLHS CONDITION)"

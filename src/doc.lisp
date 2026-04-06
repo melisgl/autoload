@@ -164,8 +164,7 @@
   (autoload macro)
   (autoload-fbound-p function)
   (defun/auto macro)
-  (defgeneric/auto macro)
-  (define-auto-function macro))
+  (defgeneric/auto macro))
 
 (defsection @classes (:title "Classes")
   (autoload-class macro)

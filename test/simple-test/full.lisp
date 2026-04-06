@@ -38,6 +38,21 @@
     x)
   (:documentation "foo-gf docstring"))
 
-(define-auto-function defun custom (x)
-  "custom doc"
-  x)
+(defmacro my-defun (name lambda-list &body body)
+  `(defun ,name ,lambda-list
+     (list 'my-defun-ran ,@body)))
+
+(defmacro my-defclass (name supers slots &rest options)
+  `(defclass ,name ,supers
+     ((custom-slot :initform 'my-defclass-ran) ,@slots)
+     ,@options))
+
+(defmacro my-defvar (name &optional value doc)
+  (declare (ignore doc))
+  `(defvar ,name (list 'my-defvar-ran ,value)))
+
+(defun/auto (my-defun test-custom-fun) (x) x)
+
+(defclass/auto (my-defclass test-custom-class) () ())
+
+(defvar/auto (my-defvar *test-custom-var*) 99)

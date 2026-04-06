@@ -6,6 +6,8 @@
 
 (in-package :cl)
 
+(autoload::foreshadow-defvar %simple-test::*test-custom-var* :init 99)
+
 (autoload::foreshadow-defvar %simple-test::*var/circular-value*)
 
 (autoload::foreshadow-defvar %simple-test::*var/complex-value*)
@@ -17,9 +19,6 @@
                              '("xxx" 7 :key nil t) :docstring
                              "*var/simple-value* docstring")
 
-(autoload:autoload %simple-test::custom "%simple-test/full" :arglist
-                   "(%simple-test::x)" :docstring "custom doc")
-
 (autoload:autoload %simple-test::foo "%simple-test/full" :arglist
                    "(%simple-test::x)" :docstring "foo docstring")
 
@@ -30,5 +29,10 @@
                    "%simple-test/full" :arglist
                    "(&optional (%simple-test::x '%3rd-party::z))")
 
+(autoload:autoload %simple-test::test-custom-fun "%simple-test/full" :arglist
+                   "(%simple-test::x)")
+
 (autoload:autoload (setf %simple-test::xxx) "%simple-test/full" :arglist
                    "(%simple-test::x)")
+
+(autoload:autoload-class %simple-test::test-custom-class "%simple-test/full")
