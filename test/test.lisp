@@ -74,6 +74,14 @@
                              :test #'equal)))
     (ignore-errors (delete-package '#:%xxx))
     (ignore-errors (delete-package '#:%yyy))))
+
+(deftest test-autoload-during-compile-or-load ()
+  (let ((*compile-file-pathname* #P"xxx"))
+    (signals (autoload-error)
+      (funcall (autoload xxx "xxx"))))
+  (let ((*load-pathname* #P"xxx"))
+    (signals (autoload-error)
+      (funcall (autoload xxx "xxx")))))
 
 
 (defun empty-file (pathname)
@@ -623,6 +631,7 @@
   (test-defvar-state)
   (test-defvar-init)
   (test-defpackage/auto-rename)
+  (test-autoload-during-compile-or-load)
   (let ((*compile-verbose* nil))
     (test-simple)
     (test-package)

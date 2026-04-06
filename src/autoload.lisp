@@ -1,45 +1,6 @@
 (in-package :autoload)
 
-;;;; Machinery for associating autoload stubs with function names,
-;;;; including [setf function names][clhs], and for recording the
-;;;; state of variable definitions.
-
-(declaim (inline kind-to-indicator))
-
-;;; Translate KIND to an package internal variable, which we use as an
-;;; indicator on SYMBOL-PLISTs.
-(defun kind-to-indicator (kind)
-  (ecase kind
-    ((:function) '%autoload-function)
-    ((:class) '%autoload-class)
-    ((:defvar) '%autoload-variable)))
-
-(defun state (name kind)
-  (multiple-value-bind (name setf*) (unpack-function-name name)
-    (getf (get name (kind-to-indicator kind)) setf*)))
-
-(defun unpack-function-name (name)
-  (cond ((symbolp name)
-         (values name nil))
-        ;; (SETF NAME) => NAME SETF.
-        ((and (consp name)
-              (eq (car name) 'setf)
-              (consp (cdr name))
-              (symbolp (cadr name))
-              (null (cddr name)))
-         (values (second name) (first name)))
-        (t
-         (error "~@<Unsupported function name ~S.~:@>" name))))
-
-(defun set-state (name kind fn)
-  (multiple-value-bind (name setf*) (unpack-function-name name)
-    (setf (getf (get name (kind-to-indicator kind)) setf*)
-          fn)))
-
-(defsetf state set-state)
-
-
-;;;; @SCAFFOLDING
+;;;; @BASICS
 
 ;;; The AUTOLOAD-SYSTEM in which the current file is being compiled or
 ;;; loaded
@@ -159,6 +120,11 @@
                    (system-name (autoload-error-system-name condition))
                    (cause (autoload-error-cause condition)))
                (cond
+                 ((eq cause :during-compile-or-load)
+                  (format stream "~@<Attempted to load ASDF:SYSTEM ~S ~
+                          for ~A ~S during ~S or ~S. See ~S.~:@>"
+                          system-name kind name
+                          'compile-file 'load '@loading-systems))
                  ((eq cause :system-not-found)
                   (format stream "~@<Could not find ASDF:SYSTEM ~S for ~
                           autoloaded ~A ~S. It may not be installed. ~
@@ -173,6 +139,45 @@
                           ASDF:SYSTEM ~S.~:@>"
                           kind name system-name))))))
   (:documentation "Signalled for some failures during @LOADING-SYSTEMS."))
+
+
+;;;; Machinery for associating autoload stubs with function names,
+;;;; including [setf function names][clhs], and for recording the
+;;;; state of variable definitions.
+
+(declaim (inline kind-to-indicator))
+
+;;; Translate KIND to a package-internal variable, which we use as an
+;;; indicator on SYMBOL-PLISTs.
+(defun kind-to-indicator (kind)
+  (ecase kind
+    ((:function) '%autoload-function)
+    ((:class) '%autoload-class)
+    ((:defvar) '%autoload-variable)))
+
+(defun state (name kind)
+  (multiple-value-bind (name setf*) (unpack-function-name name)
+    (getf (get name (kind-to-indicator kind)) setf*)))
+
+(defun unpack-function-name (name)
+  (cond ((symbolp name)
+         (values name nil))
+        ;; (SETF NAME) => NAME SETF.
+        ((and (consp name)
+              (eq (car name) 'setf)
+              (consp (cdr name))
+              (symbolp (cadr name))
+              (null (cddr name)))
+         (values (second name) (first name)))
+        (t
+         (error "~@<Unsupported function name ~S.~:@>" name))))
+
+(defun set-state (name kind fn)
+  (multiple-value-bind (name setf*) (unpack-function-name name)
+    (setf (getf (get name (kind-to-indicator kind)) setf*)
+          fn)))
+
+(defsetf state set-state)
 
 
 ;;;; @FUNCTIONS
@@ -264,8 +269,8 @@
            (values sexp t)))))
 
 (defun autoload-fbound-p (name)
-  "See if NAME's function definition is an autoloader function
-  established by AUTOLOAD."
+  "See if NAME's function definition is an autoload stub established
+  by AUTOLOAD."
   (check-type name (or symbol list))
   ;; This detects redefinitions by DEFUN too.
   (let ((fn (fdefinition* name)))
@@ -293,7 +298,7 @@
 (defmacro defun/auto (name lambda-list &body body)
   "Like DEFUN, but mark the function for @AUTOMATIC-LOADDEFS and
   silence redefinition warnings. See EXTRACT-LOADDEFS for the
-  corresponding loaddef.
+  corresponding @LOADDEF.
 
   Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
 
@@ -361,7 +366,11 @@
 
   When AUTOLOAD-CLASS is macroexpanded during the compilation or
   loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
-  SYSTEM-NAME is not among those declared in @AUTO-DEPENDS-ON."
+  SYSTEM-NAME is not among those declared in @AUTO-DEPENDS-ON.
+
+  Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
+  subclass of CLASS-NAME may run twice in the context of the
+  MAKE-INSTANCE that triggers autoloading."
   (check-loaddef class-name :class system-name)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (when (or (null (find-class ',class-name nil))
@@ -382,23 +391,24 @@
 (defmethod initialize-instance :around ((instance %autoload-class)
                                         &rest initargs
                                         &key &allow-other-keys)
-  ;; FIXME: load all autoloads systems
-  (let ((stub-class (find-if #'autoload-class-p
-                             (closer-mop:class-precedence-list
-                              (class-of instance)))))
-    (assert stub-class)
-    (let* ((stub-name (class-name stub-class))
-           (system-name (get stub-name '%autoload-system)))
-      (autoload-system-for system-name stub-name :class)
-      ;; The class is redefined. Instead of CALL-NEXT-METHOD,
-      ;; invoke INITIALIZE-INSTANCE again to recompute the
-      ;; effective methods. If there are other
-      ;; AUTOLOAD-CLASS-Ps in the class precedence list, the
-      ;; next one will be picked up here.
-      (apply #'initialize-instance instance initargs))))
+  (let* ((cpl (closer-mop:class-precedence-list (class-of instance)))
+         (stub-classes (remove-if-not #'autoload-class-p cpl)))
+    (cond (stub-classes
+           (dolist (stub-class stub-classes)
+             (let* ((stub-name (class-name stub-class))
+                    (system-name (get stub-name '%autoload-system)))
+               (autoload-system-for system-name stub-name :class)))
+           ;; Instead of CALL-NEXT-METHOD, invoke INITIALIZE-INSTANCE
+           ;; again to recompute the effective methods.
+           (apply #'initialize-instance instance initargs))
+          (t
+           ;; There are no stubs, so the :AROUND method must have been
+           ;; reentered after the class was already redefined. This
+           ;; happens on ECL, CLISP and ABCL.
+           (call-next-method)))))
 
 (defun autoload-class-p (class-designator)
-  "See if the class denoted by CLASS-DESIGNATOR was declared as
+  "See if the class denoted by CLASS-DESIGNATOR was declared as an
   AUTOLOAD-CLASS and was not redefined or deleted since. Subclasses do
   not inherit this property."
   (let ((class (if (symbolp class-designator)
@@ -408,15 +418,14 @@
                ;; It can be a different class object if there was an
                ;; intervening (SETF (FIND-CLASS ...) NIL).
                (eq (state (class-name class) :class) class))
-      ;; The class object is unchanged, but it may still be a
-      ;; redefined.
+      ;; The class object is unchanged, but it may not be the stub.
       (let ((supers (closer-mop:class-direct-superclasses class)))
         (and (= (length supers) 1)
              (eq (class-name (first supers)) '%autoload-class))))))
 
 (defmacro defclass/auto (name direct-superclasses direct-slots &rest options)
-  "Like DEFCLASS, but mark the function for @AUTOMATIC-LOADDEFS. See
-  EXTRACT-LOADDEFS for the corresponding loaddef.
+  "Like DEFCLASS, but mark the class for @AUTOMATIC-LOADDEFS. See
+  EXTRACT-LOADDEFS for the corresponding @LOADDEF.
 
   Also, warn if NAME has never been AUTOLOAD-CLASS-P.
 
@@ -440,8 +449,7 @@
   (destructuring-bind (name docstring) info
     `((autoload-class ,name ,system-name
                       ,@(let ((docstring
-                                ;; Prefer the current one. FIXME?
-                                (or (documentation name 'function)
+                                (or (documentation name 'type)
                                     docstring)))
                           (when (and process-docstring docstring)
                             `(:docstring ,docstring)))))))
@@ -464,7 +472,7 @@
 
 (defmacro defvar/auto (var &optional (val nil valp) doc)
   "Like DEFVAR, but mark the variable for @AUTOMATIC-LOADDEFS. See
-  EXTRACT-LOADDEFS for the corresponding loaddef.
+  EXTRACT-LOADDEFS for the corresponding @LOADDEF.
 
   Also, this works with the _global_ binding on Lisps that support
   it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
@@ -481,22 +489,23 @@
   => 1
   ```
 
-  In case the global binding has been set in between the corresponding
-  [loaddef][ extract-loaddefs] and the first evaluation of this form,
+  In case the global binding has been set between the [corresponding
+  loaddef][ extract-loaddefs] and the first evaluation of this form,
   VAL is evaluated for side effect.
 
   DEFVAR/AUTO warns if VAR does not have a loaddef in
   @AUTO-LOADDEFS.
 
   VAR may be of the form (DEFINER VAR). In that case, instead of
-  DEFVAR, DEFINER is used."
+  DEFVAR, DEFINER is used. Note that DEFPARAMETER is not a suitable
+  DEFINER, as it doesn't follow DEFVAR semantics."
   (multiple-value-bind (definer var) (unpack-name-with-definer var 'defvar)
     (maybe-record-autoload-info 'defvar/auto var val valp doc)
     `(progn
        (maybe-signal-missing-loaddef ',var :defvar)
        (,definer ,var)
        ;; Only evaluate VAL if necessary to mimic the semantics of
-       ;; DEFVAR, but
+       ;; DEFVAR, and evaluate VAL for side effect if necessary.
        ,@(when valp
            `((cond ((not (symbol-globally-boundp ',var))
                     (setf (symbol-global-value ',var) ,val))
@@ -542,10 +551,10 @@
 (defmacro defpackage/auto (name &rest options)
   "Like DEFPACKAGE, but mark the package for @AUTOMATIC-LOADDEFS and
   extend the existing definition additively. See EXTRACT-LOADDEFS for
-  the corresponding loaddefs.
+  the corresponding @LOADDEFs.
 
   The additivity means that instead of replacing the package
-  definition or signaling errors on redefinition, it expands into
+  definition or signalling errors on redefinition, it expands into
   individual package-altering operations such as SHADOW, USE-PACKAGE
   and EXPORT. This allows the package state to be built incrementally,
   but the `(DEFINER NAME)` syntax is not supported. DEFPACKAGE/AUTO
@@ -702,8 +711,8 @@
                  (canonical-name name))
                (->s (names)
                  ;; REMOVE-DUPLICATES because DO-SYMBOLS may visit
-                 ;; execute symbols that are inherited from multiple
-                 ;; packages multiple times and also due to
+                 ;; symbols that are inherited from multiple packages
+                 ;; multiple times and also due to
                  ;; https://gitlab.com/embeddable-common-lisp/ecl/-/work_items/827.
                  (remove-duplicates
                   (sort (mapcar #'canonical-name names) #'string<)
@@ -745,7 +754,7 @@
             ;; skipped because a package was missing, then INTERN
             ;; makes the symbol present, which will cause a package
             ;; conflict in any later USE-PACKAGE, SHADOWING-IMPORT or
-            ;; IMPORT that tried to make another symbol with the same
+            ;; IMPORT that tries to make another symbol with the same
             ;; name accessible.
             (push `(export* ',(->s exports) ,(-> pkg-name))
                   phase-5-export)))))
@@ -943,7 +952,7 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
     list of the form
 
         (loaddefs-file &key (process-arglist t) (process-docstring t)
-                            packages test)
+                            packages (test t))
 
     - LOADDEFS-FILE designates the pathname where [RECORD-LOADDEFS][
       function] writes the [extracted loaddefs][ extract-loaddefs].
@@ -1084,7 +1093,7 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
   (when (and *autoload-system*
              (eq *autoload-system* *gathering-unresolved-from-system*)
              (autoloadp name kind))
-    ;; We are called from macros, which can expanded multiple times.
+    ;; We are called from macros, which can be expanded multiple times.
     (pushnew `(,kind ,name) *gathered-unresolved-loaddefs*
              :test #'equal)))
 
@@ -1125,7 +1134,7 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 
 (defun extract-loaddefs (system &key (process-arglist t) (process-docstring t)
                          packages)
-  "Return a list of so-called loaddef forms that set up autoloading
+  "Return a list of @LOADDEF forms that set up autoloading
   for definitions such as DEFUN/AUTO in @AUTO-DEPENDS-ON of
   SYSTEM.
 
@@ -1149,10 +1158,10 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
   - If PROCESS-DOCSTRING, then the docstrings extracted from @AUTO
     definitions will be associated with the definition.
 
-  Note that if a function is not defined with DEFUN/AUTO or its kin in
-  @BASICS, then EXTRACT-LOADDEFS will not detect it. For such
-  functions, AUTOLOAD forms must be written manually. Similar
-  considerations apply to variables and packages."
+  Note that if a function is not defined with DEFUN/AUTO, then
+  EXTRACT-LOADDEFS will not detect it. For such functions, AUTOLOAD
+  forms must be written manually. Similar considerations apply to
+  variables and packages."
   (let* ((infos (without-asdf-session
                   (mapcan #'extract-autoload-infos
                           (system-auto-depends-on (asdf:find-system system)))))
@@ -1177,12 +1186,12 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
                         loaddefs)
                 #'string< :key #'cdr)))
 
-(defun write-loaddefs (forms stream)
-  "Write the autoload FORMS to STREAM so they can be LOADed or
-included in an ASDF:DEFSYSTEM."
+(defun write-loaddefs (loaddefs stream)
+  "Write LOADDEFS to STREAM so they can be LOADed or included in an
+ASDF:DEFSYSTEM."
   (with-loaddefs-file-syntax
     (format stream "~S~%~%" `(in-package :cl))
-    (format stream "~{~S~%~^~%~}" forms)))
+    (format stream "~{~S~%~^~%~}" loaddefs)))
 
 (defun read-loaddefs-file (pathname)
   (with-loaddefs-file-syntax

@@ -98,10 +98,10 @@
   => ((autoload foo "my-lib/full" :arglist "(x)" :docstring "doc"))
   ```
 
-  This is implemented by loading the :AUTO-DEPENDS-ON of `my-lib` and
-  recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility
-  used by [RECORD-LOADDEFS][ function], which writes its results to
-  the system's @AUTO-LOADDEFS, `"loaddefs.lisp"` in the above example.
+  This is implemented by loading the @AUTO-DEPENDS-ON of `my-lib` and
+  recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility used
+  by [RECORD-LOADDEFS][ function], which writes its results to the
+  system's @AUTO-LOADDEFS, `"loaddefs.lisp"` in the above example.
   So, all we need to do is call it to regenerate the loaddefs file:
 
   ```
