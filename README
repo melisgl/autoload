@@ -22,9 +22,9 @@ for the latest version.
 
     - Mailto: [mega@retes.hu](mailto:mega@retes.hu)
 
-    - Homepage: [https://github.com/melisgl/autoload](https://github.com/melisgl/autoload)
+    - Homepage: <https://github.com/melisgl/autoload>
 
-    - Bug tracker: [https://github.com/melisgl/autoload/issues](https://github.com/melisgl/autoload/issues)
+    - Bug tracker: <https://github.com/melisgl/autoload/issues>
 
     - Source control: [GIT](https://github.com/melisgl/autoload.git)
 
@@ -52,7 +52,7 @@ sacrificing features or duplicating code, to minimize
 
 - the risk of breakage through dependencies.
 
-This library reduces the tension arising from the former two
+This library reduces the tension arising from the first two
 considerations by letting heavy dependencies be loaded on demand.
 The core idea is
 
@@ -62,7 +62,8 @@ The core idea is
          (apply ',name args)))
 
 Suppose we have a library called my-lib that autoloads
-my-lib/full. In my-lib, we could use AUTOLOAD as
+my-lib/full. In my-lib, we could use AUTOLOAD
+as
 
     (autoload foo "my-lib/full")
 
@@ -75,8 +76,9 @@ and have
 in my-lib/full.
 
 However, manually keeping the loaddefs (e.g. the AUTOLOAD form
-above) in sync with the definitions is fragile, so instead we mark
-autoloaded functions in the my-lib/full system:
+above) in sync with the definitions is fragile, so we introduce the
+DEFUN/AUTO autodef to mark autoloaded functions in the
+my-lib/full system:
 
     (defun/auto foo (x)
       "doc"
@@ -114,7 +116,7 @@ So, all we need to do is call it to regenerate the loaddefs file:
 To prevent the loaddefs file from getting out of sync with the
 definitions, ASDF:TEST-SYSTEM calls CHECK-LOADDEFS by default.
 
-ASDF, and by extension Quicklisp, don't know about the declared
+ASDF, and by extension Quicklisp, doesn't know about the declared
 :AUTO-DEPENDS-ON, so (QL:QUICKLOAD "my-lib") does not install the
 autoloaded dependencies. This can be done with
 
@@ -128,31 +130,29 @@ in deployment):
 
 ## Basics
 
-- [glossary-term] autoload
-
-    An autoload definition defines a stub that, when used, triggers
-    loading of an ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.
-
 - [glossary-term] loaddef
 
-    A loaddef is either an autoload or some other Lisp form that
-    foreshadows a definition without setting up autoloading of an
-    ASDF:SYSTEM. See DEFVAR/AUTO and DEFPACKAGE/AUTO.
+    A loaddef is a preliminary definition that serves as a stand-in
+    until the fully-realized implementation is loaded. Accessing it may
+    or may not load a system. See
+    LOADDEF-FUNCTION-P, LOADDEF-CLASS-P, LOADDEF-VARIABLE-P and
+    LOADDEF-PACKAGE-P.
 
-- [glossary-term] auto
+- [glossary-term] autodef
 
-    An auto definition, such as DEFUN/AUTO, DEFGENERIC/AUTO,
-    DEFCLASS/AUTO, DEFPACKAGE/AUTO, marks the definition for
-    Automatically Generating Loaddefs and signals an AUTOLOAD-WARNING if there was no
-    corresponding loaddef.
+    An autodef (e.g. (DEFUN/AUTO NAME ...)) performs the job of its
+    plain counterpart (DEFUN). In addition, it marks the definition (of
+    NAME as a function) for Automatically Generating Loaddefs and, at the time of the
+    first such autodef, it signals an AUTOLOAD-WARNING if NAME has not
+    been declared as a loaddef (has never been LOADDEF-FUNCTION-P). See
+    DEFUN/AUTO, DEFCLASS/AUTO, DEFVAR/AUTO and DEFPACKAGE/AUTO.
 
 ### Loading Systems
 
-When an autoload definition is used, it triggers the loading of
-ASDF:SYSTEMs. Unlike normal ASDF dependencies (declared in
-:DEPENDS-ON), autoload dependencies
-(may be declared in :AUTO-DEPENDS-ON) are allowed to be circular.
-The rules for loading are as follows.
+Function and class loaddefs trigger the loading of ASDF:SYSTEMs.
+Unlike normal ASDF dependencies (declared in :DEPENDS-ON), autoload
+dependencies (which may be declared in :AUTO-DEPENDS-ON) are allowed
+to be circular. The rules for loading are as follows.
 
 1. It is an AUTOLOAD-ERROR if loading is triggered during compile
    time or during a LOAD of either a source file or a
@@ -167,15 +167,9 @@ The rules for loading are as follows.
    environment. Errors signalled during the load are not handled or
    resignalled by the Autoload library.
 
-4. It is an AUTOLOAD-ERROR if the definition established by the
-   autoload is not redefined as a non-autoload definition or
-   deleted by the loaded system.
-
-    For AUTOLOAD, this means that the autoload function stub must
-     be redefined as a normal function (e.g. by DEFUN, DEFUN/AUTO)
-     or made FMAKUNBOUND. For AUTOLOAD-CLASS, the class stub must be
-     redefined with DEFCLASS, DEFCLASS/AUTO or deleted with (SETF
-     (FIND-CLASS ...) NIL).
+4. It is an AUTOLOAD-ERROR if the loaddef is not replaced by a
+   normal definition or deleted by the loaded system, that is, when
+   it remains a loaddef (e.g. in terms of LOADDEF-FUNCTION-P).
 
 ### Conditions
 
@@ -185,25 +179,25 @@ The rules for loading are as follows.
 
 - [condition] AUTOLOAD-WARNING SIMPLE-WARNING
 
-    See AUTOLOAD, autos and :AUTO-DEPENDS-ON for when
-    this is signalled.
+    See AUTOLOAD, autodef and :AUTO-DEPENDS-ON for
+    when this is signalled.
 
 ### Functions
 
 - [macro] AUTOLOAD NAME SYSTEM-NAME &KEY (ARGLIST NIL) DOCSTRING
 
-    Define a stub function with NAME that loads SYSTEM-NAME, expecting
-    it to redefine the function, and then calls the newly loaded
-    definition. Return NAME. The arguments are not evaluated. If NAME
-    has an FDEFINITION and it is not AUTOLOAD-FBOUND-P, then do
-    nothing and return NIL.
+    This is the loaddef for autodef DEFUN/AUTO.
+
+    Define a function stub with NAME and return NAME. The arguments are
+    not evaluated. If NAME has an FDEFINITION and it is not
+    LOADDEF-FUNCTION-P, then this does nothing and returns NIL.
 
     The stub first loads SYSTEM-NAME, then it APPLYs
     the function NAME to the arguments originally provided to the stub.
 
     The stub is not defined at compile time, which matches the
-    required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
-    and NOTINLINE.
+    required semantics of DEFUN. NAME is DECLAIMed with FTYPE
+    FUNCTION and NOTINLINE.
 
     - ARGLIST will be installed as the stub's arglist if specified and
       it's supported on the platform (currently only SBCL). If ARGLIST
@@ -222,21 +216,24 @@ The rules for loading are as follows.
     an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if SYSTEM-NAME is
     not among those declared in :AUTO-DEPENDS-ON.
 
-- [function] AUTOLOAD-FBOUND-P NAME
+- [function] LOADDEF-FUNCTION-P NAME
 
-    See if NAME's function definition is an autoload stub established
-    by AUTOLOAD.
+    See if an AUTOLOAD for NAME was established, and since then it has
+    not been redefined (e.g. with DEFUN/AUTO, DEFUN) or made
+    FMAKUNBOUND.
 
 - [macro] DEFUN/AUTO NAME LAMBDA-LIST &BODY BODY
 
-    Like DEFUN, but mark the function for Automatically Generating Loaddefs and
-    silence redefinition warnings. See EXTRACT-LOADDEFS for the
-    corresponding loaddef.
+    This is the autodef for the loaddef AUTOLOAD.
 
-    Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
+    Like DEFUN, but also silence redefinition warnings. NAME may be of
+    the form (DEFINER NAME). In that case, instead of DEFUN, DEFINER
+    is used to establish the underlying function binding.
 
-    NAME may be of the form (DEFINER NAME). In that case, instead of
-    DEFUN, DEFINER is used.
+    Loaddef: The corresponding loaddef is an AUTOLOAD form.
+    EXTRACT-LOADDEFS with PROCESS-ARGLIST T installs LAMBDA-LIST as the
+    ARGLIST. If PROCESS-ARGLIST is NIL, then ARGLIST will not be passed
+    to AUTOLOAD.
 
 - [macro] DEFGENERIC/AUTO NAME LAMBDA-LIST &BODY BODY
 
@@ -246,21 +243,25 @@ The rules for loading are as follows.
 
 - [macro] AUTOLOAD-CLASS CLASS-NAME SYSTEM-NAME &KEY DOCSTRING
 
+    This is the loaddef for autodef DEFCLASS/AUTO.
+
     Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
-    be loaded when it or any of its subclasses are
-    instantiated. Return the class object. The
-    arguments are not evaluated. If CLASS-NAME denotes a CLASS and it is not AUTOLOAD-CLASS-P, then do nothing and
-    return NIL.
+    be loaded when the class or any of its
+    subclasses are instantiated. Returns the
+    class object. The arguments are not evaluated. If CLASS-NAME
+    denotes a CLASS and it is not LOADDEF-CLASS-P,
+    then it does nothing and returns NIL.
 
     - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
       a generic docstring that says what system it autoloads will be
       used.
 
-    The dummy class is defined at compile time too to
+    The dummy class is also defined at compile time to
     approximate the semantics of DEFCLASS. The dummy class is a
-    STANDARD-CLASS with no superclasses or slots. These are visible
-    through introspection e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES.
-    Introspection does not trigger autoloading.
+    STANDARD-CLASS with unrelated superclasses and no slots. These are
+    visible through introspection (e.g. via
+    CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES). Introspection does not
+    trigger autoloading.
 
     When AUTOLOAD-CLASS is macroexpanded during the compilation or
     loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
@@ -270,33 +271,36 @@ The rules for loading are as follows.
     subclass of CLASS-NAME may run twice in the context of the
     MAKE-INSTANCE that triggers autoloading.
 
-- [function] AUTOLOAD-CLASS-P CLASS-DESIGNATOR
+- [function] LOADDEF-CLASS-P NAME
 
-    See if the class denoted by CLASS-DESIGNATOR was declared as an
-    AUTOLOAD-CLASS and was not redefined or deleted since. Subclasses do
-    not inherit this property.
+    See if an AUTOLOAD-CLASS for NAME was established, and since then
+    it has not been redefined (e.g. with DEFCLASS/AUTO, DEFCLASS) or
+    deleted (with (SETF (FIND-CLASS ...) NIL)). Subclasses do not
+    inherit this property.
 
 - [macro] DEFCLASS/AUTO NAME DIRECT-SUPERCLASSES DIRECT-SLOTS &REST OPTIONS
 
-    Like DEFCLASS, but mark the class for Automatically Generating Loaddefs. See
-    EXTRACT-LOADDEFS for the corresponding loaddef.
+    This is the autodef for the loaddef AUTOLOAD-CLASS.
 
-    Also, warn if NAME has never been AUTOLOAD-CLASS-P.
-
-    NAME may be of the form (DEFINER NAME). In that case, instead of
-    DEFCLASS, DEFINER is used.
+    Like DEFCLASS. NAME may be of the form (DEFINER NAME). In that
+    case, instead of DEFCLASS, DEFINER is used to establish the
+    underlying class definition.
 
 ### Variables
 
+- [function] LOADDEF-VARIABLE-P NAME
+
+    See if a loaddef was generated from a
+    DEFVAR/AUTO for NAME, but this autodef has not been evaluated.
+
 - [macro] DEFVAR/AUTO VAR &OPTIONAL (VAL NIL) DOC
 
-    Like DEFVAR, but mark the variable for Automatically Generating Loaddefs. See
-    EXTRACT-LOADDEFS for the corresponding loaddef.
+    This is an autodef with no public loaddef. See below.
 
-    Also, this works with the global binding on Lisps that support
-    it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
-    when a system that uses DEFVAR with a default value is autoloaded
-    while that variable is locally bound:
+    Unlike DEFVAR, this works with the global binding on Lisps that
+    support it (currently Allegro, CCL, ECL, SBCL). This is to handle
+    the case when a system that uses DEFVAR with a default value is
+    autoloaded while that variable is locally bound:
 
         ;; Some base system only foreshadows *X*.
         (declaim (special *x*))
@@ -306,31 +310,40 @@ The rules for loading are as follows.
           *x*)
         => 1
 
-    In case the global binding has been set between the corresponding
-    loaddef and the first evaluation of this form,
-    VAL is evaluated for side effect.
+    Loaddef: The corresponding loaddef is not public and must be
+    generated. The generated loaddef declaims
+    the variable special and maybe sets its initial value and docstring.
+    If the initial value form in DEFVAR/AUTO is detected as a simple
+    constant form, then it is evaluated and its value is assigned to the
+    variable as in DEFVAR. Simple constant forms are strings, numbers,
+    characters, keywords, constants in the CL package, and QUOTEd nested
+    lists containing any of the previous or any symbol from the CL
+    package.
 
-    DEFVAR/AUTO warns if VAR does not have a loaddef in
-    :AUTO-LOADDEFS.
-
-    VAR may be of the form (DEFINER VAR). In that case, instead of
-    DEFVAR, DEFINER is used. Note that DEFPARAMETER is not a suitable
-    DEFINER, as it doesn't follow DEFVAR semantics.
+    In case the global binding of VAR has been set between the
+    corresponding loaddef and its first autodef, VAL is evaluated for
+    side effect.
 
 ### Packages
 
+- [function] LOADDEF-PACKAGE-P NAME
+
+    See if a loaddef was generated from a
+    DEFPACKAGE/AUTO for NAME, but this autodef has not been evaluated
+    nor has the package been deleted.
+
 - [macro] DEFPACKAGE/AUTO NAME &REST OPTIONS
 
-    Like DEFPACKAGE, but mark the package for Automatically Generating Loaddefs and
-    extend the existing definition additively. See EXTRACT-LOADDEFS for
-    the corresponding loaddefs.
+    This is an autodef with no public loaddef. See below.
 
-    The additivity means that instead of replacing the package
-    definition or signalling errors on redefinition, it expands into
-    individual package-altering operations such as SHADOW, USE-PACKAGE
-    and EXPORT. This allows the package state to be built incrementally,
-    but the (DEFINER NAME) syntax is not supported. DEFPACKAGE/AUTO
-    may be used on the same package multiple times.
+    Unlike DEFPACKAGE, if the package is already defined,
+    DEFPACKAGE/AUTO extends it additively. The additivity means that
+    instead of replacing the package definition or signalling errors on
+    redefinition, it expands into individual package-altering operations
+    such as SHADOW, USE-PACKAGE and EXPORT. This allows the package
+    state to be built incrementally, but it also means that
+    the (DEFINER NAME) syntax cannot be supported. DEFPACKAGE/AUTO is
+    idempotent.
 
     In addition, DEFPACKAGE/AUTO deviates from DEFPACKAGE in the
     following ways.
@@ -343,7 +356,26 @@ The rules for loading are as follows.
       not supported. Use ADD-PACKAGE-LOCAL-NICKNAME after the
       DEFPACKAGE/AUTO.
 
-    Alternatively, one may use, for example, DEFPACKAGE or
+    Loaddef: The corresponding loaddef is not public and must be
+    generated. As in the expansion of
+    DEFPACKAGE/AUTO itself, the generated operations are additive.
+
+    - The generated loaddef reconstructs the package states as they
+      exist after all :AUTO-DEPENDS-ON systems are loaded. Thus, manual
+      modifications after the DEFPACKAGE/AUTO definition (e.g. by
+      additional EXPORTs) are reflected in the loaddef.
+
+    - To handle circular dependencies, the loaddefs of all autodef
+      packages and those passed in the PACKAGES argument to
+      EXTRACT-LOADDEFS are generated in an interleaved manner. First,
+      all packages are created, then their state is reconstructed in
+      phases following DEFPACKAGE.
+
+    - Any reference to non-existent packages (e.g. in :USE) or symbols
+      in non-existent packages (e.g. :IMPORT-FROM) is silently skipped
+      when the loaddef is evaluated.
+
+    Instead of DEFPACKAGE/AUTO, one may use, for example, DEFPACKAGE or
     UIOP:DEFINE-PACKAGE and arrange for Automatically Generating Loaddefs for the
     package by listing it in :PACKAGES of :AUTO-LOADDEFS.
 
@@ -390,20 +422,20 @@ The rules for loading are as follows.
 
 - [class] AUTOLOAD-CL-SOURCE-FILE CL-SOURCE-FILE
 
-    The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
-    ASDF Integration relies on source files belonging to this class. When
-    combining autoload with another ASDF extension that has its own
-    ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
-    both, and use that as :DEFAULT-COMPONENT-CLASS.
+    This is the :DEFAULT-COMPONENT-CLASS of
+    AUTOLOAD-SYSTEM. ASDF Integration relies on source files belonging to
+    this class. When combining autoload with another ASDF extension that
+    has its own ASDF:CL-SOURCE-FILE subclass, define a new class that
+    inherits from both, and use that as :DEFAULT-COMPONENT-CLASS.
 
 - [reader] SYSTEM-AUTO-DEPENDS-ON AUTOLOAD-SYSTEM (:AUTO-DEPENDS-ON = NIL)
 
     This is the list of the names of systems that this
     system may autoload. The names are canonicalized with
-    ASDF:COERCE-NAME. It is an AUTOLOAD-WARNING if an autoload
-    refers to a system not listed here. This is also used by
-    EXTRACT-LOADDEFS and affects the checks performed by the AUTOLOAD
-    macro.
+    ASDF:COERCE-NAME. It is an AUTOLOAD-WARNING if a loaddef refers
+    to a system not listed here. This is also used by
+    EXTRACT-LOADDEFS and affects the checks performed by
+    Loading Systems.
 
 - [reader] SYSTEM-AUTO-LOADDEFS AUTOLOAD-SYSTEM (:AUTO-LOADDEFS = NIL)
 
@@ -428,11 +460,11 @@ The rules for loading are as follows.
 
 - [function] AUTODEPS SYSTEM &KEY (CROSS-AUTOLOADED T) INSTALLER
 
-    Return the list of the names of systems that may be autoloaded by
-    SYSTEM or any of its direct or indirect dependencies. This
-    recursively visits systems in the dependency tree, traversing both
-    normal (:DEPENDS-ON) and autoloaded (:AUTO-DEPENDS-ON) dependencies.
-    It works even if SYSTEM is not an AUTOLOAD-SYSTEM.
+    Return the list of system names that may be autoloaded by SYSTEM or
+    any of its direct or indirect dependencies. This recursively visits
+    systems in the dependency tree, traversing both normal (:DEPENDS-ON)
+    and autoloaded (:AUTO-DEPENDS-ON) dependencies. It works even if
+    SYSTEM is not an AUTOLOAD-SYSTEM.
 
     - CROSS-AUTOLOADED controls whether systems only reachable from
       SYSTEM via intermediate autoloaded dependencies are visited. Thus,
@@ -459,58 +491,26 @@ The rules for loading are as follows.
 
 - [function] EXTRACT-LOADDEFS SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES
 
-    Return a list of loaddef forms that set up autoloading
-    for definitions such as DEFUN/AUTO in :AUTO-DEPENDS-ON of
-    SYSTEM.
+    List the loaddef forms of the autodef definitions in
+    :AUTO-DEPENDS-ON of SYSTEM.
 
     There is rarely a need to call this function directly, as
     RECORD-LOADDEFS and CHECK-LOADDEFS provide
     ASDF Integration.
 
     Note that this is an expensive operation, as it loads or reloads the
-    direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
-    records the association with the system and the autoloaded
-    definitions such as DEFUN/AUTO.
+    direct dependencies listed in :AUTO-DEPENDS-ON one by one with
+    ASDF:LOAD-SYSTEM :FORCE T to find the autodefs.
 
-    - For function definitions such as DEFUN/AUTO, an AUTOLOAD loaddef
-    is emitted.
+    See the individual autodefs for descriptions of the generated
+    loaddefs.
 
-        If PROCESS-ARGLIST is T, then the autoload forms will pass the
-        ARGLIST argument of the corresponding DEFUN/AUTO to AUTOLOAD. If
-        it is NIL, then ARGLIST will not be passed to AUTOLOAD.
-
-    - For class definitions such as DEFCLASS/AUTO, an AUTOLOAD-CLASS
-    loaddef is emitted.
-
-    - For DEFVAR/AUTO, the emitted loaddef declaims the variable
-    special and maybe sets its initial value and docstring.
-
-        If the initial value form in DEFVAR/AUTO is detected as a simple
-        constant form, then it is evaluated and its value is assigned to
-        the variable as in DEFVAR. Simple constant forms are strings,
-        numbers, characters, keywords, constants in the CL package, and
-        QUOTEd nested lists containing any of the previous or any symbol
-        from the CL package.
-
-    - For DEFPACKAGE/AUTO and the provided PACKAGES,
-    individual package-altering loaddefs are emitted.
-
-        As in the expansion of DEFPACKAGE/AUTO itself, these
-        operations are additive. To handle circular dependencies, first
-        all packages are created, then their state is reconstructed in
-        phases following DEFPACKAGE.
-
-        Any reference to non-existent packages (e.g. in :USE) or symbols
-        in non-existent packages (e.g. :IMPORT-FROM) is silently
-        skipped.
-
-    - If PROCESS-DOCSTRING, then the docstrings extracted from auto
+    - If PROCESS-DOCSTRING, then the docstrings extracted from autodef
       definitions will be associated with the definition.
 
-    Note that if a function is not defined with DEFUN/AUTO, then
-    EXTRACT-LOADDEFS will not detect it. For such functions, AUTOLOAD
-    forms must be written manually. Similar considerations apply to
-    variables and packages.
+    Note that if a definition is not made with an autodef, then
+    EXTRACT-LOADDEFS will not detect it. For such functions, loaddefs
+    must be written manually.
 
 - [function] WRITE-LOADDEFS LOADDEFS STREAM
 
@@ -537,12 +537,12 @@ The rules for loading are as follows.
     In the AUTOLOAD-SYSTEM SYSTEM, check that both recorded and manual
     autoload declarations are correct.
 
-    - If there is an :AUTO-LOADDEFS, check that the file generated by
+    - If :AUTO-LOADDEFS is specified, check that the file generated by
       RECORD-LOADDEFS is up-to-date.
 
-    - Check that all manual (non-generated) autoload declarations with
-      AUTOLOADs in SYSTEM are resolved (the corresponding function or
-      variable is defined) by loading :AUTO-DEPENDS-ON.
+    - Check that all manual (non-generated) loaddefs in SYSTEM are
+      resolved (e.g. no longer LOADDEF-FUNCTION-P) by loading
+      :AUTO-DEPENDS-ON.
 
     If ERRORP, then signal an error if a check fails or the loaddefs
     file cannot be read. If :AUTO-LOADDEFS is specified, then the

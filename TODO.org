@@ -4,23 +4,31 @@
 * MAYBE make it possible to extend
 E.g. copy PAX:DEFSECTIONs.
 
-This should be easy to implement:
+This should be easy to implement for symbol names by making these a
+bit more flexible:
 
-- Expose MAYBE-RECORD-AUTOLOAD-INFO
-- Turn the ECASE in INFO-TO-AUTOLOAD-FORMS into a generic function call.
+- LOADDEFP
+- KIND-TO-INDICATOR
+- INFO-TO-LOADDEFS
+
+String names (as with packages) cannot use the SYMBOL-PLIST database,
+so they need more thought.
+
+Also, when the loaddefs cannot be generated individually per autodef
+(as with multiple packages), then things are different.
 ** MAYBE with-copying-to-autoloads macro to copy? Package problems?
 * MAYBE support pass the baton
-... wherein an autoloaded system does not resolve and autoload
-declaration, but redefines it for another system. For this, we need to
-store the system to be loaded in STATE.
+... wherein an autoloaded system does not resolve an autoload
+declaration, but redefines it to autoload another system. For this, we
+need to store the system to be loaded in STATE.
 * DEFERRED thread-safety
 There should be no autoloading in production, so we punt on this for now.
 * MAYBE standardize dynamic environment of AUTOLOAD-SYSTEM-FOR
-Currently, we try to control the IO and compiler settings, but for
-compile time evaluation, the current approach cannot work. However, we
-could start a new thread on platforms that support it, which will get
-a shiny new dynamic environment.
-* MAYBE implement transforming process-docstring and process-arglist
+Currently, we try to control the IO and compiler settings, but there
+is always more to worry about. However, we could start a new thread on
+platforms that support it, which will get a shiny new dynamic
+environment.
+* MAYBE implement PROCESS-DOCSTRING and PROCESS-ARGLIST that transform
 * MAYBE check loaddefs whenever the system is (auto)loaded?
 An exhaustive check may not be possible (if there are multiple :auto-
 depends-on systems).

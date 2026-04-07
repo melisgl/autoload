@@ -1,9 +1,8 @@
 (in-package :autoload)
 
 (defsection @basics (:title "Basics")
-  (@autoload glossary-term)
   (@loaddef glossary-term)
-  (@auto glossary-term)
+  (@autodef glossary-term)
   (@loading-systems section)
   (@conditions section)
   (@functions section)
@@ -11,20 +10,90 @@
   (@variables section)
   (@packages section))
 
-(define-glossary-term @autoload (:title "autoload")
-  "An autoload definition defines a stub that, when used, triggers
-  loading of an ASDF:SYSTEM. See AUTOLOAD and AUTOLOAD-CLASS.")
-
 (define-glossary-term @loaddef (:title "loaddef")
-  "A loaddef is either an @AUTOLOAD or some other Lisp form that
-  foreshadows a definition without setting up autoloading of an
-  ASDF:SYSTEM. See DEFVAR/AUTO and DEFPACKAGE/AUTO.")
+  "A loaddef is a preliminary definition that serves as a stand-in
+  until the fully-realized implementation is loaded. Accessing it may
+  or may not [load a system][ @loading-systems]. See
+  LOADDEF-FUNCTION-P, LOADDEF-CLASS-P, LOADDEF-VARIABLE-P and
+  LOADDEF-PACKAGE-P.")
 
-(define-glossary-term @auto (:title "auto")
-  "An auto definition, such as DEFUN/AUTO, DEFGENERIC/AUTO,
-  DEFCLASS/AUTO, DEFPACKAGE/AUTO, marks the definition for
-  @AUTOMATIC-LOADDEFS and signals an AUTOLOAD-WARNING if there was no
-  corresponding @LOADDEF.")
+(defun loaddefp (name kind)
+  (ecase kind
+    ((:function) (loaddef-function-p name))
+    ((:class) (loaddef-class-p name))
+    ((:variable) (loaddef-variable-p name))
+    ((:package) (loaddef-package-p name))))
+
+(define-glossary-term @autodef (:title "autodef")
+  "An autodef (e.g. `(DEFUN/AUTO NAME ...)`) performs the job of its
+  plain counterpart (DEFUN). In addition, it marks the definition (of
+  NAME as a function) for @AUTOMATIC-LOADDEFS and, at the time of the
+  first such autodef, it signals an AUTOLOAD-WARNING if NAME has not
+  been declared as a @LOADDEF (has never been LOADDEF-FUNCTION-P). See
+  DEFUN/AUTO, DEFCLASS/AUTO, DEFVAR/AUTO and DEFPACKAGE/AUTO.")
+
+(defun autop (name kind)
+  (member (state name kind) '(:auto :undeclared-auto)))
+
+(defun mark-auto (name kind)
+  (unless (autop name kind)
+    (cond ((known-loaddef-p name kind)
+           (setf (state name kind) :auto))
+          (t
+           (maybe-signal-missing-loaddef name kind)
+           (setf (state name kind) :undeclared-auto)))))
+
+(defun known-loaddef-p (name kind)
+  (let ((state (state name kind)))
+    (and state (not (eq state :undeclared-auto)))))
+
+
+;;;; LOADDEF state database
+
+(declaim (inline kind-to-indicator))
+
+;;; Translate KIND to a package-internal variable, which we use as an
+;;; indicator on SYMBOL-PLISTs. Package names are strings, so we use
+;;; another mechanism.
+(defun kind-to-indicator (kind)
+  (ecase kind
+    ((:function) '%autoload-function)
+    ((:class) '%autoload-class)
+    ((:variable) '%autoload-variable)))
+
+;;; If deleted autoloaded packages ever became a drag, then we should
+;;; consider purging them from here.
+(defvar *package-states* (make-hash-table))
+
+(defun state (name kind)
+  (if (eq kind :package)
+      (let ((package (ignore-errors (find-package name))))
+        (when package
+          (gethash package *package-states*)))
+      (multiple-value-bind (name setf*) (maybe-unpack-function-name name)
+        (getf (get name (kind-to-indicator kind)) setf*))))
+
+(defun maybe-unpack-function-name (name)
+  (cond ((symbolp name)
+         (values name nil))
+        ;; (SETF NAME) => NAME SETF.
+        ((and (consp name)
+              (eq (car name) 'setf)
+              (consp (cdr name))
+              (symbolp (cadr name))
+              (null (cddr name)))
+         (values (second name) (first name)))
+        (t
+         (error "~@<Unsupported function name ~S.~:@>" name))))
+
+(defun (setf state) (value name kind)
+  (if (eq kind :package)
+      (let ((package (find-package name)))
+        (when package
+          (setf (gethash package *package-states*) value)))
+      (multiple-value-bind (name setf*) (maybe-unpack-function-name name)
+        (setf (getf (get name (kind-to-indicator kind)) setf*)
+              value))))
 
 
 (defsection @loading-systems (:title "Loading Systems")
@@ -37,11 +106,10 @@
 (defvar *test-load-system* nil)
 
 (defun autoload-system-for (system-name name kind)
-  "When an @AUTOLOAD definition is used, it triggers the loading of
-  ASDF:SYSTEMs. Unlike normal ASDF dependencies (declared in
-  :DEPENDS-ON), autoload dependencies
-  (may be declared in @AUTO-DEPENDS-ON) are allowed to be circular.
-  The rules for loading are as follows.
+  "Function and class @LOADDEFs trigger the loading of ASDF:SYSTEMs.
+  Unlike normal ASDF dependencies (declared in :DEPENDS-ON), autoload
+  dependencies (which may be declared in @AUTO-DEPENDS-ON) are allowed
+  to be circular. The rules for loading are as follows.
 
   1. It is an AUTOLOAD-ERROR if loading is triggered during [compile
      time][clhs] or during a LOAD of either a [source file][clhs] or a
@@ -57,15 +125,9 @@
      environment. Errors signalled during the load are not handled or
      resignalled by the Autoload library.
 
-  4. It is an AUTOLOAD-ERROR if the definition established by the
-     @AUTOLOAD is not redefined as a non-autoload definition or
-     deleted by the loaded system.
-
-       For AUTOLOAD, this means that the autoload function stub must
-       be redefined as a normal function (e.g. by DEFUN, DEFUN/AUTO)
-       or made FMAKUNBOUND. For AUTOLOAD-CLASS, the class stub must be
-       redefined with DEFCLASS, DEFCLASS/AUTO or deleted with `(SETF
-       (FIND-CLASS ...) NIL)`."
+  4. It is an AUTOLOAD-ERROR if the @LOADDEF is not replaced by a
+     normal definition or deleted by the loaded system, that is, when
+     it remains a @LOADDEF (e.g. in terms of LOADDEF-FUNCTION-P)."
   (when (or *compile-file-pathname* *load-pathname*)
     (error 'autoload-error :name name :kind kind
            :system-name system-name :cause :during-compile-or-load))
@@ -89,15 +151,9 @@
           (if *test-load-system*
               (funcall *test-load-system* system-name)
               (asdf:load-system system-name))))))
-  (when (autoloadp name kind)
+  (when (loaddefp name kind)
     (error 'autoload-error :name name :kind kind
            :system-name system-name :cause :not-resolved)))
-
-(defun autoloadp (name kind)
-  (case kind
-    ((:function) (autoload-fbound-p name))
-    ((:class) (autoload-class-p name))
-    (t (eq (state name kind) :declared))))
 
 (defun check-loaddef (name kind &optional system-name)
   (when *autoload-system*
@@ -119,8 +175,8 @@
 
 (define-condition autoload-warning (simple-warning)
   ()
-  (:documentation "See AUTOLOAD, @AUTOs and @AUTO-DEPENDS-ON for when
-  this is signalled."))
+  (:documentation "See AUTOLOAD, @AUTODEF and @AUTO-DEPENDS-ON for
+  when this is signalled."))
 
 (defun signal-autoload-warning (format-control &rest format-args)
   (warn 'autoload-warning :format-control format-control
@@ -129,10 +185,9 @@
 (defvar *suppress-missing-loaddef-warnings* nil)
 
 (defun maybe-signal-missing-loaddef (name kind)
-  (unless (state name kind)
-    (unless *suppress-missing-loaddef-warnings*
-      (signal-autoload-warning "~@<Missing loaddef for autoloaded ~A ~S.~:@>"
-                               kind name))))
+  (unless *suppress-missing-loaddef-warnings*
+    (signal-autoload-warning "~@<Missing ~S for ~S ~A ~S.~:@>"
+                             '@loaddef '@autodef kind name)))
 
 (define-condition autoload-error (error)
   ((name
@@ -175,64 +230,25 @@
   (:documentation "Signalled for some failures during @LOADING-SYSTEMS."))
 
 
-;;;; Machinery for associating autoload stubs with function names,
-;;;; including [setf function names][clhs], and for recording the
-;;;; state of variable definitions.
-
-(declaim (inline kind-to-indicator))
-
-;;; Translate KIND to a package-internal variable, which we use as an
-;;; indicator on SYMBOL-PLISTs.
-(defun kind-to-indicator (kind)
-  (ecase kind
-    ((:function) '%autoload-function)
-    ((:class) '%autoload-class)
-    ((:defvar) '%autoload-variable)))
-
-(defun state (name kind)
-  (multiple-value-bind (name setf*) (unpack-function-name name)
-    (getf (get name (kind-to-indicator kind)) setf*)))
-
-(defun unpack-function-name (name)
-  (cond ((symbolp name)
-         (values name nil))
-        ;; (SETF NAME) => NAME SETF.
-        ((and (consp name)
-              (eq (car name) 'setf)
-              (consp (cdr name))
-              (symbolp (cadr name))
-              (null (cddr name)))
-         (values (second name) (first name)))
-        (t
-         (error "~@<Unsupported function name ~S.~:@>" name))))
-
-(defun set-state (name kind fn)
-  (multiple-value-bind (name setf*) (unpack-function-name name)
-    (setf (getf (get name (kind-to-indicator kind)) setf*)
-          fn)))
-
-(defsetf state set-state)
-
-
 (defsection @functions (:title "Functions")
   (autoload macro)
-  (autoload-fbound-p function)
+  (loaddef-function-p function)
   (defun/auto macro)
   (defgeneric/auto macro))
 
 (defmacro autoload (name system-name &key (arglist nil arglistp) docstring)
-  "Define a stub function with NAME that loads SYSTEM-NAME, expecting
-  it to redefine the function, and then calls the newly loaded
-  definition. Return NAME. The arguments are not evaluated. If NAME
-  has an FDEFINITION and it is not AUTOLOAD-FBOUND-P, then do
-  nothing and return NIL.
+  "_This is the @LOADDEF for @AUTODEF DEFUN/AUTO._
 
-  The stub first [loads SYSTEM-NAME][@loading-systems], then it APPLYs
+  Define a function stub with NAME and return NAME. The arguments are
+  not evaluated. If NAME has an FDEFINITION and it is not
+  LOADDEF-FUNCTION-P, then this does nothing and returns NIL.
+
+  The stub first [loads][@loading-systems] SYSTEM-NAME, then it APPLYs
   the function NAME to the arguments originally provided to the stub.
 
   The stub is not defined at [compile time][clhs], which matches the
-  required semantics of DEFUN. NAME is DECLAIMed with FTYPE FUNCTION
-  and NOTINLINE.
+  required semantics of DEFUN. NAME is DECLAIMed with FTYPE
+  [FUNCTION][type] and NOTINLINE.
 
   - ARGLIST will be installed as the stub's arglist if specified and
     it's supported on the platform (currently only SBCL). If ARGLIST
@@ -267,7 +283,7 @@
       ;; function.
       (notinline ,name))
      (when (or (null (fdefinition* ',name))
-               (autoload-fbound-p ',name))
+               (loaddef-function-p ',name))
        (defun ,name (&rest args)
          ,(or docstring
               (let ((*package* (find-package :keyword)))
@@ -306,9 +322,10 @@
           (t
            (values sexp t)))))
 
-(defun autoload-fbound-p (name)
-  "See if NAME's function definition is an autoload stub established
-  by AUTOLOAD."
+(defun loaddef-function-p (name)
+  "See if an AUTOLOAD for NAME was established, and since then it has
+  not been redefined (e.g. with DEFUN/AUTO, DEFUN) or made
+  FMAKUNBOUND."
   (check-type name (or symbol list))
   ;; This detects redefinitions by DEFUN too.
   (let ((fn (fdefinition* name)))
@@ -319,7 +336,7 @@
 ;;; MGL-PAX:ESCAPE-MARKDOWN is loaded.
 (defun %escape-markdown (string)
   (let ((symbol (uiop:find-symbol* '#:escape-markdown '#:mgl-pax nil)))
-    (if (and symbol (not (autoload-fbound-p symbol))
+    (if (and symbol (not (loaddef-function-p symbol))
              (fdefinition* symbol))
         (funcall symbol string)
         string)))
@@ -334,28 +351,26 @@
       (values default-definer name)))
 
 (defmacro defun/auto (name lambda-list &body body)
-  "Like DEFUN, but mark the function for @AUTOMATIC-LOADDEFS and
-  silence redefinition warnings. See EXTRACT-LOADDEFS for the
-  corresponding @LOADDEF.
+  "_This is the @AUTODEF for the @LOADDEF AUTOLOAD._
 
-  Also, warn if NAME has never been AUTOLOAD-FBOUND-P.
+  Like DEFUN, but also silence redefinition warnings. NAME may be of
+  the form `(DEFINER NAME)`. In that case, instead of DEFUN, DEFINER
+  is used to establish the underlying function binding.
 
-  NAME may be of the form (DEFINER NAME). In that case, instead of
-  DEFUN, DEFINER is used."
+  [defun/auto-info-to-loaddefs function][docstring]"
   (multiple-value-bind (definer name) (unpack-name-with-definer name 'defun)
     (maybe-record-autoload-info 'defun/auto name lambda-list
                                 (find-docstring-in-body body))
     `(progn
-       (maybe-signal-missing-loaddef ',name :function)
        ;; We don't want to FMAKUNBOUND a generic function and lose its
        ;; methods.
-       (when (autoload-fbound-p ',name)
+       (when (loaddef-function-p ',name)
          ;; This prevents redefinition warnings and allows DEFINER to
          ;; be a DEFGENERIC without running into an error when trying
          ;; to redefine a DEFUN (the autoload stub).
          (fmakunbound ',name))
        (,definer ,name ,lambda-list ,@body)
-       (setf (state ',name :function) :resolved)
+       (mark-auto ',name :function)
        ',name)))
 
 (defmacro defgeneric/auto (name lambda-list &body body)
@@ -364,12 +379,10 @@
 
 (defun defun/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
-  "- For function definitions such as DEFUN/AUTO, an AUTOLOAD @LOADDEF
-  is emitted.
-
-      If PROCESS-ARGLIST is T, then the autoload forms will pass the
-      ARGLIST argument of the corresponding DEFUN/AUTO to AUTOLOAD. If
-      it is NIL, then ARGLIST will not be passed to AUTOLOAD."
+  "__Loaddef:__ The corresponding @LOADDEF is an AUTOLOAD form.
+  EXTRACT-LOADDEFS with PROCESS-ARGLIST T installs LAMBDA-LIST as the
+  ARGLIST. If PROCESS-ARGLIST is NIL, then ARGLIST will not be passed
+  to AUTOLOAD."
   (destructuring-bind (name lambda-list docstring) info
     `((autoload ,name ,system-name
                 ,@(when process-arglist
@@ -384,26 +397,29 @@
 
 (defsection @classes (:title "Classes")
   (autoload-class macro)
-  (autoload-class-p function)
+  (loaddef-class-p function)
   (defclass/auto macro))
 
 (defmacro autoload-class (class-name system-name &key docstring)
-  "Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
-  be [loaded][ @loading-systems] when it or any of its subclasses are
-  [instantiated][ make-instance clhs]. Return the class object. The
-  arguments are not evaluated. If CLASS-NAME [denotes][find-class
-  clhs] a CLASS and it is not AUTOLOAD-CLASS-P, then do nothing and
-  return NIL.
+  "_This is the @LOADDEF for @AUTODEF DEFCLASS/AUTO._
+
+  Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
+  be [loaded][ @loading-systems] when the class or any of its
+  subclasses are [instantiated][ make-instance clhs]. Returns the
+  class object. The arguments are not evaluated. If CLASS-NAME
+  [denotes][find-class clhs] a CLASS and it is not LOADDEF-CLASS-P,
+  then it does nothing and returns NIL.
 
   - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
     a generic docstring that says what system it autoloads will be
     used.
 
-  The dummy class is defined at [compile time][clhs] too to
+  The dummy class is also defined at [compile time][clhs] to
   approximate the semantics of DEFCLASS. The dummy class is a
-  STANDARD-CLASS with no superclasses or slots. These are visible
-  through introspection e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES.
-  Introspection does not trigger autoloading.
+  STANDARD-CLASS with unrelated superclasses and no slots. These are
+  visible through introspection (e.g. via
+  CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES). Introspection does not
+  trigger autoloading.
 
   When AUTOLOAD-CLASS is macroexpanded during the compilation or
   loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
@@ -415,9 +431,9 @@
   (check-loaddef class-name :class system-name)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (when (or (null (find-class ',class-name nil))
-               (autoload-class-p ',class-name))
+               (loaddef-class-p ',class-name))
        (prog1
-           (defclass ,class-name (%autoload-class)
+           (defclass ,class-name (%autoload-stub)
              ()
              (:documentation
               ,(or docstring
@@ -427,13 +443,13 @@
          (setf (get ',class-name '%autoload-system) ',system-name)
          (setf (state ',class-name :class) (find-class ',class-name))))))
 
-(defclass %autoload-class () ())
+(defclass %autoload-stub () ())
 
-(defmethod initialize-instance :around ((instance %autoload-class)
+(defmethod initialize-instance :around ((instance %autoload-stub)
                                         &rest initargs
                                         &key &allow-other-keys)
   (let* ((cpl (closer-mop:class-precedence-list (class-of instance)))
-         (stub-classes (remove-if-not #'autoload-class-p cpl)))
+         (stub-classes (remove-if-not #'loaddef-class-p cpl :key #'class-name)))
     (cond (stub-classes
            (dolist (stub-class stub-classes)
              (let* ((stub-name (class-name stub-class))
@@ -448,13 +464,12 @@
            ;; happens on ECL, CLISP and ABCL.
            (call-next-method)))))
 
-(defun autoload-class-p (class-designator)
-  "See if the class denoted by CLASS-DESIGNATOR was declared as an
-  AUTOLOAD-CLASS and was not redefined or deleted since. Subclasses do
-  not inherit this property."
-  (let ((class (if (symbolp class-designator)
-                   (find-class class-designator nil)
-                   class-designator)))
+(defun loaddef-class-p (name)
+  "See if an AUTOLOAD-CLASS for NAME was established, and since then
+  it has not been redefined (e.g. with DEFCLASS/AUTO, DEFCLASS) or
+  deleted (with `(SETF (FIND-CLASS ...) NIL)`). Subclasses do not
+  inherit this property."
+  (let ((class (find-class name nil)))
     (when (and (typep class 'class)
                ;; It can be a different class object if there was an
                ;; intervening (SETF (FIND-CLASS ...) NIL).
@@ -462,30 +477,25 @@
       ;; The class object is unchanged, but it may not be the stub.
       (let ((supers (closer-mop:class-direct-superclasses class)))
         (and (= (length supers) 1)
-             (eq (class-name (first supers)) '%autoload-class))))))
+             (eq (class-name (first supers)) '%autoload-stub))))))
 
 (defmacro defclass/auto (name direct-superclasses direct-slots &rest options)
-  "Like DEFCLASS, but mark the class for @AUTOMATIC-LOADDEFS. See
-  EXTRACT-LOADDEFS for the corresponding @LOADDEF.
+  "_This is the @AUTODEF for the @LOADDEF AUTOLOAD-CLASS._
 
-  Also, warn if NAME has never been AUTOLOAD-CLASS-P.
-
-  NAME may be of the form (DEFINER NAME). In that case, instead of
-  DEFCLASS, DEFINER is used."
+  Like DEFCLASS. NAME may be of the form `(DEFINER NAME)`. In that
+  case, instead of DEFCLASS, DEFINER is used to establish the
+  underlying class definition."
   (multiple-value-bind (definer name) (unpack-name-with-definer name 'defclass)
     (maybe-record-autoload-info 'defclass/auto name
                                 (find-docstring-in-body options))
     `(progn
-       (maybe-signal-missing-loaddef ',name :class)
        (,definer ,name ,direct-superclasses
                  ,direct-slots
                  ,@options)
-       (setf (state ',name :class) :resolved))))
+       (mark-auto ',name :class))))
 
 (defun defclass/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
-   "- For class definitions such as DEFCLASS/AUTO, an AUTOLOAD-CLASS
-  @LOADDEF is emitted."
   (declare (ignore process-arglist))
   (destructuring-bind (name docstring) info
     `((autoload-class ,name ,system-name
@@ -497,29 +507,34 @@
 
 
 (defsection @variables (:title "Variables")
+  (loaddef-variable-p function)
   (defvar/auto macro))
 
 ;;; Be wary of changing this: although not exported, it is a loaddef.
 (defmacro foreshadow-defvar (var &key (init nil initp) docstring)
-  (check-loaddef var :defvar)
+  (check-loaddef var :variable)
   `(progn
      (defvar ,var
        ,@(when initp
            `(,init)))
      ,@(when docstring
-         `((unless (eq (state ',var :defvar) :resolved)
+         `((unless (autop ',var :variable)
              (setf (documentation ',var 'variable) ,docstring))))
-     (unless (state ',var :defvar)
-       (setf (state ',var :defvar) :declared))))
+     (unless (state ',var :variable)
+       (setf (state ',var :variable) :declared))))
+
+(defun loaddef-variable-p (name)
+  "See if a loaddef was [generated][ @automatic-loaddefs] from a
+  DEFVAR/AUTO for NAME, but this @AUTODEF has not been evaluated."
+  (eq (state name :variable) :declared))
 
 (defmacro defvar/auto (var &optional (val nil valp) doc)
-  "Like DEFVAR, but mark the variable for @AUTOMATIC-LOADDEFS. See
-  EXTRACT-LOADDEFS for the corresponding @LOADDEF.
+  "_This is an @AUTODEF with no public @LOADDEF. See below._
 
-  Also, this works with the _global_ binding on Lisps that support
-  it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
-  when a system that uses DEFVAR with a default value is autoloaded
-  while that variable is locally bound:
+  Unlike DEFVAR, this works with the _global_ binding on Lisps that
+  support it (currently Allegro, CCL, ECL, SBCL). This is to handle
+  the case when a system that uses DEFVAR with a default value is
+  autoloaded while that variable is locally bound:
 
   ```cl-transcript
   ;; Some base system only foreshadows *X*.
@@ -531,44 +546,37 @@
   => 1
   ```
 
-  In case the global binding has been set between the [corresponding
-  loaddef][ extract-loaddefs] and the first evaluation of this form,
-  VAL is evaluated for side effect.
+  [defvar/auto-info-to-loaddefs function][docstring]
 
-  DEFVAR/AUTO warns if VAR does not have a loaddef in
-  @AUTO-LOADDEFS.
-
-  VAR may be of the form (DEFINER VAR). In that case, instead of
-  DEFVAR, DEFINER is used. Note that DEFPARAMETER is not a suitable
-  DEFINER, as it doesn't follow DEFVAR semantics."
-  (multiple-value-bind (definer var) (unpack-name-with-definer var 'defvar)
-    (maybe-record-autoload-info 'defvar/auto var val valp doc)
-    `(progn
-       (maybe-signal-missing-loaddef ',var :defvar)
-       (,definer ,var)
-       ;; Only evaluate VAL if necessary to mimic the semantics of
-       ;; DEFVAR, and evaluate VAL for side effect if necessary.
-       ,@(when valp
-           `((cond ((not (symbol-globally-boundp ',var))
-                    (setf (symbol-global-value ',var) ,val))
-                   ((eq (state ',var :defvar) :declared)
-                    ,val))))
-       ,@(when doc
-           `((setf (documentation ',var 'variable) ,doc)))
-       (setf (state ',var :defvar) :resolved)
-       ',var)))
+  In case the global binding of VAR has been set between the
+  corresponding loaddef and its first autodef, VAL is evaluated for
+  side effect."
+  (maybe-record-autoload-info 'defvar/auto var val valp doc)
+  `(progn
+     (defvar ,var)
+     ;; Only evaluate VAL if necessary to mimic the semantics of
+     ;; DEFVAR, and evaluate VAL for side effect if necessary.
+     ,@(when valp
+         `((cond ((not (symbol-globally-boundp ',var))
+                  (setf (symbol-global-value ',var) ,val))
+                 ((eq (state ',var :variable) :declared)
+                  ,val))))
+     ,@(when doc
+         `((setf (documentation ',var 'variable) ,doc)))
+     (mark-auto ',var :variable)
+     ',var))
 
 (defun defvar/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
-  "- For DEFVAR/AUTO, the emitted @LOADDEF declaims the variable
-  special and maybe sets its initial value and docstring.
-
-      If the initial value form in DEFVAR/AUTO is detected as a simple
-      constant form, then it is evaluated and its value is assigned to
-      the variable as in DEFVAR. Simple constant forms are strings,
-      numbers, characters, keywords, constants in the CL package, and
-      QUOTEd nested lists containing any of the previous or any symbol
-      from the `CL` package."
+  "__Loaddef:__ The corresponding @LOADDEF is not public and must be
+  [generated][ @automatic-loaddefs]. The generated loaddef declaims
+  the variable special and maybe sets its initial value and docstring.
+  If the initial value form in DEFVAR/AUTO is detected as a simple
+  constant form, then it is evaluated and its value is assigned to the
+  variable as in DEFVAR. Simple constant forms are strings, numbers,
+  characters, keywords, constants in the CL package, and QUOTEd nested
+  lists containing any of the previous or any symbol from the `CL`
+  package."
   (declare (ignore system-name process-arglist))
   (destructuring-bind (name val-form val-form-p docstring) info
     `((foreshadow-defvar
@@ -589,19 +597,26 @@
 
 
 (defsection @packages (:title "Packages")
+  (loaddef-package-p function)
   (defpackage/auto macro))
 
-(defmacro defpackage/auto (name &rest options)
-  "Like DEFPACKAGE, but mark the package for @AUTOMATIC-LOADDEFS and
-  extend the existing definition additively. See EXTRACT-LOADDEFS for
-  the corresponding @LOADDEFs.
+(defun loaddef-package-p (name)
+  "See if a loaddef was [generated][ @automatic-loaddefs] from a
+  DEFPACKAGE/AUTO for NAME, but this @AUTODEF has not been evaluated
+  nor has the package been deleted."
+  (eq (state name :package) (ignore-errors (find-package name))))
 
-  The additivity means that instead of replacing the package
-  definition or signalling errors on redefinition, it expands into
-  individual package-altering operations such as SHADOW, USE-PACKAGE
-  and EXPORT. This allows the package state to be built incrementally,
-  but the `(DEFINER NAME)` syntax is not supported. DEFPACKAGE/AUTO
-  may be used on the same package multiple times.
+(defmacro defpackage/auto (name &rest options)
+  "_This is an @AUTODEF with no public @LOADDEF. See below._
+
+  Unlike DEFPACKAGE, if the package is already defined,
+  DEFPACKAGE/AUTO extends it additively. The additivity means that
+  instead of replacing the package definition or signalling errors on
+  redefinition, it expands into individual package-altering operations
+  such as SHADOW, USE-PACKAGE and EXPORT. This allows the package
+  state to be built incrementally, but it also means that
+  the `(DEFINER NAME)` syntax cannot be supported. DEFPACKAGE/AUTO is
+  idempotent.
 
   In addition, DEFPACKAGE/AUTO deviates from DEFPACKAGE in the
   following ways.
@@ -614,11 +629,14 @@
     not supported. Use `ADD-PACKAGE-LOCAL-NICKNAME` after the
     DEFPACKAGE/AUTO.
 
-  Alternatively, one may use, for example, DEFPACKAGE or
+  [generate-package-loaddefs function][docstring]
+
+  Instead of DEFPACKAGE/AUTO, one may use, for example, DEFPACKAGE or
   UIOP:DEFINE-PACKAGE and arrange for @AUTOMATIC-LOADDEFS for the
   package by listing it in :PACKAGES of @AUTO-LOADDEFS."
   (check-defpackage-options options)
-  (let ((nicknames (filter-options :nicknames options :append))
+  (let ((name (string name))
+        (nicknames (filter-options :nicknames options :append))
         (shadows (filter-options :shadow options :append))
         (shadowing-imports (filter-options :shadowing-import-from options
                                            :collect))
@@ -626,34 +644,36 @@
         (imports (filter-options :import-from options :collect))
         (interns (filter-options :intern options :append))
         (exports (filter-options :export options :append))
-        (doc (filter-options :documentation options :single))
-        (pkg-name (string name)))
-    (maybe-record-autoload-info 'defpackage/auto pkg-name)
-    `(eval-when (:compile-toplevel :load-toplevel :execute)
-       (ensure-package-names ,pkg-name ',(mapcar #'string nicknames))
-       ,@(when shadows
-           `((shadow ',(mapcar #'string shadows) ,pkg-name)))
-       ,@(loop for (pkg . syms) in shadowing-imports
-               collect `(shadowing-import
-                         (find-symbols-or-error ',(mapcar #'string syms)
-                                                ,(string pkg))
-                         ,pkg-name))
-       ,@(when use
-           `((use-package ',(mapcar #'string use) ,pkg-name)))
-       ,@(loop for (pkg . syms) in imports
-               collect `(import (find-symbols-or-error ',(mapcar #'string syms)
-                                                       ,(string pkg))
-                                ,pkg-name))
-       ,@(when interns
-           `((mapc (lambda (s) (intern s ,pkg-name))
-                   ',(mapcar #'string interns))))
-       ,@(when exports
-           `((export (mapcar (lambda (s) (intern s ,pkg-name))
-                             ',(mapcar #'string exports))
-                     ,pkg-name)))
-       ,@(when doc
-           `((setf (documentation (find-package ,pkg-name) t) ,doc)))
-       (find-package ,pkg-name))))
+        (doc (filter-options :documentation options :single)))
+    (maybe-record-autoload-info 'defpackage/auto name)
+    `(progn
+       (eval-when (:compile-toplevel :load-toplevel :execute)
+         (%ensure-package-names ,name ',(mapcar #'string nicknames))
+         ,@(when shadows
+             `((shadow ',(mapcar #'string shadows) ,name)))
+         ,@(loop for (pkg . syms) in shadowing-imports
+                 collect `(shadowing-import
+                           (find-symbols-or-error ',(mapcar #'string syms)
+                                                  ,(string pkg))
+                           ,name))
+         ,@(when use
+             `((use-package ',(mapcar #'string use) ,name)))
+         ,@(loop for (pkg . syms) in imports
+                 collect `(import (find-symbols-or-error
+                                   ',(mapcar #'string syms)
+                                   ,(string pkg))
+                                  ,name))
+         ,@(when interns
+             `((mapc (lambda (s) (intern s ,name))
+                     ',(mapcar #'string interns))))
+         ,@(when exports
+             `((export (mapcar (lambda (s) (intern s ,name))
+                               ',(mapcar #'string exports))
+                       ,name)))
+         ,@(when doc
+             `((setf (documentation (find-package ,name) t) ,doc)))
+         (mark-auto ',name :package)
+         (find-package ,name)))))
 
 (defun check-defpackage-options (options)
   (loop for option in options
@@ -692,17 +712,24 @@
 
 (defun generate-package-loaddefs (package-designators
                                   &key (process-docstring t))
-  "- For DEFPACKAGE/AUTO and the provided PACKAGES,
-  individual package-altering @LOADDEFs are emitted.
+  "__Loaddef:__ The corresponding @LOADDEF is not public and must be
+  [generated][ @automatic-loaddefs]. As in the expansion of
+  DEFPACKAGE/AUTO itself, the generated operations are additive.
 
-      As in the expansion of DEFPACKAGE/AUTO itself, these
-      operations are additive. To handle circular dependencies, first
-      all packages are created, then their state is reconstructed in
-      phases following [DEFPACKAGE][clhs].
+  - The generated loaddef reconstructs the package states as they
+    exist after all @AUTO-DEPENDS-ON systems are loaded. Thus, manual
+    modifications after the DEFPACKAGE/AUTO definition (e.g. by
+    additional EXPORTs) are reflected in the loaddef.
 
-      Any reference to non-existent packages (e.g. in :USE) or symbols
-      in non-existent packages (e.g. :IMPORT-FROM) is silently
-      skipped."
+  - To handle circular dependencies, the loaddefs of all @AUTODEF
+    packages and those passed in the PACKAGES argument to
+    EXTRACT-LOADDEFS are generated in an interleaved manner. First,
+    all packages are created, then their state is reconstructed in
+    phases following [DEFPACKAGE][ clhs].
+
+  - Any reference to non-existent packages (e.g. in :USE) or symbols
+    in non-existent packages (e.g. :IMPORT-FROM) is silently skipped
+    when the loaddef is evaluated."
   (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
                                                    package-designators))
                         #'string< :key #'package-name))
@@ -885,7 +912,8 @@
 
 (defmacro ensure-package-names (name nicknames)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
-     (%ensure-package-names ,name ,nicknames)))
+     (%ensure-package-names ,name ,nicknames)
+     (setf (state ',name :package) (find-package ',name))))
 
 (defmacro set-package-documentation (package-name doc)
   `(setf (documentation (find-package (native-name ,package-name)) t)
@@ -940,10 +968,10 @@
     :reader system-auto-depends-on
     :documentation "This is the list of the names of systems that this
      system may autoload. The names are canonicalized with
-     ASDF:COERCE-NAME. It is an AUTOLOAD-WARNING if an @AUTOLOAD
-     refers to a system not listed here. This is also used by
-     EXTRACT-LOADDEFS and affects the checks performed by the AUTOLOAD
-     macro.")
+     ASDF:COERCE-NAME. It is an AUTOLOAD-WARNING if a @LOADDEF refers
+     to a system not listed here. This is also used by
+     EXTRACT-LOADDEFS and affects the checks performed by
+     @LOADING-SYSTEMS.")
    (auto-loaddefs
     :initform nil
     :initarg :auto-loaddefs
@@ -1024,11 +1052,11 @@
 
 (defclass autoload-cl-source-file (asdf:cl-source-file)
   ()
-  (:documentation "The :DEFAULT-COMPONENT-CLASS of AUTOLOAD-SYSTEM.
-@ASDF-INTEGRATION relies on source files belonging to this class. When
-combining autoload with another ASDF extension that has its own
-ASDF:CL-SOURCE-FILE subclass, define a new class that inherits from
-both, and use that as :DEFAULT-COMPONENT-CLASS."))
+  (:documentation "This is the :DEFAULT-COMPONENT-CLASS of
+AUTOLOAD-SYSTEM. @ASDF-INTEGRATION relies on source files belonging to
+this class. When combining autoload with another ASDF extension that
+has its own ASDF:CL-SOURCE-FILE subclass, define a new class that
+inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
 
 (defmacro with-autoload-system ((autoload-cl-source-file) &body body)
   (let ((cl-file (gensym "CL-FILE"))
@@ -1088,11 +1116,11 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
   nil)
 
 (defun autodeps (system &key (cross-autoloaded t) installer)
-  "Return the list of the names of systems that may be autoloaded by
-  SYSTEM or any of its direct or indirect dependencies. This
-  recursively visits systems in the dependency tree, traversing both
-  normal (:DEPENDS-ON) and autoloaded (@AUTO-DEPENDS-ON) dependencies.
-  It works even if SYSTEM is not an AUTOLOAD-SYSTEM.
+  "Return the list of system names that may be autoloaded by SYSTEM or
+  any of its direct or indirect dependencies. This recursively visits
+  systems in the dependency tree, traversing both normal (:DEPENDS-ON)
+  and autoloaded (@AUTO-DEPENDS-ON) dependencies. It works even if
+  SYSTEM is not an AUTOLOAD-SYSTEM.
 
   - CROSS-AUTOLOADED controls whether systems only reachable from
     SYSTEM via intermediate autoloaded dependencies are visited. Thus,
@@ -1147,7 +1175,7 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
   ;; Thus everything should be resolved.
   (when (and *autoload-system*
              (eq *autoload-system* *gathering-unresolved-from-system*)
-             (autoloadp name kind))
+             (loaddefp name kind))
     ;; We are called from macros, which can be expanded multiple times.
     (pushnew `(,kind ,name) *gathered-unresolved-loaddefs*
              :test #'equal)))
@@ -1174,9 +1202,9 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
       (prin1-to-string object))))
 
 (defun maybe-record-autoload-info (definer name &rest rest)
-  ;; Do not record definitions from dependencies of autoloaded
-  ;; systems.
   (when (and *recording-from-system*
+             ;; Do not record definitions from dependencies of
+             ;; autoloaded systems.
              (eq *recording-from-system* *autoload-system*))
     ;; This is called from a macro, and macros are allowed to be
     ;; expanded multiple times.
@@ -1189,34 +1217,26 @@ both, and use that as :DEFAULT-COMPONENT-CLASS."))
 
 (defun extract-loaddefs (system &key (process-arglist t) (process-docstring t)
                          packages)
-  "Return a list of @LOADDEF forms that set up autoloading
-  for definitions such as DEFUN/AUTO in @AUTO-DEPENDS-ON of
-  SYSTEM.
+  "List the @LOADDEF forms of the @AUTODEF definitions in
+  @AUTO-DEPENDS-ON of SYSTEM.
 
   There is rarely a need to call this function directly, as
   [RECORD-LOADDEFS][ function] and CHECK-LOADDEFS provide
   @ASDF-INTEGRATION.
 
   Note that this is an expensive operation, as it loads or reloads the
-  direct dependencies one by one with ASDF:LOAD-SYSTEM :FORCE T and
-  records the association with the system and the autoloaded
-  definitions such as DEFUN/AUTO.
+  direct dependencies listed in :AUTO-DEPENDS-ON one by one with
+  ASDF:LOAD-SYSTEM :FORCE T to find the @AUTODEFs.
 
-  [defun/auto-info-to-loaddefs function][docstring]
+  See the individual @AUTODEFs for descriptions of the generated
+  loaddefs.
 
-  [defclass/auto-info-to-loaddefs function][docstring]
-
-  [defvar/auto-info-to-loaddefs function][docstring]
-
-  [generate-package-loaddefs function][docstring]
-
-  - If PROCESS-DOCSTRING, then the docstrings extracted from @AUTO
+  - If PROCESS-DOCSTRING, then the docstrings extracted from @AUTODEF
     definitions will be associated with the definition.
 
-  Note that if a function is not defined with DEFUN/AUTO, then
-  EXTRACT-LOADDEFS will not detect it. For such functions, AUTOLOAD
-  forms must be written manually. Similar considerations apply to
-  variables and packages."
+  Note that if a definition is not made with an @AUTODEF, then
+  EXTRACT-LOADDEFS will not detect it. For such functions, @LOADDEFs
+  must be written manually."
   (let* ((infos (without-asdf-session
                   (mapcan #'extract-autoload-infos
                           (system-auto-depends-on (asdf:find-system system)))))
@@ -1343,12 +1363,12 @@ ASDF:DEFSYSTEM."
   "In the AUTOLOAD-SYSTEM SYSTEM, check that both recorded and manual
   autoload declarations are correct.
 
-  - If there is an @AUTO-LOADDEFS, check that the file generated by
+  - If @AUTO-LOADDEFS is specified, check that the file generated by
     [RECORD-LOADDEFS][ function] is up-to-date.
 
-  - Check that all manual (non-generated) autoload declarations with
-    AUTOLOADs in SYSTEM are resolved (the corresponding function or
-    variable is defined) by loading @AUTO-DEPENDS-ON.
+  - Check that all manual (non-generated) @LOADDEFs in SYSTEM are
+    resolved (e.g. no longer LOADDEF-FUNCTION-P) by loading
+    @AUTO-DEPENDS-ON.
 
   If ERRORP, then signal an error if a check fails or the loaddefs
   file cannot be read. If @AUTO-LOADDEFS is specified, then the

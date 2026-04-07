@@ -6,8 +6,6 @@
 
 (in-package :cl)
 
-(autoload::foreshadow-defvar %simple-test::*test-custom-var* :init 99)
-
 (autoload::foreshadow-defvar %simple-test::*var/circular-value*)
 
 (autoload::foreshadow-defvar %simple-test::*var/complex-value*)
