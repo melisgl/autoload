@@ -1,7 +1,7 @@
 (cl:in-package :autoload-test)
 
 (deftest test-autoload-defaults ()
-  (let ((loadedp (and (not (autoload-fbound-p 'pax:escape-markdown))
+  (let ((loadedp (and (not (loaddef-function-p 'pax:escape-markdown))
                       (ignore-errors (fdefinition 'pax:escape-markdown)))))
     ;; KLUDGE: Some Lisps don't immediately associate the arglist and
     ;; docstring with the definition.
@@ -25,48 +25,49 @@
   (setf (autoload::state 'test-fun :function) nil)
   (signals (autoload-warning :handler #'muffle-warning)
     (eval '(defun/auto test-fun (x) "doc" x)))
-  (is (eq (autoload::state 'test-fun :function) :resolved))
+  (is (eq (autoload::state 'test-fun :function) :undeclared-auto))
   (let ((dref (dref:dref 'test-fun 'function)))
     #-ccl
     (is (equal (dref:arglist dref) '(x)))
     (is (equal (dref:docstring dref) "doc"))
     (eval '(autoload test-fun "xxx" :arglist '(y) :docstring "early"))
-    (is (eq (autoload::state 'test-fun :function) :resolved))
+    (is (eq (autoload::state 'test-fun :function) :undeclared-auto))
     #-ccl
     (is (equal (dref:arglist dref) '(x)))
     (is (equal (dref:docstring dref) "doc"))))
 
 (deftest test-defvar-state ()
   (makunbound '*test-var*)
-  (setf (autoload::state '*test-var* :defvar) nil)
+  (setf (autoload::state '*test-var* :variable) nil)
   (signals (autoload-warning :handler #'muffle-warning)
     (eval '(autoload:defvar/auto *test-var* 1 "doc")))
   (let ((dref (dref:dref '*test-var* 'variable)))
     (is (equal (dref:docstring dref) "doc"))
-    (is (eq (autoload::state '*test-var* :defvar) :resolved))
+    (is (eq (autoload::state '*test-var* :variable) :undeclared-auto))
     (eval '(autoload::foreshadow-defvar *test-var*
-            :docstring "early"))
+            :docstring "doc"))
     (is (equal (dref:docstring dref) "doc"))
-    (is (eq (autoload::state '*test-var* :defvar) :resolved))))
+    (is (eq (autoload::state '*test-var* :variable) :undeclared-auto))))
 
 (defvar *defvar-init-evaluatedp*)
 
 (deftest test-defvar-init ()
   (makunbound '*test-var*)
-  (setf (autoload::state '*test-var* :defvar) nil)
+  (setf (autoload::state '*test-var* :variable) nil)
   (eval '(autoload::foreshadow-defvar *test-var*))
-  (is (eq (autoload::state '*test-var* :defvar) :declared))
+  (is (eq (autoload::state '*test-var* :variable) :declared))
   (set '*test-var* 1)
   (let ((*defvar-init-evaluatedp* nil))
     (eval '(defvar/auto *test-var* (setq *defvar-init-evaluatedp* t)))
-    (is (eq (autoload::state '*test-var* :defvar) :resolved))
+    (is (eq (autoload::state '*test-var* :variable) :auto))
     (is (eql (symbol-value '*test-var*) 1))
     (is *defvar-init-evaluatedp*)))
 
 (deftest test-defpackage/auto-rename ()
   (unwind-protect
        (progn
-         (eval '(defpackage/auto :%xxx (:nicknames :%yyy)))
+         (signals (autoload-warning :pred "Missing" :handler #'muffle-warning)
+           (eval '(defpackage/auto :%xxx (:nicknames :%yyy))))
          (eval '(defpackage/auto :%yyy (:nicknames :%zzz)))
          (is (equal (package-name :%xxx) (string :%yyy)))
          (is (try:same-set-p (package-nicknames :%yyy)
@@ -239,25 +240,25 @@
           (with-test ("variables and simple DEFUN")
             (with-test-systems
               (load-simple-test)
-              (is (not (autoload-fbound-p 'non-existent)))
+              (is (not (loaddef-function-p 'non-existent)))
               ;; *VAR/NO-VALUE*
-              (is (autoload::autoloadp *var/no-value* :defvar))
+              (is (loaddef-variable-p *var/no-value*))
               (is (not (boundp *var/no-value*)))
               (is (equal (documentation *var/no-value* 'variable)
                          "*var/no-value* docstring"))
               ;; *VAR/SIMPLE-VALUE*
-              (is (autoload::autoloadp *var/simple-value* :defvar))
+              (is (loaddef-variable-p *var/simple-value*))
               (is (and (boundp *var/simple-value*)
                        (equal (symbol-value *var/simple-value*)
                               '("xxx" 7 :key nil t))))
               (is (equal (documentation *var/simple-value* 'variable)
                          "*var/simple-value* docstring"))
               ;; *VAR/COMPLEX-VALUE*
-              (is (autoload::autoloadp *var/complex-value* :defvar))
+              (is (loaddef-variable-p *var/complex-value*))
               (is (not (boundp *var/complex-value*)))
               (is (null (documentation *var/complex-value* 'variable)))
               ;; FOO
-              (is (autoload-fbound-p foo))
+              (is (loaddef-function-p foo))
               #+sbcl
               (is (equal (dref:arglist (dref:dref foo 'function))
                          (read-from-string "(%simple-test::x)")))
@@ -265,11 +266,11 @@
               (is (not (asdf:component-loaded-p "%simple-test/full")))
               (is (equal (funcall foo 'secret) 'secret))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (autoload-fbound-p foo)))))
+              (is (not (loaddef-function-p foo)))))
           (with-test ("traced stub")
             (with-test-systems
               (load-simple-test)
-              (is (autoload-fbound-p foo))
+              (is (loaddef-function-p foo))
               ;; CMUCL sometimes fails with a type error somewhere in the
               ;; tracing machinery.
               #-(or clisp cmucl)
@@ -283,7 +284,7 @@
               (let ((*trace-output* (make-broadcast-stream)))
                 (is (equal (funcall foo 'secret) 'secret)))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (autoload-fbound-p foo)))))
+              (is (not (loaddef-function-p foo)))))
           (with-test ("GLOBAL-SYMBOL-VALUE")
             (with-test-systems
               (load-simple-test)
@@ -297,38 +298,38 @@
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (autoload-fbound-p setf-xxx))
+              (is (loaddef-function-p setf-xxx))
               (is (eq (eval (read-from-string
                              "(cl:setf (%simple-test::xxx)
                                    'autoload-test::secret)"))
                       'secret))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (autoload-fbound-p setf-xxx)))))
+              (is (not (loaddef-function-p setf-xxx)))))
           (with-test ("DEFGENERIC")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (autoload-fbound-p foo-gf))
+              (is (loaddef-function-p foo-gf))
               (is (eq (funcall foo-gf 7) 8))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (not (autoload-fbound-p foo-gf)))))
+              (is (not (loaddef-function-p foo-gf)))))
           (with-test ("AUTOLOAD missing system")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (autoload-fbound-p missing-system))
+              (is (loaddef-function-p missing-system))
               (signals (autoload-error :pred #'system-not-found-error-p)
                 (funcall missing-system))
-              (is (autoload-fbound-p missing-system))))
+              (is (loaddef-function-p missing-system))))
           (with-test ("AUTOLOAD not redefined")
             (with-test-systems
               (load-simple-test)
               (is (not (asdf:component-loaded-p "%simple-test/full")))
-              (is (autoload-fbound-p missing-fn))
+              (is (loaddef-function-p missing-fn))
               (signals (autoload-error :pred #'not-resolved-error-p)
                 (funcall missing-fn))
               (is (asdf:component-loaded-p "%simple-test/full"))
-              (is (autoload-fbound-p missing-fn))))
+              (is (loaddef-function-p missing-fn))))
           (with-test-systems
             (load-simple-test)
             (let ((*package* (find-package '#:%simple-test)))
@@ -468,8 +469,7 @@
         (with-test-systems
           (write-manual nil)
           (write-full t nil nil)
-          (signals (autoload-warning :pred "Missing loaddef"
-                    :handler #'muffle-warning)
+          (signals (autoload-warning :pred "Missing" :handler #'muffle-warning)
             (asdf-force-load "%test-system/full"))
           ;; Test the CONTINUE restart.
           (let ((n-continues 0))
@@ -490,8 +490,7 @@
           (write-manual t)
           (write-full t t t)
           (asdf-force-load "%test-system")
-          (signals (autoload-warning :pred "Missing loaddef"
-                    :handler #'muffle-warning)
+          (signals (autoload-warning :pred "Missing" :handler #'muffle-warning)
             (asdf-force-load "%test-system/full"))
           (record-loaddefs "%test-system")
           (is (check-loaddefs "%test-system"))))
@@ -550,8 +549,8 @@
     (autoload-class test-class "non-existent")
     (check-direct-accessors (find-class 'test-class) nil)
     (eval '(defclass/auto test-class () ()))
-    (is (eq (autoload::state 'test-class :class) :resolved))
-    (is (not (autoload::autoloadp 'test-class :class)))))
+    (is (eq (autoload::state 'test-class :class) :auto))
+    (is (not (loaddef-class-p 'test-class)))))
 
 (defun check-direct-accessors (class subclassp)
   (signals-not (autoload-error)
@@ -566,12 +565,12 @@
     (eval '(defgeneric test-class-gf (x)
             (:method ((x test-class))
               x))))
-  (is (autoload::autoloadp 'test-class :class))
+  (is (loaddef-class-p 'test-class))
   (signals (autoload-error :pred #'system-not-found-error-p)
     (make-instance 'test-class))
   (signals-not (error)
     (closer-mop:finalize-inheritance class))
-  (is (autoload::autoloadp 'test-class :class)))
+  (is (loaddef-class-p 'test-class)))
 
 (deftest test-autoload-class-subclassing ()
   (with-test-class
@@ -579,8 +578,8 @@
     (defclass test-subclass (test-class) ())
     (check-direct-accessors (find-class 'test-subclass) t)
     (eval '(defclass/auto test-class () ()))
-    (is (eq (autoload::state 'test-class :class) :resolved))
-    (is (not (autoload::autoloadp 'test-class :class)))))
+    (is (eq (autoload::state 'test-class :class) :auto))
+    (is (not (loaddef-class-p 'test-class)))))
 
 (deftest test-autoload-class-reentrancy ()
   (with-test-class
@@ -592,7 +591,7 @@
               (make-instance 'test-class))))
       (let ((instance (make-instance 'test-class)))
         (is (eval `(typep ,instance 'test-class)))
-        (is (eq (autoload::state 'test-class :class) :resolved))))))
+        (is (eq (autoload::state 'test-class :class) :auto))))))
 
 (deftest test-autoload-class-not-resolved ()
   (with-test-class
@@ -614,7 +613,7 @@
               (error "CoMpILe ErRoR"))))
       (signals (error :pred "CoMpILe ErRoR")
         (make-instance 'test-class))
-      (autoload-class-p 'test-class))))
+      (loaddef-class-p 'test-class))))
 
 
 (deftest test-autodeps ()

@@ -26,7 +26,7 @@
 
   - the risk of breakage through dependencies.
 
-  This library reduces the tension arising from the former two
+  This library reduces the tension arising from the first two
   considerations by letting heavy dependencies be loaded on demand.
   The core idea is
 
@@ -38,7 +38,8 @@
   ```
 
   Suppose we have a library called `my-lib` that autoloads
-  `my-lib/full`. In `my-lib`, we could use AUTOLOAD as
+  `my-lib/full`. In `my-lib`, we could use [AUTOLOAD][pax:dislocated]
+  as
 
   ```
   (autoload foo "my-lib/full")
@@ -54,9 +55,10 @@
 
   in `my-lib/full`.
 
-  However, manually keeping the loaddefs (e.g. the AUTOLOAD form
-  above) in sync with the definitions is fragile, so instead we mark
-  autoloaded functions in the `my-lib/full` system:
+  However, manually keeping the @LOADDEFs (e.g. the AUTOLOAD form
+  above) in sync with the definitions is fragile, so we introduce the
+  DEFUN/AUTO @AUTODEF to mark autoloaded functions in the
+  `my-lib/full` system:
 
   ```
   (defun/auto foo (x)
@@ -103,7 +105,7 @@
   To prevent the loaddefs file from getting out of sync with the
   definitions, ASDF:TEST-SYSTEM calls CHECK-LOADDEFS by default.
 
-  ASDF, and by extension @QUICKLISP, don't know about the declared
+  ASDF, and by extension @QUICKLISP, doesn't know about the declared
   @AUTO-DEPENDS-ON, so `(QL:QUICKLOAD "my-lib")` does not install the
   autoloaded dependencies. This can be done with
 

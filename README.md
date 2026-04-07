@@ -36,8 +36,8 @@ for the latest version.
     - _Licence:_ MIT, see COPYING.
     - _Author:_ Gábor Melis
     - _Mailto:_ [mega@retes.hu](mailto:mega@retes.hu)
-    - _Homepage:_ [https://github.com/melisgl/autoload](https://github.com/melisgl/autoload)
-    - _Bug tracker:_ [https://github.com/melisgl/autoload/issues](https://github.com/melisgl/autoload/issues)
+    - _Homepage:_ <https://github.com/melisgl/autoload>
+    - _Bug tracker:_ <https://github.com/melisgl/autoload/issues>
     - _Source control:_ [GIT](https://github.com/melisgl/autoload.git)
     - *Depends on:* closer-mop, mgl-pax-bootstrap
 
@@ -66,7 +66,7 @@ sacrificing features or duplicating code, to minimize
 
 - the risk of breakage through dependencies.
 
-This library reduces the tension arising from the former two
+This library reduces the tension arising from the first two
 considerations by letting heavy dependencies be loaded on demand.
 The core idea is
 
@@ -78,7 +78,8 @@ The core idea is
 ```
 
 Suppose we have a library called `my-lib` that autoloads
-`my-lib/full`. In `my-lib`, we could use [`AUTOLOAD`][7da0] as
+`my-lib/full`. In `my-lib`, we could use `AUTOLOAD`
+as
 
 ```
 (autoload foo "my-lib/full")
@@ -94,9 +95,10 @@ and have
 
 in `my-lib/full`.
 
-However, manually keeping the loaddefs (e.g. the `AUTOLOAD` form
-above) in sync with the definitions is fragile, so instead we mark
-autoloaded functions in the `my-lib/full` system:
+However, manually keeping the [loaddef][e4a5]s (e.g. the `AUTOLOAD` form
+above) in sync with the definitions is fragile, so we introduce the
+[`DEFUN/AUTO`][a825] [autodef][af1d] to mark autoloaded functions in the
+`my-lib/full` system:
 
 ```
 (defun/auto foo (x)
@@ -132,7 +134,7 @@ Then, the loaddefs can be extracted:
 ```
 
 This is implemented by loading the [`:AUTO-DEPENDS-ON`][9b08] of `my-lib` and
-recording [`DEFUN/AUTO`][a825]s. [`EXTRACT-LOADDEFS`][dd7e] is a low-level utility used
+recording `DEFUN/AUTO`s. [`EXTRACT-LOADDEFS`][dd7e] is a low-level utility used
 by [`RECORD-LOADDEFS`][e90c], which writes its results to the
 system's [`:AUTO-LOADDEFS`][0724], `"loaddefs.lisp"` in the above example.
 So, all we need to do is call it to regenerate the loaddefs file:
@@ -144,7 +146,7 @@ So, all we need to do is call it to regenerate the loaddefs file:
 To prevent the loaddefs file from getting out of sync with the
 definitions, `ASDF:TEST-SYSTEM` calls [`CHECK-LOADDEFS`][451b] by default.
 
-ASDF, and by extension [Quicklisp][ae25], don't know about the declared
+ASDF, and by extension [Quicklisp][ae25], doesn't know about the declared
 [`:AUTO-DEPENDS-ON`][9b08], so `(QL:QUICKLOAD "my-lib")` does not install the
 autoloaded dependencies. This can be done with
 
@@ -165,39 +167,35 @@ in deployment):
 
 ## 3 Basics
 
-<a id="x-28AUTOLOAD-3A-40AUTOLOAD-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
-
-- [glossary-term] **autoload**
-
-    An autoload definition defines a stub that, when used, triggers
-    loading of an `ASDF:SYSTEM`. See [`AUTOLOAD`][7da0] and [`AUTOLOAD-CLASS`][9d6b].
-
 <a id="x-28AUTOLOAD-3A-40LOADDEF-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
 
 - [glossary-term] **loaddef**
 
-    A loaddef is either an [autoload][c7d6] or some other Lisp form that
-    foreshadows a definition without setting up autoloading of an
-    `ASDF:SYSTEM`. See [`DEFVAR/AUTO`][3cff] and [`DEFPACKAGE/AUTO`][aa0e].
+    A loaddef is a preliminary definition that serves as a stand-in
+    until the fully-realized implementation is loaded. Accessing it may
+    or may not [load a system][ddfa]. See
+    [`LOADDEF-FUNCTION-P`][8c12], [`LOADDEF-CLASS-P`][42c5], [`LOADDEF-VARIABLE-P`][fd18] and
+    [`LOADDEF-PACKAGE-P`][9776].
 
-<a id="x-28AUTOLOAD-3A-40AUTO-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
+<a id="x-28AUTOLOAD-3A-40AUTODEF-20MGL-PAX-3AGLOSSARY-TERM-29"></a>
 
-- [glossary-term] **auto**
+- [glossary-term] **autodef**
 
-    An auto definition, such as [`DEFUN/AUTO`][a825], [`DEFGENERIC/AUTO`][5b87],
-    [`DEFCLASS/AUTO`][ee20], [`DEFPACKAGE/AUTO`][aa0e], marks the definition for
-    [Automatically Generating Loaddefs][c1d4] and signals an [`AUTOLOAD-WARNING`][da95] if there was no
-    corresponding [loaddef][e4a5].
+    An autodef (e.g. `(DEFUN/AUTO NAME ...)`) performs the job of its
+    plain counterpart ([`DEFUN`][f472]). In addition, it marks the definition (of
+    `NAME` as a function) for [Automatically Generating Loaddefs][c1d4] and, at the time of the
+    first such autodef, it signals an [`AUTOLOAD-WARNING`][da95] if `NAME` has not
+    been declared as a [loaddef][e4a5] (has never been [`LOADDEF-FUNCTION-P`][8c12]). See
+    [`DEFUN/AUTO`][a825], [`DEFCLASS/AUTO`][ee20], [`DEFVAR/AUTO`][3cff] and [`DEFPACKAGE/AUTO`][aa0e].
 
 <a id="x-28AUTOLOAD-3A-40LOADING-SYSTEMS-20MGL-PAX-3ASECTION-29"></a>
 
 ### 3.1 Loading Systems
 
-When an [autoload][c7d6] definition is used, it triggers the loading of
-`ASDF:SYSTEM`s. Unlike normal ASDF dependencies (declared in
-`:DEPENDS-ON`), autoload dependencies
-(may be declared in [`:AUTO-DEPENDS-ON`][9b08]) are allowed to be circular.
-The rules for loading are as follows.
+Function and class [loaddef][e4a5]s trigger the loading of `ASDF:SYSTEM`s.
+Unlike normal ASDF dependencies (declared in `:DEPENDS-ON`), autoload
+dependencies (which may be declared in [`:AUTO-DEPENDS-ON`][9b08]) are allowed
+to be circular. The rules for loading are as follows.
 
 1. It is an [`AUTOLOAD-ERROR`][a515] if loading is triggered during [compile
    time][27c6] or during a [`LOAD`][b5ec] of either a [source file][e8f2] or a
@@ -212,15 +210,9 @@ The rules for loading are as follows.
    environment. Errors signalled during the load are not handled or
    resignalled by the Autoload library.
 
-4. It is an `AUTOLOAD-ERROR` if the definition established by the
-   [autoload][c7d6] is not redefined as a non-autoload definition or
-   deleted by the loaded system.
-
-    For [`AUTOLOAD`][7da0], this means that the autoload function stub must
-     be redefined as a normal function (e.g. by [`DEFUN`][f472], [`DEFUN/AUTO`][a825])
-     or made [`FMAKUNBOUND`][609c]. For [`AUTOLOAD-CLASS`][9d6b], the class stub must be
-     redefined with [`DEFCLASS`][ead6], [`DEFCLASS/AUTO`][ee20] or deleted with `(SETF
-     (FIND-CLASS ...) NIL)`.
+4. It is an `AUTOLOAD-ERROR` if the [loaddef][e4a5] is not replaced by a
+   normal definition or deleted by the loaded system, that is, when
+   it remains a [loaddef][e4a5] (e.g. in terms of [`LOADDEF-FUNCTION-P`][8c12]).
 
 
 <a id="x-28AUTOLOAD-3A-40CONDITIONS-20MGL-PAX-3ASECTION-29"></a>
@@ -237,8 +229,8 @@ The rules for loading are as follows.
 
 - [condition] **AUTOLOAD-WARNING** *[SIMPLE-WARNING][fc62]*
 
-    See [`AUTOLOAD`][7da0], [auto][a159]s and [`:AUTO-DEPENDS-ON`][9b08] for when
-    this is signalled.
+    See [`AUTOLOAD`][7da0], [autodef][af1d] and [`:AUTO-DEPENDS-ON`][9b08] for
+    when this is signalled.
 
 <a id="x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29"></a>
 
@@ -248,18 +240,18 @@ The rules for loading are as follows.
 
 - [macro] **AUTOLOAD** *NAME SYSTEM-NAME &KEY (ARGLIST NIL) DOCSTRING*
 
-    Define a stub function with `NAME` that loads `SYSTEM-NAME`, expecting
-    it to redefine the function, and then calls the newly loaded
-    definition. Return `NAME`. The arguments are not evaluated. If `NAME`
-    has an [`FDEFINITION`][eea4] and it is not [`AUTOLOAD-FBOUND-P`][8dd7], then do
-    nothing and return `NIL`.
+    *This is the [loaddef][e4a5] for [autodef][af1d] [`DEFUN/AUTO`][a825].*
     
-    The stub first [loads `SYSTEM-NAME`][ddfa], then it [`APPLY`][d811]s
+    Define a function stub with `NAME` and return `NAME`. The arguments are
+    not evaluated. If `NAME` has an [`FDEFINITION`][eea4] and it is not
+    [`LOADDEF-FUNCTION-P`][8c12], then this does nothing and returns `NIL`.
+    
+    The stub first [loads][ddfa] `SYSTEM-NAME`, then it [`APPLY`][d811]s
     the function `NAME` to the arguments originally provided to the stub.
     
     The stub is not defined at [compile time][27c6], which matches the
-    required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1] `FUNCTION`([`0`][119e] [`1`][81f7])
-    and [`NOTINLINE`][9514].
+    required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1]
+    [`FUNCTION`][119e] and [`NOTINLINE`][9514].
     
     - `ARGLIST` will be installed as the stub's arglist if specified and
       it's supported on the platform (currently only SBCL). If `ARGLIST`
@@ -278,25 +270,28 @@ The rules for loading are as follows.
     an [`AUTOLOAD-SYSTEM`][cd2d], it signals an `AUTOLOAD-WARNING` if `SYSTEM-NAME` is
     not among those declared in [`:AUTO-DEPENDS-ON`][9b08].
 
-<a id="x-28AUTOLOAD-3AAUTOLOAD-FBOUND-P-20FUNCTION-29"></a>
+<a id="x-28AUTOLOAD-3ALOADDEF-FUNCTION-P-20FUNCTION-29"></a>
 
-- [function] **AUTOLOAD-FBOUND-P** *NAME*
+- [function] **LOADDEF-FUNCTION-P** *NAME*
 
-    See if `NAME`'s function definition is an autoload stub established
-    by [`AUTOLOAD`][7da0].
+    See if an [`AUTOLOAD`][7da0] for `NAME` was established, and since then it has
+    not been redefined (e.g. with [`DEFUN/AUTO`][a825], [`DEFUN`][f472]) or made
+    [`FMAKUNBOUND`][609c].
 
 <a id="x-28AUTOLOAD-3ADEFUN-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFUN/AUTO** *NAME LAMBDA-LIST &BODY BODY*
 
-    Like [`DEFUN`][f472], but mark the function for [Automatically Generating Loaddefs][c1d4] and
-    silence redefinition warnings. See [`EXTRACT-LOADDEFS`][dd7e] for the
-    corresponding [loaddef][e4a5].
+    *This is the [autodef][af1d] for the [loaddef][e4a5] [`AUTOLOAD`][7da0].*
     
-    Also, warn if `NAME` has never been [`AUTOLOAD-FBOUND-P`][8dd7].
+    Like [`DEFUN`][f472], but also silence redefinition warnings. `NAME` may be of
+    the form `(DEFINER NAME)`. In that case, instead of `DEFUN`, `DEFINER`
+    is used to establish the underlying function binding.
     
-    `NAME` may be of the form (`DEFINER` `NAME`). In that case, instead of
-    `DEFUN`, `DEFINER` is used.
+    **Loaddef:** The corresponding [loaddef][e4a5] is an `AUTOLOAD` form.
+    [`EXTRACT-LOADDEFS`][dd7e] with `PROCESS-ARGLIST` `T` installs `LAMBDA-LIST` as the
+    `ARGLIST`. If `PROCESS-ARGLIST` is `NIL`, then `ARGLIST` will not be passed
+    to `AUTOLOAD`.
 
 <a id="x-28AUTOLOAD-3ADEFGENERIC-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
@@ -312,21 +307,25 @@ The rules for loading are as follows.
 
 - [macro] **AUTOLOAD-CLASS** *CLASS-NAME SYSTEM-NAME &KEY DOCSTRING*
 
+    *This is the [loaddef][e4a5] for [autodef][af1d] [`DEFCLASS/AUTO`][ee20].*
+    
     Define a dummy class with `CLASS-NAME` and arrange for `SYSTEM-NAME` to
-    be [loaded][ddfa] when it or any of its subclasses are
-    [instantiated][dddd]. Return the class object. The
-    arguments are not evaluated. If `CLASS-NAME` [denotes][51fe] a [`CLASS`][1f37] and it is not [`AUTOLOAD-CLASS-P`][37fc], then do nothing and
-    return `NIL`.
+    be [loaded][ddfa] when the class or any of its
+    subclasses are [instantiated][dddd]. Returns the
+    class object. The arguments are not evaluated. If `CLASS-NAME`
+    [denotes][51fe] a [`CLASS`][1f37] and it is not [`LOADDEF-CLASS-P`][42c5],
+    then it does nothing and returns `NIL`.
     
     - `DOCSTRING`, if non-`NIL`, will be the stub's docstring. If `NIL`, then
       a generic docstring that says what system it autoloads will be
       used.
     
-    The dummy class is defined at [compile time][27c6] too to
+    The dummy class is also defined at [compile time][27c6] to
     approximate the semantics of [`DEFCLASS`][ead6]. The dummy class is a
-    [`STANDARD-CLASS`][c77f] with no superclasses or slots. These are visible
-    through introspection e.g. via `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`.
-    Introspection does not trigger autoloading.
+    [`STANDARD-CLASS`][c77f] with unrelated superclasses and no slots. These are
+    visible through introspection (e.g. via
+    `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`). Introspection does not
+    trigger autoloading.
     
     When `AUTOLOAD-CLASS` is macroexpanded during the compilation or
     loading of an [`AUTOLOAD-SYSTEM`][cd2d], it signals an [`AUTOLOAD-WARNING`][da95] if
@@ -336,41 +335,46 @@ The rules for loading are as follows.
     subclass of `CLASS-NAME` may run twice in the context of the
     `MAKE-INSTANCE` that triggers autoloading.
 
-<a id="x-28AUTOLOAD-3AAUTOLOAD-CLASS-P-20FUNCTION-29"></a>
+<a id="x-28AUTOLOAD-3ALOADDEF-CLASS-P-20FUNCTION-29"></a>
 
-- [function] **AUTOLOAD-CLASS-P** *CLASS-DESIGNATOR*
+- [function] **LOADDEF-CLASS-P** *NAME*
 
-    See if the class denoted by `CLASS-DESIGNATOR` was declared as an
-    [`AUTOLOAD-CLASS`][9d6b] and was not redefined or deleted since. Subclasses do
-    not inherit this property.
+    See if an [`AUTOLOAD-CLASS`][9d6b] for `NAME` was established, and since then
+    it has not been redefined (e.g. with [`DEFCLASS/AUTO`][ee20], [`DEFCLASS`][ead6]) or
+    deleted (with `(SETF (FIND-CLASS ...) NIL)`). Subclasses do not
+    inherit this property.
 
 <a id="x-28AUTOLOAD-3ADEFCLASS-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFCLASS/AUTO** *NAME DIRECT-SUPERCLASSES DIRECT-SLOTS &REST OPTIONS*
 
-    Like [`DEFCLASS`][ead6], but mark the class for [Automatically Generating Loaddefs][c1d4]. See
-    [`EXTRACT-LOADDEFS`][dd7e] for the corresponding [loaddef][e4a5].
+    *This is the [autodef][af1d] for the [loaddef][e4a5] [`AUTOLOAD-CLASS`][9d6b].*
     
-    Also, warn if `NAME` has never been [`AUTOLOAD-CLASS-P`][37fc].
-    
-    `NAME` may be of the form (`DEFINER` `NAME`). In that case, instead of
-    `DEFCLASS`, `DEFINER` is used.
+    Like [`DEFCLASS`][ead6]. `NAME` may be of the form `(DEFINER NAME)`. In that
+    case, instead of `DEFCLASS`, `DEFINER` is used to establish the
+    underlying class definition.
 
 <a id="x-28AUTOLOAD-3A-40VARIABLES-20MGL-PAX-3ASECTION-29"></a>
 
 ### 3.5 Variables
 
+<a id="x-28AUTOLOAD-3ALOADDEF-VARIABLE-P-20FUNCTION-29"></a>
+
+- [function] **LOADDEF-VARIABLE-P** *NAME*
+
+    See if a loaddef was [generated][c1d4] from a
+    [`DEFVAR/AUTO`][3cff] for `NAME`, but this [autodef][af1d] has not been evaluated.
+
 <a id="x-28AUTOLOAD-3ADEFVAR-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFVAR/AUTO** *VAR &OPTIONAL (VAL NIL) DOC*
 
-    Like [`DEFVAR`][7334], but mark the variable for [Automatically Generating Loaddefs][c1d4]. See
-    [`EXTRACT-LOADDEFS`][dd7e] for the corresponding [loaddef][e4a5].
+    *This is an [autodef][af1d] with no public [loaddef][e4a5]. See below.*
     
-    Also, this works with the *global* binding on Lisps that support
-    it (currently Allegro, CCL, ECL, SBCL). This is to handle the case
-    when a system that uses `DEFVAR` with a default value is autoloaded
-    while that variable is locally bound:
+    Unlike [`DEFVAR`][7334], this works with the *global* binding on Lisps that
+    support it (currently Allegro, CCL, ECL, SBCL). This is to handle
+    the case when a system that uses `DEFVAR` with a default value is
+    autoloaded while that variable is locally bound:
     
     ```common-lisp
     ;; Some base system only foreshadows *X*.
@@ -382,35 +386,46 @@ The rules for loading are as follows.
     => 1
     ```
     
-    In case the global binding has been set between the [corresponding
-    loaddef][dd7e] and the first evaluation of this form,
-    `VAL` is evaluated for side effect.
+    **Loaddef:** The corresponding [loaddef][e4a5] is not public and must be
+    [generated][c1d4]. The generated loaddef declaims
+    the variable special and maybe sets its initial value and docstring.
+    If the initial value form in `DEFVAR/AUTO` is detected as a simple
+    constant form, then it is evaluated and its value is assigned to the
+    variable as in `DEFVAR`. Simple constant forms are strings, numbers,
+    characters, keywords, constants in the CL package, and [`QUOTE`][f5d0]d nested
+    lists containing any of the previous or any symbol from the `CL`
+    package.
     
-    `DEFVAR/AUTO` warns if `VAR` does not have a loaddef in
-    [`:AUTO-LOADDEFS`][0724].
-    
-    `VAR` may be of the form (`DEFINER` `VAR`). In that case, instead of
-    `DEFVAR`, `DEFINER` is used. Note that [`DEFPARAMETER`][570e] is not a suitable
-    `DEFINER`, as it doesn't follow `DEFVAR` semantics.
+    In case the global binding of `VAR` has been set between the
+    corresponding loaddef and its first autodef, `VAL` is evaluated for
+    side effect.
 
 <a id="x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29"></a>
 
 ### 3.6 Packages
 
+<a id="x-28AUTOLOAD-3ALOADDEF-PACKAGE-P-20FUNCTION-29"></a>
+
+- [function] **LOADDEF-PACKAGE-P** *NAME*
+
+    See if a loaddef was [generated][c1d4] from a
+    [`DEFPACKAGE/AUTO`][aa0e] for `NAME`, but this [autodef][af1d] has not been evaluated
+    nor has the package been deleted.
+
 <a id="x-28AUTOLOAD-3ADEFPACKAGE-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
 - [macro] **DEFPACKAGE/AUTO** *NAME &REST OPTIONS*
 
-    Like [`DEFPACKAGE`][9b43], but mark the package for [Automatically Generating Loaddefs][c1d4] and
-    extend the existing definition additively. See [`EXTRACT-LOADDEFS`][dd7e] for
-    the corresponding [loaddef][e4a5]s.
+    *This is an [autodef][af1d] with no public [loaddef][e4a5]. See below.*
     
-    The additivity means that instead of replacing the package
-    definition or signalling errors on redefinition, it expands into
-    individual package-altering operations such as [`SHADOW`][d0c4], [`USE-PACKAGE`][2264]
-    and [`EXPORT`][0c4f]. This allows the package state to be built incrementally,
-    but the `(DEFINER NAME)` syntax is not supported. `DEFPACKAGE/AUTO`
-    may be used on the same package multiple times.
+    Unlike [`DEFPACKAGE`][9b43], if the package is already defined,
+    `DEFPACKAGE/AUTO` extends it additively. The additivity means that
+    instead of replacing the package definition or signalling errors on
+    redefinition, it expands into individual package-altering operations
+    such as [`SHADOW`][d0c4], [`USE-PACKAGE`][2264] and [`EXPORT`][0c4f]. This allows the package
+    state to be built incrementally, but it also means that
+    the `(DEFINER NAME)` syntax cannot be supported. `DEFPACKAGE/AUTO` is
+    idempotent.
     
     In addition, `DEFPACKAGE/AUTO` deviates from `DEFPACKAGE` in the
     following ways.
@@ -423,7 +438,26 @@ The rules for loading are as follows.
       not supported. Use `ADD-PACKAGE-LOCAL-NICKNAME` after the
       `DEFPACKAGE/AUTO`.
     
-    Alternatively, one may use, for example, `DEFPACKAGE` or
+    **Loaddef:** The corresponding [loaddef][e4a5] is not public and must be
+    [generated][c1d4]. As in the expansion of
+    `DEFPACKAGE/AUTO` itself, the generated operations are additive.
+    
+    - The generated loaddef reconstructs the package states as they
+      exist after all [`:AUTO-DEPENDS-ON`][9b08] systems are loaded. Thus, manual
+      modifications after the `DEFPACKAGE/AUTO` definition (e.g. by
+      additional `EXPORT`s) are reflected in the loaddef.
+    
+    - To handle circular dependencies, the loaddefs of all [autodef][af1d]
+      packages and those passed in the [`PACKAGES`][1d5a] argument to
+      [`EXTRACT-LOADDEFS`][dd7e] are generated in an interleaved manner. First,
+      all packages are created, then their state is reconstructed in
+      phases following [`DEFPACKAGE`][9b43].
+    
+    - Any reference to non-existent packages (e.g. in `:USE`) or symbols
+      in non-existent packages (e.g. `:IMPORT-FROM`) is silently skipped
+      when the loaddef is evaluated.
+    
+    Instead of `DEFPACKAGE/AUTO`, one may use, for example, `DEFPACKAGE` or
     `UIOP:DEFINE-PACKAGE` and arrange for [Automatically Generating Loaddefs][c1d4] for the
     package by listing it in `:PACKAGES` of [`:AUTO-LOADDEFS`][0724].
 
@@ -480,11 +514,11 @@ The rules for loading are as follows.
 
 - [class] **AUTOLOAD-CL-SOURCE-FILE** *ASDF/LISP-ACTION:CL-SOURCE-FILE*
 
-    The `:DEFAULT-COMPONENT-CLASS` of [`AUTOLOAD-SYSTEM`][cd2d].
-    [ASDF Integration][0c5c] relies on source files belonging to this class. When
-    combining autoload with another ASDF extension that has its own
-    `ASDF:CL-SOURCE-FILE` subclass, define a new class that inherits from
-    both, and use that as `:DEFAULT-COMPONENT-CLASS`.
+    This is the `:DEFAULT-COMPONENT-CLASS` of
+    [`AUTOLOAD-SYSTEM`][cd2d]. [ASDF Integration][0c5c] relies on source files belonging to
+    this class. When combining autoload with another ASDF extension that
+    has its own `ASDF:CL-SOURCE-FILE` subclass, define a new class that
+    inherits from both, and use that as `:DEFAULT-COMPONENT-CLASS`.
 
 <a id="x-28AUTOLOAD-3ASYSTEM-AUTO-DEPENDS-ON-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
 
@@ -492,10 +526,10 @@ The rules for loading are as follows.
 
     This is the list of the names of systems that this
     system may autoload. The names are canonicalized with
-    `ASDF:COERCE-NAME`. It is an [`AUTOLOAD-WARNING`][da95] if an [autoload][c7d6]
-    refers to a system not listed here. This is also used by
-    [`EXTRACT-LOADDEFS`][dd7e] and affects the checks performed by the [`AUTOLOAD`][7da0]
-    macro.
+    `ASDF:COERCE-NAME`. It is an [`AUTOLOAD-WARNING`][da95] if a [loaddef][e4a5] refers
+    to a system not listed here. This is also used by
+    [`EXTRACT-LOADDEFS`][dd7e] and affects the checks performed by
+    [Loading Systems][ddfa].
 
 <a id="x-28AUTOLOAD-3ASYSTEM-AUTO-LOADDEFS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29"></a>
 
@@ -524,11 +558,11 @@ The rules for loading are as follows.
 
 - [function] **AUTODEPS** *SYSTEM &KEY (CROSS-AUTOLOADED T) INSTALLER*
 
-    Return the list of the names of systems that may be autoloaded by
-    `SYSTEM` or any of its direct or indirect dependencies. This
-    recursively visits systems in the dependency tree, traversing both
-    normal (`:DEPENDS-ON`) and autoloaded ([`:AUTO-DEPENDS-ON`][9b08]) dependencies.
-    It works even if `SYSTEM` is not an [`AUTOLOAD-SYSTEM`][cd2d].
+    Return the list of system names that may be autoloaded by `SYSTEM` or
+    any of its direct or indirect dependencies. This recursively visits
+    systems in the dependency tree, traversing both normal (`:DEPENDS-ON`)
+    and autoloaded ([`:AUTO-DEPENDS-ON`][9b08]) dependencies. It works even if
+    `SYSTEM` is not an [`AUTOLOAD-SYSTEM`][cd2d].
     
     - `CROSS-AUTOLOADED` controls whether systems only reachable from
       `SYSTEM` via intermediate autoloaded dependencies are visited. Thus,
@@ -559,58 +593,26 @@ The rules for loading are as follows.
 
 - [function] **EXTRACT-LOADDEFS** *SYSTEM &KEY (PROCESS-ARGLIST T) (PROCESS-DOCSTRING T) PACKAGES*
 
-    Return a list of [loaddef][e4a5] forms that set up autoloading
-    for definitions such as [`DEFUN/AUTO`][a825] in [`:AUTO-DEPENDS-ON`][9b08] of
-    `SYSTEM`.
+    List the [loaddef][e4a5] forms of the [autodef][af1d] definitions in
+    [`:AUTO-DEPENDS-ON`][9b08] of `SYSTEM`.
     
     There is rarely a need to call this function directly, as
     [`RECORD-LOADDEFS`][e90c] and [`CHECK-LOADDEFS`][451b] provide
     [ASDF Integration][0c5c].
     
     Note that this is an expensive operation, as it loads or reloads the
-    direct dependencies one by one with `ASDF:LOAD-SYSTEM` `:FORCE` `T` and
-    records the association with the system and the autoloaded
-    definitions such as `DEFUN/AUTO`.
+    direct dependencies listed in `:AUTO-DEPENDS-ON` one by one with
+    `ASDF:LOAD-SYSTEM` `:FORCE` `T` to find the [autodef][af1d]s.
     
-    - For function definitions such as `DEFUN/AUTO`, an [`AUTOLOAD`][7da0] [loaddef][e4a5]
-    is emitted.
+    See the individual [autodef][af1d]s for descriptions of the generated
+    loaddefs.
     
-        If `PROCESS-ARGLIST` is `T`, then the autoload forms will pass the
-        `ARGLIST` argument of the corresponding `DEFUN/AUTO` to `AUTOLOAD`. If
-        it is `NIL`, then `ARGLIST` will not be passed to `AUTOLOAD`.
-    
-    - For class definitions such as [`DEFCLASS/AUTO`][ee20], an [`AUTOLOAD-CLASS`][9d6b]
-    [loaddef][e4a5] is emitted.
-    
-    - For [`DEFVAR/AUTO`][3cff], the emitted [loaddef][e4a5] declaims the variable
-    special and maybe sets its initial value and docstring.
-    
-        If the initial value form in `DEFVAR/AUTO` is detected as a simple
-        constant form, then it is evaluated and its value is assigned to
-        the variable as in [`DEFVAR`][7334]. Simple constant forms are strings,
-        numbers, characters, keywords, constants in the CL package, and
-        [`QUOTE`][f5d0]d nested lists containing any of the previous or any symbol
-        from the `CL` package.
-    
-    - For [`DEFPACKAGE/AUTO`][aa0e] and the provided `PACKAGES`,
-    individual package-altering [loaddef][e4a5]s are emitted.
-    
-        As in the expansion of `DEFPACKAGE/AUTO` itself, these
-        operations are additive. To handle circular dependencies, first
-        all packages are created, then their state is reconstructed in
-        phases following [`DEFPACKAGE`][9b43].
-    
-        Any reference to non-existent packages (e.g. in `:USE`) or symbols
-        in non-existent packages (e.g. `:IMPORT-FROM`) is silently
-        skipped.
-    
-    - If `PROCESS-DOCSTRING`, then the docstrings extracted from [auto][a159]
+    - If `PROCESS-DOCSTRING`, then the docstrings extracted from [autodef][af1d]
       definitions will be associated with the definition.
     
-    Note that if a function is not defined with `DEFUN/AUTO`, then
-    `EXTRACT-LOADDEFS` will not detect it. For such functions, `AUTOLOAD`
-    forms must be written manually. Similar considerations apply to
-    variables and packages.
+    Note that if a definition is not made with an [autodef][af1d], then
+    `EXTRACT-LOADDEFS` will not detect it. For such functions, [loaddef][e4a5]s
+    must be written manually.
 
 <a id="x-28AUTOLOAD-3AWRITE-LOADDEFS-20FUNCTION-29"></a>
 
@@ -643,12 +645,12 @@ The rules for loading are as follows.
     In the [`AUTOLOAD-SYSTEM`][cd2d] `SYSTEM`, check that both recorded and manual
     autoload declarations are correct.
     
-    - If there is an [`:AUTO-LOADDEFS`][0724], check that the file generated by
+    - If [`:AUTO-LOADDEFS`][0724] is specified, check that the file generated by
       [`RECORD-LOADDEFS`][e90c] is up-to-date.
     
-    - Check that all manual (non-generated) autoload declarations with
-      [`AUTOLOAD`][7da0]s in `SYSTEM` are resolved (the corresponding function or
-      variable is defined) by loading [`:AUTO-DEPENDS-ON`][9b08].
+    - Check that all manual (non-generated) [loaddef][e4a5]s in `SYSTEM` are
+      resolved (e.g. no longer [`LOADDEF-FUNCTION-P`][8c12]) by loading
+      [`:AUTO-DEPENDS-ON`][9b08].
     
     If `ERRORP`, then signal an error if a check fails or the loaddefs
     file cannot be read. If [`:AUTO-LOADDEFS`][0724] is specified, then the
@@ -674,22 +676,21 @@ The rules for loading are as follows.
   [0c5c]: #x-28AUTOLOAD-3A-40ASDF-INTEGRATION-20MGL-PAX-3ASECTION-29 "ASDF Integration"
   [119e]: http://www.lispworks.com/documentation/HyperSpec/Body/t_fn.htm "FUNCTION (MGL-PAX:CLHS CLASS)"
   [1466]: http://www.lispworks.com/documentation/HyperSpec/Body/f_init_i.htm "INITIALIZE-INSTANCE (MGL-PAX:CLHS GENERIC-FUNCTION)"
+  [1d5a]: http://www.lispworks.com/documentation/HyperSpec/Body/t_pkg.htm "PACKAGE (MGL-PAX:CLHS CLASS)"
   [1f37]: http://www.lispworks.com/documentation/HyperSpec/Body/t_class.htm "CLASS (MGL-PAX:CLHS CLASS)"
   [2264]: http://www.lispworks.com/documentation/HyperSpec/Body/f_use_pk.htm "USE-PACKAGE (MGL-PAX:CLHS FUNCTION)"
   [27c6]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compile_time "\"compile time\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
-  [37fc]: #x-28AUTOLOAD-3AAUTOLOAD-CLASS-P-20FUNCTION-29 "AUTOLOAD:AUTOLOAD-CLASS-P FUNCTION"
   [38fe]: #x-28AUTOLOAD-3A-40CLASSES-20MGL-PAX-3ASECTION-29 "Classes"
   [39df]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_std_.htm "WITH-STANDARD-IO-SYNTAX (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [3cff]: #x-28AUTOLOAD-3ADEFVAR-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFVAR/AUTO MGL-PAX:MACRO"
   [3d01]: #x-28AUTOLOAD-3ARECORD-LOADDEFS-20RESTART-29 "AUTOLOAD:RECORD-LOADDEFS RESTART"
+  [42c5]: #x-28AUTOLOAD-3ALOADDEF-CLASS-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-CLASS-P FUNCTION"
   [451b]: #x-28AUTOLOAD-3ACHECK-LOADDEFS-20FUNCTION-29 "AUTOLOAD:CHECK-LOADDEFS FUNCTION"
   [471f]: #x-28AUTOLOAD-3A-40INTRODUCTION-20MGL-PAX-3ASECTION-29 "Introduction"
   [4b04]: #x-28AUTOLOAD-3A-40FUNCTIONS-20MGL-PAX-3ASECTION-29 "Functions"
   [51fe]: http://www.lispworks.com/documentation/HyperSpec/Body/f_find_c.htm "FIND-CLASS (MGL-PAX:CLHS FUNCTION)"
   [53ee]: http://www.lispworks.com/documentation/HyperSpec/Body/26_glo_c.htm#compiled_file "\"compiled file\" (MGL-PAX:CLHS MGL-PAX:GLOSSARY-TERM)"
-  [570e]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpar.htm "DEFPARAMETER (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [5968]: #x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29 "\"autoload\" ASDF/SYSTEM:SYSTEM"
-  [5b87]: #x-28AUTOLOAD-3ADEFGENERIC-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFGENERIC/AUTO MGL-PAX:MACRO"
   [609c]: http://www.lispworks.com/documentation/HyperSpec/Body/f_fmakun.htm "FMAKUNBOUND (MGL-PAX:CLHS FUNCTION)"
   [6166]: http://www.lispworks.com/documentation/HyperSpec/Body/m_w_comp.htm "WITH-COMPILATION-UNIT (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [643f]: #x-28AUTOLOAD-3A-40PACKAGES-20MGL-PAX-3ASECTION-29 "Packages"
@@ -698,22 +699,21 @@ The rules for loading are as follows.
   [6d25]: #x-28AUTOLOAD-3AWRITE-LOADDEFS-20FUNCTION-29 "AUTOLOAD:WRITE-LOADDEFS FUNCTION"
   [7334]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpar.htm "DEFVAR (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
-  [81f7]: http://www.lispworks.com/documentation/HyperSpec/Body/s_fn.htm "FUNCTION (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [8aca]: http://www.lispworks.com/documentation/HyperSpec/Body/v_pr_rda.htm "*PRINT-READABLY* (MGL-PAX:CLHS VARIABLE)"
-  [8dd7]: #x-28AUTOLOAD-3AAUTOLOAD-FBOUND-P-20FUNCTION-29 "AUTOLOAD:AUTOLOAD-FBOUND-P FUNCTION"
+  [8c12]: #x-28AUTOLOAD-3ALOADDEF-FUNCTION-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-FUNCTION-P FUNCTION"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
+  [9776]: #x-28AUTOLOAD-3ALOADDEF-PACKAGE-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-PACKAGE-P FUNCTION"
   [9b08]: #x-28AUTOLOAD-3ASYSTEM-AUTO-DEPENDS-ON-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTO-DEPENDS-ON (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [9b43]: http://www.lispworks.com/documentation/HyperSpec/Body/m_defpkg.htm "DEFPACKAGE (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [9d6b]: #x-28AUTOLOAD-3AAUTOLOAD-CLASS-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD-CLASS MGL-PAX:MACRO"
-  [a159]: #x-28AUTOLOAD-3A-40AUTO-20MGL-PAX-3AGLOSSARY-TERM-29 "auto"
   [a515]: #x-28AUTOLOAD-3AAUTOLOAD-ERROR-20CONDITION-29 "AUTOLOAD:AUTOLOAD-ERROR CONDITION"
   [a825]: #x-28AUTOLOAD-3ADEFUN-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFUN/AUTO MGL-PAX:MACRO"
   [aa0e]: #x-28AUTOLOAD-3ADEFPACKAGE-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFPACKAGE/AUTO MGL-PAX:MACRO"
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
+  [af1d]: #x-28AUTOLOAD-3A-40AUTODEF-20MGL-PAX-3AGLOSSARY-TERM-29 "autodef"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c1d4]: #x-28AUTOLOAD-3A-40AUTOMATIC-LOADDEFS-20MGL-PAX-3ASECTION-29 "Automatically Generating Loaddefs"
   [c77f]: http://www.lispworks.com/documentation/HyperSpec/Body/t_std_cl.htm "STANDARD-CLASS (MGL-PAX:CLHS CLASS)"
-  [c7d6]: #x-28AUTOLOAD-3A-40AUTOLOAD-20MGL-PAX-3AGLOSSARY-TERM-29 "autoload"
   [cd2d]: #x-28AUTOLOAD-3AAUTOLOAD-SYSTEM-20CLASS-29 "AUTOLOAD:AUTOLOAD-SYSTEM CLASS"
   [d0c4]: http://www.lispworks.com/documentation/HyperSpec/Body/f_shadow.htm "SHADOW (MGL-PAX:CLHS FUNCTION)"
   [d162]: http://www.lispworks.com/documentation/HyperSpec/Body/e_error.htm "ERROR (MGL-PAX:CLHS CONDITION)"
@@ -738,6 +738,7 @@ The rules for loading are as follows.
   [f5d0]: http://www.lispworks.com/documentation/HyperSpec/Body/s_quote.htm "QUOTE (MGL-PAX:CLHS MGL-PAX:MACRO)"
   [fa90]: #x-28AUTOLOAD-3A-40BASICS-20MGL-PAX-3ASECTION-29 "Basics"
   [fc62]: http://www.lispworks.com/documentation/HyperSpec/Body/e_smp_wa.htm "SIMPLE-WARNING (MGL-PAX:CLHS CONDITION)"
+  [fd18]: #x-28AUTOLOAD-3ALOADDEF-VARIABLE-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-VARIABLE-P FUNCTION"
 
 * * *
 ###### \[generated by [MGL-PAX](https://github.com/melisgl/mgl-pax)\]

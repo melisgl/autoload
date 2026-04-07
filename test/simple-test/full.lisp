@@ -47,12 +47,6 @@
      ((custom-slot :initform 'my-defclass-ran) ,@slots)
      ,@options))
 
-(defmacro my-defvar (name &optional value doc)
-  (declare (ignore doc))
-  `(defvar ,name (list 'my-defvar-ran ,value)))
-
 (defun/auto (my-defun test-custom-fun) (x) x)
 
 (defclass/auto (my-defclass test-custom-class) () ())
-
-(defvar/auto (my-defvar *test-custom-var*) 99)
