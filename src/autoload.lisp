@@ -1431,4 +1431,7 @@ ASDF:DEFSYSTEM."
 
 (defmethod asdf:perform ((op asdf:test-op) (system autoload-system))
   (when (system-test-loaddefs-p system)
-    (check-loaddefs system)))
+    (format t "~&Checking loaddefs ...~%")
+    (let ((*standard-output* (make-broadcast-stream)))
+      (check-loaddefs system))
+    (format t "~&Loaddefs are up-to-date.~%")))
