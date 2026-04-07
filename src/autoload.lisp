@@ -1256,8 +1256,10 @@ ASDF:DEFSYSTEM."
   (let* ((system (asdf:find-system system))
          (*recording-from-system* system)
          (*recorded-autoload-infos* ())
-         (asdf:*compile-file-warnings-behaviour* :ignore))
-    (asdf:load-system system :force t)
+         (asdf:*compile-file-warnings-behaviour* :ignore)
+         (asdf:*compile-file-failure-behaviour* :ignore))
+    (with-compilation-unit (:override t)
+      (asdf:load-system system :force t))
     (reverse *recorded-autoload-infos*)))
 
 (defun info-to-loaddefs (info process-arglist process-docstring)
@@ -1420,8 +1422,11 @@ ASDF:DEFSYSTEM."
 
 (defun unresolved-loaddefs (system)
   (let ((*gathering-unresolved-from-system* system)
-        (*gathered-unresolved-loaddefs* ()))
-    (asdf:load-system system :force t)
+        (*gathered-unresolved-loaddefs* ())
+        (asdf:*compile-file-warnings-behaviour* :ignore)
+        (asdf:*compile-file-failure-behaviour* :ignore))
+    (with-compilation-unit (:override t)
+      (asdf:load-system system :force t))
     *gathered-unresolved-loaddefs*))
 
 (defmethod asdf:perform ((op asdf:test-op) (system autoload-system))

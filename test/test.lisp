@@ -88,10 +88,19 @@
   (autoload::with-file-superseded (stream pathname)
     (declare (ignorable stream))))
 
+(defun asdf-force-load (system)
+  ;; This avoids redefinition warnings.
+  #-abcl
+  (with-compilation-unit (:override t)
+    (asdf:load-system system :force t))
+  #+abcl
+  (asdf:load-system system :force t))
+
 (defmacro with-test-systems (&body body)
   `(unwind-protect
         (autoload::without-asdf-session
-          (let ((asdf:*compile-file-warnings-behaviour* :ignore))
+          (let ((asdf:*compile-file-warnings-behaviour* :ignore)
+                (asdf:*compile-file-failure-behaviour* :ignore))
             (load (asdf:system-relative-pathname
                    "autoload-test" "test/simple-test/%simple-test.system"))
             (load (asdf:system-relative-pathname
@@ -117,11 +126,14 @@
 (defmacro with-test-class (&body body)
   `(unwind-protect
         (progn
-          (ignore-errors (setf (find-class 'test-class) nil))
-          (ignore-errors (setf (find-class 'test-subclass) nil))
+          (delete-test-classes)
           ,@body)
-     (ignore-errors (setf (find-class 'test-class) nil))
-     (ignore-errors (setf (find-class 'test-subclass) nil))))
+     (delete-test-classes)))
+
+(defun delete-test-classes ()
+  (handler-bind ((warning #'muffle-warning))
+    (ignore-errors (setf (find-class 'test-class) nil))
+    (ignore-errors (setf (find-class 'test-subclass) nil))))
 
 (define-symbol-macro foo
     (read-from-string "%simple-test::foo"))
@@ -181,8 +193,9 @@
                (let ((*error-output* (make-broadcast-stream)))
                  (if load-source-p
                      (asdf:operate 'asdf:load-source-op "%simple-test")
-                     (asdf:load-system "%simple-test" :force t))))
+                     (asdf-force-load "%simple-test"))))
              (load-simple-test (&optional empty-loaddefs-file-p)
+               (declare (ignorable empty-loaddefs-file-p))
                (signals-not (autoload-warning :pred #'unexpected-condition-p
                              :handler #'muffle-warning)
                  ;; CCC [handle][clhs]s warnings in COMPILE-FILE.
@@ -259,8 +272,13 @@
               (is (autoload-fbound-p foo))
               ;; CMUCL sometimes fails with a type error somewhere in the
               ;; tracing machinery.
-              #-cmucl
+              #-(or clisp cmucl)
               (eval `(trace ,foo))
+              #+clisp
+              (let ((*trace-output* (make-broadcast-stream))
+                    (*standard-output* (make-broadcast-stream))
+                    (*error-output* (make-broadcast-stream)))
+                (eval `(trace ,foo)))
               (is (not (asdf:component-loaded-p "%simple-test/full")))
               (let ((*trace-output* (make-broadcast-stream)))
                 (is (equal (funcall foo 'secret) 'secret)))
@@ -340,7 +358,7 @@
                       (test-file "loaddefs.lisp"))
                      (uiop:read-file-forms
                       (test-file "expected-loaddefs.lisp")))))
-        (asdf:load-system "%package-test" :force t))
+        (asdf-force-load "%package-test"))
       (dolist (compilep '(t nil))
         (with-test-systems
           (if compilep
@@ -431,7 +449,7 @@
             ;; fasl is stale. FILE-WRITE-DATE has a resolution of one
             ;; second. Since we have compiled and overwritten
             ;; full.lisp in quick succession, force loading.
-            (asdf:load-system "%test-system/full" :force t))
+            (asdf-force-load "%test-system/full"))
           ;; Test the CONTINUE restart.
           (let ((n-continues 0))
             (signals (error :pred "differ"
@@ -452,7 +470,7 @@
           (write-full t nil nil)
           (signals (autoload-warning :pred "Missing loaddef"
                     :handler #'muffle-warning)
-            (asdf:load-system "%test-system/full" :force t))
+            (asdf-force-load "%test-system/full"))
           ;; Test the CONTINUE restart.
           (let ((n-continues 0))
             (signals (error :pred "differ"
@@ -471,18 +489,18 @@
         (with-test-systems
           (write-manual t)
           (write-full t t t)
-          (asdf:load-system "%test-system" :force t)
+          (asdf-force-load "%test-system")
           (signals (autoload-warning :pred "Missing loaddef"
                     :handler #'muffle-warning)
-            (asdf:load-system "%test-system/full" :force t))
+            (asdf-force-load "%test-system/full"))
           (record-loaddefs "%test-system")
           (is (check-loaddefs "%test-system"))))
       (with-test ("unresolved manual function autoload")
         (with-test-systems
           (write-manual t)
           (write-full t t nil)
-          (asdf:load-system "%test-system" :force t)
-          (asdf:load-system "%test-system/full" :force t)
+          (asdf-force-load "%test-system")
+          (asdf-force-load "%test-system/full")
           (record-loaddefs "%test-system")
           ;; Test the CONTINUE restart.
           (with-test ("CONTINUE")
@@ -516,8 +534,7 @@
           (signals (error :handler #'record-loaddefs)
             (let ((*standard-output* (make-broadcast-stream))
                   (*error-output* (make-broadcast-stream)))
-              (with-compilation-unit (:override t)
-                (asdf:load-system "%test-system" :force t)))))))))
+              (asdf-force-load "%test-system"))))))))
 
 
 (deftest test-autoload-class ()
