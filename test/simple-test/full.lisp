@@ -28,7 +28,7 @@
   (fmakunbound 'foo-gf))
 
 ;;; Prevent redefinition warnings from DEFGENERIC/AUTO below.
-(defgeneric foo-gf (x))
+#+(or clisp sbcl) (defgeneric foo-gf (x))
 
 (defmethod foo-gf ((x integer))
   (1+ x))
