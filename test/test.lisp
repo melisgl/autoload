@@ -516,7 +516,8 @@
                         :handler (lambda (condition)
                                    (when (= (incf n-continues) 1)
                                      (continue condition))))
-                (asdf:test-system "%test-system"))))
+                (let ((*standard-output* (make-broadcast-stream)))
+                  (asdf:test-system "%test-system")))))
           ;; Test that there is no RECORD-LOADDEFS restart.
           (signals (error :pred "manual"
                     :handler (lambda (condition)
