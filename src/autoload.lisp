@@ -285,10 +285,7 @@
      (when (or (null (fdefinition* ',name))
                (loaddef-function-p ',name))
        (defun ,name (&rest args)
-         ,(or docstring
-              (let ((*package* (find-package :keyword)))
-                (format nil "~S in the ~A ASDF:SYSTEM."
-                        'autoload (%escape-markdown system-name))))
+         ,(or docstring (default-stub-docstring 'autoload system-name))
          (autoload-system-for ',system-name ',name :function)
          ;; Make sure that the function redefined by ASDF:LOAD-SYSTEM
          ;; is invoked and not this stub, which could be the case
@@ -296,6 +293,11 @@
          (apply (fdefinition ',name) args))
        (after-function-autoload-definition ',name ',arglistp ',arglist)
        ',name)))
+
+(defun default-stub-docstring (autoloader system-name)
+  (let ((*package* (find-package :keyword)))
+    (format nil "~S in the ~A ASDF:SYSTEM."
+            autoloader (%escape-markdown system-name))))
 
 (defun after-function-autoload-definition (name arglistp arglist)
   (declare (ignorable arglistp arglist))
@@ -373,9 +375,9 @@
        (mark-auto ',name :function)
        ',name)))
 
-(defmacro defgeneric/auto (name lambda-list &body body)
+(defmacro defgeneric/auto (name lambda-list &body options)
   "A shorthand for `(` DEFUN/AUTO `(DEFGENERIC NAME) ...)`."
-  `(defun/auto (defgeneric ,name) ,lambda-list ,@body))
+  `(defun/auto (defgeneric ,name) ,lambda-list ,@options))
 
 (defun defun/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
@@ -426,10 +428,10 @@
     instance of STANDARD-CLASS.
 
   The dummy class is also defined at [compile time][clhs] to
-  approximate the semantics of DEFCLASS. The dummy class has METACLASS
-  with a single superclass and no slots. These are visible through
-  introspection (e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES).
-  Introspection does not trigger autoloading.
+  approximate the semantics of DEFCLASS. It class has METACLASS with a
+  single superclass and no slots. These are visible through
+  introspection (e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES), which
+  does not trigger autoloading.
 
   Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
   subclass of CLASS-NAME may run twice in the context of the
@@ -446,9 +448,7 @@
              (:metaclass ,metaclass)
              (:documentation
               ,(or docstring
-                   (let ((*package* (find-package :keyword)))
-                     (format nil "~S in the ~A ASDF:SYSTEM." 'autoload-class
-                             (%escape-markdown system-name))))))
+                   (default-stub-docstring 'autoload-class system-name))))
          (setf (get ',class-name '%autoload-system) ',system-name)
          (setf (state ',class-name :class) (find-class ',class-name))))))
 
@@ -1033,7 +1033,7 @@
    ;; KLUDGE: (:DEFAULT-INITARGS :DEFAULT-COMPONENT-CLASS
    ;; 'AUTOLOAD-CL-SOURCE-FILE) doesn't work, so do it directly.
    (asdf::default-component-class :initform 'autoload-cl-source-file))
-  (:documentation "Inheriting from this class in your ASDF:DEFSYSTEM
+  (:documentation "Inheriting from this class in an ASDF:DEFSYSTEM
   form enables the features documented in the reader methods. Consider
   the following example.
 
