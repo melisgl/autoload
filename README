@@ -241,7 +241,7 @@ to be circular. The rules for loading are as follows.
 
 ### Classes
 
-- [macro] AUTOLOAD-CLASS CLASS-NAME SYSTEM-NAME &KEY DOCSTRING
+- [macro] AUTOLOAD-CLASS CLASS-NAME SYSTEM-NAME &KEY DOCSTRING (METACLASS 'STANDARD-CLASS)
 
     This is the loaddef for autodef DEFCLASS/AUTO.
 
@@ -252,20 +252,26 @@ to be circular. The rules for loading are as follows.
     denotes a CLASS and it is not LOADDEF-CLASS-P,
     then it does nothing and returns NIL.
 
+    When AUTOLOAD-CLASS is macroexpanded during the compilation or
+    loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
+    SYSTEM-NAME is not among those declared in :AUTO-DEPENDS-ON.
+
     - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
       a generic docstring that says what system it autoloads will be
       used.
 
+    - METACLASS is symbol denoting a class that is subtype of
+      STANDARD-CLASS. Also, classes with this metaclass must be allowed
+      to inherit from standard classes. In MOP terms,
+      CLOSER-MOP:VALIDATE-SUPERCLASS must return true when called with
+      an instance of METACLASS and an instance of STANDARD-CLASS.
+
     The dummy class is also defined at compile time to
-    approximate the semantics of DEFCLASS. The dummy class is a
-    STANDARD-CLASS with unrelated superclasses and no slots. These are
-    visible through introspection (e.g. via
+    approximate the semantics of DEFCLASS. The dummy class is of
+    METACLASS with a single superclass and no slots. These are visible
+    through introspection (e.g. via
     CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES). Introspection does not
     trigger autoloading.
-
-    When AUTOLOAD-CLASS is macroexpanded during the compilation or
-    loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
-    SYSTEM-NAME is not among those declared in :AUTO-DEPENDS-ON.
 
     Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
     subclass of CLASS-NAME may run twice in the context of the
@@ -285,6 +291,10 @@ to be circular. The rules for loading are as follows.
     Like DEFCLASS. NAME may be of the form (DEFINER NAME). In that
     case, instead of DEFCLASS, DEFINER is used to establish the
     underlying class definition.
+
+    Loaddef: The corresponding loaddef is an AUTOLOAD-CLASS form.
+    Note that the metaclass of the class NAME must already be defined
+    when the loaddef is evaluated.
 
 ### Variables
 

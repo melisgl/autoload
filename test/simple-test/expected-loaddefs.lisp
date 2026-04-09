@@ -33,4 +33,7 @@
 (autoload:autoload (setf %simple-test::xxx) "%simple-test/full" :arglist
                    "(%simple-test::x)")
 
+(autoload:autoload-class %simple-test::ccc "%simple-test/full"
+                         :metaclass autoload-test::meta)
+
 (autoload:autoload-class %simple-test::test-custom-class "%simple-test/full")
