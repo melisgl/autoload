@@ -66,9 +66,8 @@ sacrificing features or duplicating code, to minimize
 
 - the risk of breakage through dependencies.
 
-This library reduces the tension arising from the first two
-considerations by letting heavy dependencies be loaded on demand.
-The core idea is
+This library mitigates the first two issues by loading heavy
+dependencies on demand. The core idea is
 
 ```
 (defmacro autoload (name asdf-system)
@@ -106,8 +105,12 @@ above) in sync with the definitions is fragile, so we introduce the
   (1+ x))
 ```
 
-and [generate loaddefs][c1d4] through the
-[ASDF Integration][0c5c]:
+<br>
+
+**[ASDF Integration][0c5c]**
+
+To [generate loaddefs][c1d4], we add a few lines to
+the system definitions:
 
 ```
 (asdf:defsystem "my-lib"
@@ -136,8 +139,9 @@ Then, the loaddefs can be extracted:
 This is implemented by loading the [`:AUTO-DEPENDS-ON`][9b08] of `my-lib` and
 recording `DEFUN/AUTO`s. [`EXTRACT-LOADDEFS`][dd7e] is a low-level utility used
 by [`RECORD-LOADDEFS`][e90c], which writes its results to the
-system's [`:AUTO-LOADDEFS`][0724], `"loaddefs.lisp"` in the above example.
-So, all we need to do is call it to regenerate the loaddefs file:
+system's [`:AUTO-LOADDEFS`][0724], `"loaddefs.lisp"` in the above example. So,
+all we need to do is call `RECORD-LOADDEFS` to regenerate the loaddefs
+file:
 
 ```
 (record-loaddefs "my-lib")
@@ -148,7 +152,7 @@ definitions, `ASDF:TEST-SYSTEM` calls [`CHECK-LOADDEFS`][451b] by default.
 
 ASDF, and by extension [Quicklisp][ae25], doesn't know about the declared
 [`:AUTO-DEPENDS-ON`][9b08], so `(QL:QUICKLOAD "my-lib")` does not install the
-autoloaded dependencies. This can be done with
+autoloaded dependencies. They can be installed manually with
 
 ```
 (autodeps "my-lib" :installer #'ql:quickload)
@@ -161,6 +165,25 @@ in deployment):
 ```
 (map nil #'asdf:load-system (autodeps "my-lib"))
 ```
+
+<br>
+
+**Other Features**
+
+Autoloading is not only for [Functions][4b04]:
+
+- Autoloading [Classes][38fe] at the time of their first instantiation is
+  supported.
+
+- [Variables][f490] can be marked for early definition and have their
+  initial values assigned if the initial value form provably doesn't
+  have dependencies. If that's not the case, subject to platform
+  support, the definition in the loaded system injects a global
+  binding even in the presence of local bindings.
+
+- Multiple [Packages][643f] can have their final states and
+  interdependencies reconstructed before loading their systems even
+  if they were mutated operations like [`IMPORT`][8f46] and [`EXPORT`][0c4f].
 
 
 <a id="x-28AUTOLOAD-3A-40BASICS-20MGL-PAX-3ASECTION-29"></a>
@@ -295,7 +318,7 @@ to be circular. The rules for loading are as follows.
 
 <a id="x-28AUTOLOAD-3ADEFGENERIC-2FAUTO-20MGL-PAX-3AMACRO-29"></a>
 
-- [macro] **DEFGENERIC/AUTO** *NAME LAMBDA-LIST &BODY BODY*
+- [macro] **DEFGENERIC/AUTO** *NAME LAMBDA-LIST &BODY OPTIONS*
 
     A shorthand for `(` [`DEFUN/AUTO`][a825] `(DEFGENERIC NAME) ...)`.
 
@@ -324,18 +347,17 @@ to be circular. The rules for loading are as follows.
       a generic docstring that says what system it autoloads will be
       used.
     
-    - `METACLASS` is symbol denoting a class that is subtype of
-      [`STANDARD-CLASS`][c77f]. Also, classes with this metaclass must be allowed
-      to inherit from standard classes. In MOP terms,
-      `CLOSER-MOP:VALIDATE-SUPERCLASS` must return true when called with
-      an instance of `METACLASS` and an instance of `STANDARD-CLASS`.
+    - `METACLASS` is a symbol denoting [`STANDARD-CLASS`][c77f] or a subclass of it.
+      Also, classes with this metaclass must be allowed to inherit from
+      standard classes. In MOP terms, `CLOSER-MOP:VALIDATE-SUPERCLASS`
+      must return true when called with an instance of `METACLASS` and an
+      instance of `STANDARD-CLASS`.
     
     The dummy class is also defined at [compile time][27c6] to
-    approximate the semantics of [`DEFCLASS`][ead6]. The dummy class is of
-    `METACLASS` with a single superclass and no slots. These are visible
-    through introspection (e.g. via
-    `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`). Introspection does not
-    trigger autoloading.
+    approximate the semantics of [`DEFCLASS`][ead6]. It class has `METACLASS` with a
+    single superclass and no slots. These are visible through
+    introspection (e.g. via `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`), which
+    does not trigger autoloading.
     
     Note that [`INITIALIZE-INSTANCE`][1466] `:AROUND` methods specialized on a
     subclass of `CLASS-NAME` may run twice in the context of the
@@ -479,7 +501,7 @@ to be circular. The rules for loading are as follows.
 
 - [class] **AUTOLOAD-SYSTEM** *ASDF/SYSTEM:SYSTEM*
 
-    Inheriting from this class in your `ASDF:DEFSYSTEM`
+    Inheriting from this class in an `ASDF:DEFSYSTEM`
     form enables the features documented in the reader methods. Consider
     the following example.
     
@@ -711,6 +733,7 @@ to be circular. The rules for loading are as follows.
   [7da0]: #x-28AUTOLOAD-3AAUTOLOAD-20MGL-PAX-3AMACRO-29 "AUTOLOAD:AUTOLOAD MGL-PAX:MACRO"
   [8aca]: http://www.lispworks.com/documentation/HyperSpec/Body/v_pr_rda.htm "*PRINT-READABLY* (MGL-PAX:CLHS VARIABLE)"
   [8c12]: #x-28AUTOLOAD-3ALOADDEF-FUNCTION-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-FUNCTION-P FUNCTION"
+  [8f46]: http://www.lispworks.com/documentation/HyperSpec/Body/f_import.htm "IMPORT (MGL-PAX:CLHS FUNCTION)"
   [9514]: http://www.lispworks.com/documentation/HyperSpec/Body/d_inline.htm "NOTINLINE (MGL-PAX:CLHS DECLARATION)"
   [9776]: #x-28AUTOLOAD-3ALOADDEF-PACKAGE-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-PACKAGE-P FUNCTION"
   [9b08]: #x-28AUTOLOAD-3ASYSTEM-AUTO-DEPENDS-ON-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTO-DEPENDS-ON (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"

@@ -52,9 +52,8 @@ sacrificing features or duplicating code, to minimize
 
 - the risk of breakage through dependencies.
 
-This library reduces the tension arising from the first two
-considerations by letting heavy dependencies be loaded on demand.
-The core idea is
+This library mitigates the first two issues by loading heavy
+dependencies on demand. The core idea is
 
     (defmacro autoload (name asdf-system)
       `(defun ,name (&rest args)
@@ -84,8 +83,12 @@ my-lib/full system:
       "doc"
       (1+ x))
 
-and generate loaddefs through the
-ASDF Integration:
+<br>
+
+ASDF Integration
+
+To generate loaddefs, we add a few lines to
+the system definitions:
 
     (asdf:defsystem "my-lib"
       :defsystem-depends-on ("autoload")
@@ -108,8 +111,9 @@ Then, the loaddefs can be extracted:
 This is implemented by loading the :AUTO-DEPENDS-ON of my-lib and
 recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility used
 by RECORD-LOADDEFS, which writes its results to the
-system's :AUTO-LOADDEFS, "loaddefs.lisp" in the above example.
-So, all we need to do is call it to regenerate the loaddefs file:
+system's :AUTO-LOADDEFS, "loaddefs.lisp" in the above example. So,
+all we need to do is call RECORD-LOADDEFS to regenerate the loaddefs
+file:
 
     (record-loaddefs "my-lib")
 
@@ -118,7 +122,7 @@ definitions, ASDF:TEST-SYSTEM calls CHECK-LOADDEFS by default.
 
 ASDF, and by extension Quicklisp, doesn't know about the declared
 :AUTO-DEPENDS-ON, so (QL:QUICKLOAD "my-lib") does not install the
-autoloaded dependencies. This can be done with
+autoloaded dependencies. They can be installed manually with
 
     (autodeps "my-lib" :installer #'ql:quickload)
 
@@ -127,6 +131,25 @@ load them to ensure that autoloading is not triggered later (e.g.
 in deployment):
 
     (map nil #'asdf:load-system (autodeps "my-lib"))
+
+<br>
+
+Other Features
+
+Autoloading is not only for Functions:
+
+- Autoloading Classes at the time of their first instantiation is
+  supported.
+
+- Variables can be marked for early definition and have their
+  initial values assigned if the initial value form provably doesn't
+  have dependencies. If that's not the case, subject to platform
+  support, the definition in the loaded system injects a global
+  binding even in the presence of local bindings.
+
+- Multiple Packages can have their final states and
+  interdependencies reconstructed before loading their systems even
+  if they were mutated operations like IMPORT and EXPORT.
 
 ## Basics
 
@@ -235,7 +258,7 @@ to be circular. The rules for loading are as follows.
     ARGLIST. If PROCESS-ARGLIST is NIL, then ARGLIST will not be passed
     to AUTOLOAD.
 
-- [macro] DEFGENERIC/AUTO NAME LAMBDA-LIST &BODY BODY
+- [macro] DEFGENERIC/AUTO NAME LAMBDA-LIST &BODY OPTIONS
 
     A shorthand for ( DEFUN/AUTO (DEFGENERIC NAME) ...).
 
@@ -260,18 +283,17 @@ to be circular. The rules for loading are as follows.
       a generic docstring that says what system it autoloads will be
       used.
 
-    - METACLASS is symbol denoting a class that is subtype of
-      STANDARD-CLASS. Also, classes with this metaclass must be allowed
-      to inherit from standard classes. In MOP terms,
-      CLOSER-MOP:VALIDATE-SUPERCLASS must return true when called with
-      an instance of METACLASS and an instance of STANDARD-CLASS.
+    - METACLASS is a symbol denoting STANDARD-CLASS or a subclass of it.
+      Also, classes with this metaclass must be allowed to inherit from
+      standard classes. In MOP terms, CLOSER-MOP:VALIDATE-SUPERCLASS
+      must return true when called with an instance of METACLASS and an
+      instance of STANDARD-CLASS.
 
     The dummy class is also defined at compile time to
-    approximate the semantics of DEFCLASS. The dummy class is of
-    METACLASS with a single superclass and no slots. These are visible
-    through introspection (e.g. via
-    CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES). Introspection does not
-    trigger autoloading.
+    approximate the semantics of DEFCLASS. It class has METACLASS with a
+    single superclass and no slots. These are visible through
+    introspection (e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES), which
+    does not trigger autoloading.
 
     Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
     subclass of CLASS-NAME may run twice in the context of the
@@ -393,7 +415,7 @@ to be circular. The rules for loading are as follows.
 
 - [class] AUTOLOAD-SYSTEM SYSTEM
 
-    Inheriting from this class in your ASDF:DEFSYSTEM
+    Inheriting from this class in an ASDF:DEFSYSTEM
     form enables the features documented in the reader methods. Consider
     the following example.
 

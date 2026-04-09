@@ -26,9 +26,8 @@
 
   - the risk of breakage through dependencies.
 
-  This library reduces the tension arising from the first two
-  considerations by letting heavy dependencies be loaded on demand.
-  The core idea is
+  This library mitigates the first two issues by loading heavy
+  dependencies on demand. The core idea is
 
   ```
   (defmacro autoload (name asdf-system)
@@ -66,8 +65,12 @@
     (1+ x))
   ```
 
-  and [generate loaddefs][ @automatic-loaddefs] through the
-  @ASDF-INTEGRATION:
+  <br>
+
+  __@ASDF-INTEGRATION__
+
+  To [generate loaddefs][ @automatic-loaddefs], we add a few lines to
+  the system definitions:
 
   ```
   (asdf:defsystem "my-lib"
@@ -95,8 +98,9 @@
   This is implemented by loading the @AUTO-DEPENDS-ON of `my-lib` and
   recording DEFUN/AUTOs. EXTRACT-LOADDEFS is a low-level utility used
   by [RECORD-LOADDEFS][ function], which writes its results to the
-  system's @AUTO-LOADDEFS, `"loaddefs.lisp"` in the above example.
-  So, all we need to do is call it to regenerate the loaddefs file:
+  system's @AUTO-LOADDEFS, `"loaddefs.lisp"` in the above example. So,
+  all we need to do is call RECORD-LOADDEFS to regenerate the loaddefs
+  file:
 
   ```
   (record-loaddefs "my-lib")
@@ -107,7 +111,7 @@
 
   ASDF, and by extension @QUICKLISP, doesn't know about the declared
   @AUTO-DEPENDS-ON, so `(QL:QUICKLOAD "my-lib")` does not install the
-  autoloaded dependencies. This can be done with
+  autoloaded dependencies. They can be installed manually with
 
   ```
   (autodeps "my-lib" :installer #'ql:quickload)
@@ -120,7 +124,25 @@
   ```
   (map nil #'asdf:load-system (autodeps "my-lib"))
   ```
-  """)
+
+  <br>
+
+  __Other Features__
+
+  Autoloading is not only for @FUNCTIONS:
+
+  - Autoloading @CLASSES at the time of their first instantiation is
+    supported.
+
+  - @VARIABLES can be marked for early definition and have their
+    initial values assigned if the initial value form provably doesn't
+    have dependencies. If that's not the case, subject to platform
+    support, the definition in the loaded system injects a global
+    binding even in the presence of local bindings.
+
+  - Multiple @PACKAGES can have their final states and
+    interdependencies reconstructed before loading their systems even
+    if they were mutated operations like IMPORT and EXPORT.""")
 
 (dref:define-restart record-loaddefs ()
   "Provided by CHECK-LOADDEFS and also when the compilation of the
