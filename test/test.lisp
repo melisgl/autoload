@@ -542,11 +542,12 @@
   (test-autoload-class-subclassing)
   (test-autoload-class-reentrancy)
   (test-autoload-class-not-resolved)
-  (test-autoload-class-interactive-failure-recovery))
+  (test-autoload-class-interactive-failure-recovery)
+  (test-autoload-class-metaclass))
 
 (deftest test-autoload-class-triggers ()
   (with-test-class
-    (autoload-class test-class "non-existent")
+    (eval '(autoload-class test-class "non-existent"))
     (check-direct-accessors (find-class 'test-class) nil)
     (eval '(defclass/auto test-class () ()))
     (is (eq (autoload::state 'test-class :class) :auto))
@@ -557,8 +558,7 @@
     (is (endp (closer-mop:class-direct-slots class)))
     (if subclassp
         (closer-mop:class-direct-superclasses class)
-        (is (equal (closer-mop:class-direct-superclasses class)
-                   (list (find-class 'autoload::%autoload-class)))))
+        (is (= (length (closer-mop:class-direct-superclasses class)) 1)))
     (is (endp (closer-mop:class-direct-subclasses class)))
     (is (endp (closer-mop:class-direct-default-initargs class)))
     (fmakunbound 'test-class-gf)
@@ -574,7 +574,7 @@
 
 (deftest test-autoload-class-subclassing ()
   (with-test-class
-    (autoload-class test-class "non-existent")
+    (eval '(autoload-class test-class "non-existent"))
     (defclass test-subclass (test-class) ())
     (check-direct-accessors (find-class 'test-subclass) t)
     (eval '(defclass/auto test-class () ()))
@@ -583,7 +583,7 @@
 
 (deftest test-autoload-class-reentrancy ()
   (with-test-class
-    (autoload-class test-class "xxx")
+    (eval '(autoload-class test-class "xxx"))
     (let ((autoload::*test-load-system*
             (lambda (system-name)
               (is (equal system-name "xxx"))
@@ -595,7 +595,7 @@
 
 (deftest test-autoload-class-not-resolved ()
   (with-test-class
-    (autoload-class test-class "xxx")
+    (eval '(autoload-class test-class "xxx"))
     (let ((autoload::*test-load-system*
             (lambda (system-name)
               (is (equal system-name "xxx")))))
@@ -604,7 +604,7 @@
 
 (deftest test-autoload-class-interactive-failure-recovery ()
   (with-test-class
-    (autoload-class test-class "xxx")
+    (eval '(autoload-class test-class "xxx"))
     (let ((*standard-output* (make-broadcast-stream))
           (*error-output* (make-broadcast-stream))
           (autoload::*test-load-system*
@@ -614,6 +614,18 @@
       (signals (error :pred "CoMpILe ErRoR")
         (make-instance 'test-class))
       (loaddef-class-p 'test-class))))
+
+(defclass meta (standard-class)
+  ())
+
+(defmethod closer-mop:validate-superclass
+    ((class meta) (superclass standard-class))
+  t)
+
+(deftest test-autoload-class-metaclass ()
+  (with-test-class
+    (eval '(autoload-class test-class "non-existent" :metaclass meta))
+    (check-direct-accessors (find-class 'test-class) nil)))
 
 
 (deftest test-autodeps ()

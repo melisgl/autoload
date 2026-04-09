@@ -50,3 +50,7 @@
 (defun/auto (my-defun test-custom-fun) (x) x)
 
 (defclass/auto (my-defclass test-custom-class) () ())
+
+(defclass/auto ccc ()
+  ()
+  (:metaclass autoload-test::meta))

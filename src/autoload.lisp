@@ -400,7 +400,8 @@
   (loaddef-class-p function)
   (defclass/auto macro))
 
-(defmacro autoload-class (class-name system-name &key docstring)
+(defmacro autoload-class (class-name system-name &key docstring
+                          (metaclass 'standard-class))
   "_This is the @LOADDEF for @AUTODEF DEFCLASS/AUTO._
 
   Define a dummy class with CLASS-NAME and arrange for SYSTEM-NAME to
@@ -410,31 +411,39 @@
   [denotes][find-class clhs] a CLASS and it is not LOADDEF-CLASS-P,
   then it does nothing and returns NIL.
 
-  - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
-    a generic docstring that says what system it autoloads will be
-    used.
-
-  The dummy class is also defined at [compile time][clhs] to
-  approximate the semantics of DEFCLASS. The dummy class is a
-  STANDARD-CLASS with unrelated superclasses and no slots. These are
-  visible through introspection (e.g. via
-  CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES). Introspection does not
-  trigger autoloading.
-
   When AUTOLOAD-CLASS is macroexpanded during the compilation or
   loading of an AUTOLOAD-SYSTEM, it signals an AUTOLOAD-WARNING if
   SYSTEM-NAME is not among those declared in @AUTO-DEPENDS-ON.
 
+  - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
+    a generic docstring that says what system it autoloads will be
+    used.
+
+  - METACLASS is a symbol denoting STANDARD-CLASS or a subclass of it.
+    Also, classes with this metaclass must be allowed to inherit from
+    standard classes. In MOP terms, CLOSER-MOP:VALIDATE-SUPERCLASS
+    must return true when called with an instance of METACLASS and an
+    instance of STANDARD-CLASS.
+
+  The dummy class is also defined at [compile time][clhs] to
+  approximate the semantics of DEFCLASS. The dummy class has METACLASS
+  with a single superclass and no slots. These are visible through
+  introspection (e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES).
+  Introspection does not trigger autoloading.
+
   Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
   subclass of CLASS-NAME may run twice in the context of the
   MAKE-INSTANCE that triggers autoloading."
+  (assert (subtypep metaclass 'standard-class))
   (check-loaddef class-name :class system-name)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
      (when (or (null (find-class ',class-name nil))
                (loaddef-class-p ',class-name))
+       (ensure-autoload-stub ,metaclass)
        (prog1
-           (defclass ,class-name (%autoload-stub)
+           (defclass ,class-name (,(stub-class-name metaclass))
              ()
+             (:metaclass ,metaclass)
              (:documentation
               ,(or docstring
                    (let ((*package* (find-package :keyword)))
@@ -443,12 +452,28 @@
          (setf (get ',class-name '%autoload-system) ',system-name)
          (setf (state ',class-name :class) (find-class ',class-name))))))
 
-(defclass %autoload-stub () ())
+(defun stub-class-name (metaclass-name)
+  (assert (symbol-package metaclass-name))
+  ;; This name is stable regardless of whether METACLASS-NAME is exported.
+  (intern (format nil "%AUTOLOAD-STUB-~A::~A"
+                  (package-name (symbol-package metaclass-name))
+                  (symbol-name metaclass-name))
+          'autoload))
 
-(defmethod initialize-instance :around ((instance %autoload-stub)
-                                        &rest initargs
-                                        &key &allow-other-keys)
-  (let* ((cpl (closer-mop:class-precedence-list (class-of instance)))
+;;; Since we cannot redefine a class with a different metaclass, the
+;;; stub must be of the final definition's metaclass. So, we lazily
+;;; define a stub superclass for each metaclass.
+(defmacro ensure-autoload-stub (metaclass-name)
+  (let ((stub-name (stub-class-name metaclass-name)))
+    `(unless (find-class ',stub-name nil)
+       (defclass ,stub-name () ()
+         (:metaclass ,metaclass-name))
+       (defmethod initialize-instance :around
+           ((stub ,stub-name) &rest initargs)
+         (initialize-stub-instance stub initargs #'call-next-method)))))
+
+(defun initialize-stub-instance (stub initargs call-next-method)
+  (let* ((cpl (closer-mop:class-precedence-list (class-of stub)))
          (stub-classes (remove-if-not #'loaddef-class-p cpl :key #'class-name)))
     (cond (stub-classes
            (dolist (stub-class stub-classes)
@@ -457,12 +482,12 @@
                (autoload-system-for system-name stub-name :class)))
            ;; Instead of CALL-NEXT-METHOD, invoke INITIALIZE-INSTANCE
            ;; again to recompute the effective methods.
-           (apply #'initialize-instance instance initargs))
+           (apply #'initialize-instance stub initargs))
           (t
            ;; There are no stubs, so the :AROUND method must have been
            ;; reentered after the class was already redefined. This
            ;; happens on ECL, CLISP and ABCL.
-           (call-next-method)))))
+           (funcall call-next-method)))))
 
 (defun loaddef-class-p (name)
   "See if an AUTOLOAD-CLASS for NAME was established, and since then
@@ -477,14 +502,17 @@
       ;; The class object is unchanged, but it may not be the stub.
       (let ((supers (closer-mop:class-direct-superclasses class)))
         (and (= (length supers) 1)
-             (eq (class-name (first supers)) '%autoload-stub))))))
+             (eq (class-name (first supers))
+                 (stub-class-name (class-name (class-of class)))))))))
 
 (defmacro defclass/auto (name direct-superclasses direct-slots &rest options)
   "_This is the @AUTODEF for the @LOADDEF AUTOLOAD-CLASS._
 
   Like DEFCLASS. NAME may be of the form `(DEFINER NAME)`. In that
   case, instead of DEFCLASS, DEFINER is used to establish the
-  underlying class definition."
+  underlying class definition.
+
+  [defclass/auto-info-to-loaddefs function][docstring]"
   (multiple-value-bind (definer name) (unpack-name-with-definer name 'defclass)
     (maybe-record-autoload-info 'defclass/auto name
                                 (find-docstring-in-body options))
@@ -496,6 +524,9 @@
 
 (defun defclass/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
+  "__Loaddef:__ The corresponding @LOADDEF is an AUTOLOAD-CLASS form.
+  Note that the metaclass of the class NAME must already be defined
+  when the loaddef is evaluated."
   (declare (ignore process-arglist))
   (destructuring-bind (name docstring) info
     `((autoload-class ,name ,system-name
@@ -503,7 +534,11 @@
                                 (or (documentation name 'type)
                                     docstring)))
                           (when (and process-docstring docstring)
-                            `(:docstring ,docstring)))))))
+                            `(:docstring ,docstring)))
+                      ,@(let ((metaclass (class-name (class-of
+                                                      (find-class name)))))
+                          (unless (eq metaclass 'standard-class)
+                            `(:metaclass ,metaclass)))))))
 
 
 (defsection @variables (:title "Variables")
