@@ -25,20 +25,22 @@
 
 ;;; Detect some common constant forms that are print-read consistent
 ;;; given only the existence of the standard packages :CL and
-;;; :KEYWORD.
-(defun simple-constant-form-p (form)
-  (let ((cl-package (find-package :cl)))
+;;; :KEYWORD and PACKAGE-NAMES.
+(defun simple-constant-form-p (form packages)
+  (let* ((cl-package (find-package :cl))
+         (packages (cons cl-package packages)))
     (labels
         ((simple-self-evaluating-form-p (form)
            (or (stringp form) (numberp form) (characterp form) (keywordp form)
                (and (symbolp form)
+                    ;; In other packages, constants can become non-constant.
                     (eq (symbol-package form) cl-package)
                     (constantp form))))
          (recurse (form depth)
            (cond ((atom form)
                   (or (simple-self-evaluating-form-p form)
                       (and (symbolp form)
-                           (eq (symbol-package form) cl-package))))
+                           (member (symbol-package form) packages))))
                  ;; Circularities and deep nesting bail out here.
                  ((= depth 100)
                   (return-from simple-constant-form-p nil))

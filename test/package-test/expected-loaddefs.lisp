@@ -31,3 +31,11 @@
 (autoload::export* '("aaa-foo" "forward-import-target" "missing") "%aaa")
 
 (autoload::export* '("foo" "plain-import-target") "%package-test")
+
+(autoload::foreshadow-defvar %package-test::*var/3rd-part-init*)
+
+(autoload::foreshadow-defvar
+ %package-test::*var/reconstructed-package-init-bad*)
+
+(autoload::foreshadow-defvar
+ %package-test::*var/reconstructed-package-init-good* :init '%aaa:aaa-foo)

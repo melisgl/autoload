@@ -426,7 +426,8 @@ to be circular. The rules for loading are as follows.
     variable as in `DEFVAR`. Simple constant forms are strings, numbers,
     characters, keywords, constants in the CL package, and [`QUOTE`][f5d0]d nested
     lists containing any of the previous or any symbol from the `CL`
-    package.
+    package and other packages for which loaddefs have been generated in
+    the same [`EXTRACT-LOADDEFS`][dd7e] call (see [`DEFPACKAGE/AUTO`][aa0e])).
     
     In case the global binding of `VAR` has been set between the
     corresponding loaddef and its first autodef, `VAL` is evaluated for

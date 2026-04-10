@@ -30,6 +30,8 @@
   (:use :cl)
   (:export #:aaa-foo #:forward-import-target))
 
+(defun %aaa:aaa-foo ())
+
 ;; Circular :USEs
 (eval-when (:compile-toplevel :load-toplevel :execute)
   (use-package :%package-test :%aaa)
@@ -40,3 +42,9 @@
   (import '%3rd-party:missing :%aaa)
   (export '%3rd-party:missing :%aaa)
   (import '%aaa::forward-import-target :%package-test))
+
+(defvar/auto *var/3rd-part-init* '%3rd-party::z)
+
+(defvar/auto *var/reconstructed-package-init-good* '%aaa:aaa-foo)
+
+(defvar/auto *var/reconstructed-package-init-bad* (%aaa:aaa-foo))
