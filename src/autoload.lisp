@@ -602,7 +602,7 @@
      ',var))
 
 (defun defvar/auto-info-to-loaddefs
-    (system-name info process-arglist process-docstring)
+    (system-name info process-arglist process-docstring packages)
   "__Loaddef:__ The corresponding @LOADDEF is not public and must be
   [generated][ @automatic-loaddefs]. The generated loaddef declaims
   the variable special and maybe sets its initial value and docstring.
@@ -611,7 +611,8 @@
   variable as in DEFVAR. Simple constant forms are strings, numbers,
   characters, keywords, constants in the CL package, and QUOTEd nested
   lists containing any of the previous or any symbol from the `CL`
-  package."
+  package and other packages for which loaddefs have been generated in
+  the same EXTRACT-LOADDEFS call (see DEFPACKAGE/AUTO))."
   (declare (ignore system-name process-arglist))
   (destructuring-bind (name val-form val-form-p docstring) info
     `((foreshadow-defvar
@@ -622,7 +623,7 @@
                     ;; VAL-FORM as a string and have FORESHADOW-DEFVAR
                     ;; try to read and execute it, giving up on any
                     ;; error, but that could compute the wrong value.
-                    (simple-constant-form-p val-form))
+                    (simple-constant-form-p val-form packages))
            `(:init ,val-form))
        ,@(let ((docstring
                  (or (documentation name 'variable)
@@ -745,8 +746,7 @@
                 symbol))
             symbol-names)))
 
-(defun generate-package-loaddefs (package-designators
-                                  &key (process-docstring t))
+(defun generate-package-loaddefs (packages &key (process-docstring t))
   "__Loaddef:__ The corresponding @LOADDEF is not public and must be
   [generated][ @automatic-loaddefs]. As in the expansion of
   DEFPACKAGE/AUTO itself, the generated operations are additive.
@@ -765,9 +765,7 @@
   - Any reference to non-existent packages (e.g. in :USE) or symbols
     in non-existent packages (e.g. :IMPORT-FROM) is silently skipped
     when the loaddef is evaluated."
-  (let ((packages (sort (delete-duplicates (mapcar #'find-package-or-error
-                                                   package-designators))
-                        #'string< :key #'package-name))
+  (let ((packages (sort (copy-seq packages) #'string< :key #'package-name))
         ;; We create the packages first, in case their :USEs are
         ;; circular. The phases follow the order specified in
         ;; [DEFPACKAGE][clhs].
@@ -1278,15 +1276,18 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
          (package-infos (remove 'defpackage/auto infos
                                 :test-not #'eq :key #'second))
          (other-infos (remove 'defpackage/auto infos
-                              :test #'eq :key #'second)))
+                              :test #'eq :key #'second))
+         (package-names (union (mapcar #'third package-infos)
+                               (uiop:ensure-list packages)
+                               :test #'equal))
+         (packages (remove-duplicates
+                    (mapcar #'find-package-or-error package-names))))
     (append
-     ;; These are already ordered.
-     (generate-package-loaddefs (union (mapcar #'third package-infos)
-                                       (uiop:ensure-list packages))
-                                :process-docstring process-docstring)
+     (generate-package-loaddefs packages :process-docstring process-docstring)
      (sort-loaddefs (mapcan (lambda (info)
                               (info-to-loaddefs info process-arglist
-                                                process-docstring))
+                                                process-docstring
+                                                packages))
                             other-infos)))))
 
 (defun sort-loaddefs (loaddefs)
@@ -1317,7 +1318,7 @@ ASDF:DEFSYSTEM."
       (asdf:load-system system :force t))
     (reverse *recorded-autoload-infos*)))
 
-(defun info-to-loaddefs (info process-arglist process-docstring)
+(defun info-to-loaddefs (info process-arglist process-docstring packages)
   (let ((system-name (pop info))
         (definer (pop info)))
     (ecase definer
@@ -1329,7 +1330,7 @@ ASDF:DEFSYSTEM."
          process-arglist process-docstring))
       ((defvar/auto)
        (defvar/auto-info-to-loaddefs system-name info
-         process-arglist process-docstring)))))
+         process-arglist process-docstring packages)))))
 
 (defun record-loaddefs (system)
   "EXTRACT-LOADDEFS from SYSTEM and WRITE-LOADDEFS. The arguments of
