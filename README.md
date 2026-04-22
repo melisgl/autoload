@@ -57,8 +57,28 @@ for the latest version.
 
 ## 2 Introduction
 
-Libraries often choose to limit dependencies, even if it means
-sacrificing features or duplicating code, to minimize
+Autoload was factored out of PAX, so let's
+explore the motivation in that context. PAX is a large system with
+substantial dependencies, but what you actually need in deployment
+is tiny. The rest is for interactive use and documentation
+generation. By autoloading the optional parts, we can keep
+deployment size down and avoid annoyingly long compile times caused
+by code for unused features (and their transitive dependencies).
+
+Users could load the relevant systems manually when they need them,
+but that would be quite disruptive and they would need to remember
+what system to load. Also, code whose dependencies may not be loaded
+needs to jump through hoops (e.g. [`FUNCALL`][03c7] + [`INTERN`][b4f0]) or rely on
+forward declarations. Autoload takes care of these issues: you can
+factor out code that isn't always necessary into some
+sub-asdf-system along with its dependencies. This removes the
+pressure to drop dependencies just to keep deployments lean and
+spares some users the long wait of compiling
+`ironclad`.
+
+More abstractly, libraries often choose to limit dependencies,
+even if it means sacrificing features or duplicating code, to
+minimize
 
 - compilation time,
 
@@ -66,8 +86,8 @@ sacrificing features or duplicating code, to minimize
 
 - the risk of breakage through dependencies.
 
-This library mitigates the first two issues by loading heavy
-dependencies on demand. The core idea is
+Autoload mitigates these issues by loading heavy dependencies on
+demand. The core idea is
 
 ```
 (defmacro autoload (name asdf-system)
@@ -703,6 +723,7 @@ to be circular. The rules for loading are as follows.
     [`RECORD-LOADDEFS`][e90c] can be used as a condition handler to invoke this
     restart.
 
+  [03c7]: http://www.lispworks.com/documentation/HyperSpec/Body/f_funcal.htm "FUNCALL (MGL-PAX:CLHS FUNCTION)"
   [05c1]: http://www.lispworks.com/documentation/HyperSpec/Body/d_ftype.htm "FTYPE (MGL-PAX:CLHS DECLARATION)"
   [0724]: #x-28AUTOLOAD-3ASYSTEM-AUTO-LOADDEFS-20-28MGL-PAX-3AREADER-20AUTOLOAD-3AAUTOLOAD-SYSTEM-29-29 "AUTOLOAD:SYSTEM-AUTO-LOADDEFS (MGL-PAX:READER AUTOLOAD:AUTOLOAD-SYSTEM)"
   [0c4f]: http://www.lispworks.com/documentation/HyperSpec/Body/f_export.htm "EXPORT (MGL-PAX:CLHS FUNCTION)"
@@ -745,6 +766,7 @@ to be circular. The rules for loading are as follows.
   [aa0e]: #x-28AUTOLOAD-3ADEFPACKAGE-2FAUTO-20MGL-PAX-3AMACRO-29 "AUTOLOAD:DEFPACKAGE/AUTO MGL-PAX:MACRO"
   [ae25]: https://www.quicklisp.org/ "Quicklisp"
   [af1d]: #x-28AUTOLOAD-3A-40AUTODEF-20MGL-PAX-3AGLOSSARY-TERM-29 "autodef"
+  [b4f0]: http://www.lispworks.com/documentation/HyperSpec/Body/f_intern.htm "INTERN (MGL-PAX:CLHS FUNCTION)"
   [b5ec]: http://www.lispworks.com/documentation/HyperSpec/Body/f_load.htm "LOAD (MGL-PAX:CLHS FUNCTION)"
   [c1d4]: #x-28AUTOLOAD-3A-40AUTOMATIC-LOADDEFS-20MGL-PAX-3ASECTION-29 "Automatically Generating Loaddefs"
   [c77f]: http://www.lispworks.com/documentation/HyperSpec/Body/t_std_cl.htm "STANDARD-CLASS (MGL-PAX:CLHS CLASS)"

@@ -17,8 +17,28 @@
   ("autoload-doc" asdf:system))
 
 (defsection @introduction (:title "Introduction")
-  """Libraries often choose to limit dependencies, even if it means
-  sacrificing features or duplicating code, to minimize
+  """Autoload was factored out of [PAX][pax::@pax-manual], so let's
+  explore the motivation in that context. PAX is a large system with
+  substantial dependencies, but what you actually need in deployment
+  is tiny. The rest is for interactive use and documentation
+  generation. By autoloading the optional parts, we can keep
+  deployment size down and avoid annoyingly long compile times caused
+  by code for unused features (and their transitive dependencies).
+
+  Users could load the relevant systems manually when they need them,
+  but that would be quite disruptive and they would need to remember
+  what system to load. Also, code whose dependencies may not be loaded
+  needs to jump through hoops (e.g. FUNCALL + INTERN) or rely on
+  forward declarations. Autoload takes care of these issues: you can
+  factor out code that isn't always necessary into some
+  sub-asdf-system along with its dependencies. This removes the
+  pressure to drop dependencies just to keep deployments lean and
+  spares some users the long wait of compiling
+  [`ironclad`][asdf:system].
+
+  More abstractly, libraries often choose to limit dependencies,
+  even if it means sacrificing features or duplicating code, to
+  minimize
 
   - compilation time,
 
@@ -26,8 +46,8 @@
 
   - the risk of breakage through dependencies.
 
-  This library mitigates the first two issues by loading heavy
-  dependencies on demand. The core idea is
+  Autoload mitigates these issues by loading heavy dependencies on
+  demand. The core idea is
 
   ```
   (defmacro autoload (name asdf-system)
