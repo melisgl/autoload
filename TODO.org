@@ -1,6 +1,6 @@
-#+STARTUP: overview
-#+SEQ_TODO: TODO(t@) NEXT(n@) STARTED(s@) WAITING(w@) | DONE(d@) OLD(o@) CANCELLED(c@)
-#+TODO: MAYBE(m@) FAILED(f@) LOG(l@) DEFERRED(e@) BUG(b@)
+#+STARTUP: overview nologdone
+#+SEQ_TODO: TODO(t) NEXT(n) STARTED(s) WAITING(w) | DONE(d) OLD(o) CANCELLED(c)
+#+TODO: MAYBE(m) FAILED(f) LOG(l) DEFERRED(e) BUG(b)
 * MAYBE make it possible to extend
 E.g. copy PAX:DEFSECTIONs.
 
