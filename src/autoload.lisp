@@ -1108,8 +1108,8 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
        (loop
          (with-record-loaddefs-restart
              (return (progn ,@body))
-             :test ,loaddefs-file-p
-             :on-restart (record-loaddefs *autoload-system*))))))
+           :test ,loaddefs-file-p
+           :on-restart (record-loaddefs *autoload-system*))))))
 
 (defun loaddefs-file-p (autoload-cl-source-file)
   (declare (type autoload-cl-source-file autoload-cl-source-file))
@@ -1118,8 +1118,8 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
          (system (asdf:component-system f))
          (loaddefs-file (ignore-errors (split-system-auto-loaddefs system)))
          (loaddefs-file (when loaddefs-file
-                           (asdf:system-relative-pathname system
-                                                          loaddefs-file))))
+                          (asdf:system-relative-pathname system
+                                                         loaddefs-file))))
     (declare (type autoload-system system))
     (uiop:pathname-equal f-file loaddefs-file)))
 
