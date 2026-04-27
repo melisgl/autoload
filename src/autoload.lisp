@@ -375,9 +375,13 @@
        (mark-auto ',name :function)
        ',name)))
 
+(trivial-indent:define-indentation defun/auto (4 &lambda &body))
+
 (defmacro defgeneric/auto (name lambda-list &body options)
   "A shorthand for `(` DEFUN/AUTO `(DEFGENERIC NAME) ...)`."
   `(defun/auto (defgeneric ,name) ,lambda-list ,@options))
+
+(trivial-indent:define-indentation defgeneric/auto (4 &lambda &body))
 
 (defun defun/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring)
@@ -601,6 +605,8 @@
      (mark-auto ',var :variable)
      ',var))
 
+(trivial-indent:define-indentation defvar/auto (4 2 2))
+
 (defun defvar/auto-info-to-loaddefs
     (system-name info process-arglist process-docstring packages)
   "__Loaddef:__ The corresponding @LOADDEF is not public and must be
@@ -710,6 +716,8 @@
              `((setf (documentation (find-package ,name) t) ,doc)))
          (mark-auto ',name :package)
          (find-package ,name)))))
+
+(trivial-indent:define-indentation defpackage/auto (4 2))
 
 (defun check-defpackage-options (options)
   (loop for option in options

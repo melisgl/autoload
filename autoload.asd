@@ -10,7 +10,7 @@
   :source-control (:git "https://github.com/melisgl/autoload.git")
   :description "An ASDF autoloading facility. See
   AUTOLOAD::@AUTOLOAD-MANUAL."
-  :depends-on ("closer-mop" "mgl-pax-bootstrap")
+  :depends-on ("closer-mop" "mgl-pax-bootstrap" "trivial-indent")
   :components ((:module "src/"
                 :serial t
                 :components ((:file "package")
