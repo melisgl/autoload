@@ -39,7 +39,7 @@ for the latest version.
     - _Homepage:_ <https://github.com/melisgl/autoload>
     - _Bug tracker:_ <https://github.com/melisgl/autoload/issues>
     - _Source control:_ [GIT](https://github.com/melisgl/autoload.git)
-    - *Depends on:* closer-mop, mgl-pax-bootstrap
+    - *Depends on:* closer-mop, mgl-pax-bootstrap, trivial-indent
 
 <a id="x-28-22autoload-doc-22-20ASDF-2FSYSTEM-3ASYSTEM-29"></a>
 
@@ -379,9 +379,9 @@ to be circular. The rules for loading are as follows.
     introspection (e.g. via `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`), which
     does not trigger autoloading.
     
-    Note that [`INITIALIZE-INSTANCE`][1466] `:AROUND` methods specialized on a
-    subclass of `CLASS-NAME` may run twice in the context of the
-    `MAKE-INSTANCE` that triggers autoloading.
+    > *Note*: [`INITIALIZE-INSTANCE`][1466] `:AROUND` methods specialized on a
+    > subclass of `CLASS-NAME` may run twice in the context of the
+    > `MAKE-INSTANCE` that triggers autoloading.
 
 <a id="x-28AUTOLOAD-3ALOADDEF-CLASS-P-20FUNCTION-29"></a>
 
@@ -653,9 +653,11 @@ to be circular. The rules for loading are as follows.
     [`RECORD-LOADDEFS`][e90c] and [`CHECK-LOADDEFS`][451b] provide
     [ASDF Integration][0c5c].
     
-    Note that this is an expensive operation, as it loads or reloads the
-    direct dependencies listed in `:AUTO-DEPENDS-ON` one by one with
-    `ASDF:LOAD-SYSTEM` `:FORCE` `T` to find the [autodef][af1d]s.
+    > *Note*: This is an expensive operation, as it loads or reloads the
+    > direct dependencies listed in `:AUTO-DEPENDS-ON` one by one with
+    > `ASDF:LOAD-SYSTEM` `:FORCE` `T` to find the [autodef][af1d]s. As a side-effect,
+    > this can later cause spurious recompilation of systems that depend
+    > on the force-loaded systems.
     
     See the individual [autodef][af1d]s for descriptions of the generated
     loaddefs.

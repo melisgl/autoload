@@ -28,7 +28,7 @@ for the latest version.
 
     - Source control: [GIT](https://github.com/melisgl/autoload.git)
 
-    - Depends on: closer-mop, mgl-pax-bootstrap
+    - Depends on: closer-mop, mgl-pax-bootstrap, trivial-indent
 
 - [system] "autoload-doc"
 
@@ -315,9 +315,9 @@ to be circular. The rules for loading are as follows.
     introspection (e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES), which
     does not trigger autoloading.
 
-    Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
-    subclass of CLASS-NAME may run twice in the context of the
-    MAKE-INSTANCE that triggers autoloading.
+    > Note: INITIALIZE-INSTANCE :AROUND methods specialized on a
+    > subclass of CLASS-NAME may run twice in the context of the
+    > MAKE-INSTANCE that triggers autoloading.
 
 - [function] LOADDEF-CLASS-P NAME
 
@@ -551,9 +551,11 @@ to be circular. The rules for loading are as follows.
     RECORD-LOADDEFS and CHECK-LOADDEFS provide
     ASDF Integration.
 
-    Note that this is an expensive operation, as it loads or reloads the
-    direct dependencies listed in :AUTO-DEPENDS-ON one by one with
-    ASDF:LOAD-SYSTEM :FORCE T to find the autodefs.
+    > Note: This is an expensive operation, as it loads or reloads the
+    > direct dependencies listed in :AUTO-DEPENDS-ON one by one with
+    > ASDF:LOAD-SYSTEM :FORCE T to find the autodefs. As a side-effect,
+    > this can later cause spurious recompilation of systems that depend
+    > on the force-loaded systems.
 
     See the individual autodefs for descriptions of the generated
     loaddefs.

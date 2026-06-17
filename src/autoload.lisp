@@ -437,9 +437,9 @@
   introspection (e.g. via CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES), which
   does not trigger autoloading.
 
-  Note that INITIALIZE-INSTANCE :AROUND methods specialized on a
-  subclass of CLASS-NAME may run twice in the context of the
-  MAKE-INSTANCE that triggers autoloading."
+  > _Note_: INITIALIZE-INSTANCE :AROUND methods specialized on a
+  > subclass of CLASS-NAME may run twice in the context of the
+  > MAKE-INSTANCE that triggers autoloading."
   (assert (subtypep metaclass 'standard-class))
   (check-loaddef class-name :class system-name)
   `(eval-when (:compile-toplevel :load-toplevel :execute)
@@ -1265,9 +1265,11 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
   [RECORD-LOADDEFS][ function] and CHECK-LOADDEFS provide
   @ASDF-INTEGRATION.
 
-  Note that this is an expensive operation, as it loads or reloads the
-  direct dependencies listed in :AUTO-DEPENDS-ON one by one with
-  ASDF:LOAD-SYSTEM :FORCE T to find the @AUTODEFs.
+  > _Note_: This is an expensive operation, as it loads or reloads the
+  > direct dependencies listed in :AUTO-DEPENDS-ON one by one with
+  > ASDF:LOAD-SYSTEM :FORCE T to find the @AUTODEFs. As a side-effect,
+  > this can later cause spurious recompilation of systems that depend
+  > on the force-loaded systems.
 
   See the individual @AUTODEFs for descriptions of the generated
   loaddefs.
