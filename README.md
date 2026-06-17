@@ -374,7 +374,7 @@ to be circular. The rules for loading are as follows.
       instance of `STANDARD-CLASS`.
     
     The dummy class is also defined at [compile time][27c6] to
-    approximate the semantics of [`DEFCLASS`][ead6]. It class has `METACLASS` with a
+    approximate the semantics of [`DEFCLASS`][ead6]. It has `METACLASS` with a
     single superclass and no slots. These are visible through
     introspection (e.g. via `CLOSER-MOP:CLASS-DIRECT-SUPERCLASSES`), which
     does not trigger autoloading.

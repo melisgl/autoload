@@ -33,6 +33,16 @@ environment.
 An exhaustive check may not be possible (if there are multiple :auto-
 depends-on systems).
 * MAYBE DEFPARAMETER/AUTO?
+* MAYBE autoload conditions?
+The mechanism for autoloading classes doesn't work on conditions even
+on SBCL, where conditions are classes.
+
+Still, to silence undefined type warnings about yet-to-be-defined
+conditions used in e.g. HANDLER-CASE, PAX has to do this:
+
+#+sbcl
+(unless (find-class 'unresolvable-reflink)
+  (define-condition unresolvable-reflink (warning condition-context-mixin) ()))
 * DONE compare to Emacs autoload
 ** Architectural comparison
 
