@@ -9,7 +9,8 @@
       "*var/no-value* docstring")
 
 (defvar/auto *var/simple-value* '("xxx" 7 :key nil t)
-  "*var/simple-value* docstring")
+  "*var/simple-value*
+docstring")
 
 (defvar/auto *var/complex-value* (1+ 2))
 

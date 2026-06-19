@@ -23,9 +23,9 @@
              `((,*asdf-session-symbol* nil))))
      ,@body))
 
-;;; Detect some common constant forms that are print-read consistent
-;;; given only the existence of the standard packages :CL and
-;;; :KEYWORD and PACKAGE-NAMES.
+;;; Return true if FORM is definitely print-read consistent given only
+;;; the existence of the standard packages :CL and :KEYWORD and
+;;; PACKAGES. Does not detect all constant forms.
 (defun simple-constant-form-p (form packages)
   (let* ((cl-package (find-package :cl))
          (packages (cons cl-package packages)))

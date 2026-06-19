@@ -232,11 +232,14 @@
                   ;; %MISSING-SYSTEM.
                   (handler-bind ((autoload-warning #'muffle-warning))
                     (record-loaddefs "%simple-test")))
-              (let ((*package* (find-package :autoload-test)))
-                (is (equal (uiop:read-file-forms
-                            (test-file "loaddefs.lisp"))
-                           (uiop:read-file-forms
-                            (test-file "expected-loaddefs.lisp")))))))
+              (with-failure-expected (#+clisp t #-clisp nil)
+                (let ((*package* (find-package :autoload-test)))
+                  (is (null (mismatch%
+                             (uiop:read-file-forms
+                              (test-file "loaddefs.lisp"))
+                             (uiop:read-file-forms
+                              (test-file "expected-loaddefs.lisp"))
+                             :test #'equal)))))))
           (with-test ("variables and simple DEFUN")
             (with-test-systems
               (load-simple-test)
@@ -252,7 +255,7 @@
                        (equal (symbol-value *var/simple-value*)
                               '("xxx" 7 :key nil t))))
               (is (equal (documentation *var/simple-value* 'variable)
-                         "*var/simple-value* docstring"))
+                         (format nil "*var/simple-value*~%docstring")))
               ;; *VAR/COMPLEX-VALUE*
               (is (loaddef-variable-p *var/complex-value*))
               (is (not (boundp *var/complex-value*)))

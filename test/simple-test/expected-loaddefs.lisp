@@ -15,7 +15,8 @@
 
 (autoload::foreshadow-defvar %simple-test::*var/simple-value* :init
                              '("xxx" 7 :key nil t) :docstring
-                             "*var/simple-value* docstring")
+                             "*var/simple-value*
+docstring")
 
 (autoload:autoload %simple-test::foo "%simple-test/full" :arglist
                    "(%simple-test::x)" :docstring "foo docstring")
@@ -25,7 +26,7 @@
 
 (autoload:autoload %simple-test::foo-with-unreadable-arglist
                    "%simple-test/full" :arglist
-                   "(&optional (%simple-test::x '%3rd-party::z))")
+                   "(&optional (%simple-test::x (quote %3rd-party::z)))")
 
 (autoload:autoload %simple-test::test-custom-fun "%simple-test/full" :arglist
                    "(%simple-test::x)")

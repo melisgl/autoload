@@ -1233,13 +1233,13 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
        ,@body)))
 
 (defun prin1-to-string* (object)
-  ;; We need to print the same string on all Lisp implementations for
-  ;; the sake of the EQUAL comparison in CHECK-LOADDEFS.
-  ;; *PRINT-PRETTY* NIL would be the easy way, but CLISP still prints
-  ;; (QUOTE X) as 'X.
+  ;; We need to print the same string so that SORT-LOADDEFS is stable
+  ;; across implementations. Note that even with *PRINT-PRETTY* NIL,
+  ;; CLISP still prints (QUOTE X) as 'X. With *PRINT-PRETTY* T, there
+  ;; seems to be no way to reliably prevent CCL from breaking lines
+  ;; (https://github.com/Clozure/ccl/issues/554).
   (with-loaddefs-file-syntax
-    (let ((*print-right-margin* most-positive-fixnum)
-          (*print-miser-width* nil))
+    (let ((*print-pretty* nil))
       (prin1-to-string object))))
 
 (defun maybe-record-autoload-info (definer name &rest rest)
@@ -1301,6 +1301,9 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
                             other-infos)))))
 
 (defun sort-loaddefs (loaddefs)
+  ;; FIXME: We should do some lexicographical tree sort instead of
+  ;; fighthing the printer differences between the Lisp
+  ;; implementations.
   (mapcar #'car
           (sort (mapcar (lambda (loaddef)
                           (cons loaddef (prin1-to-string* loaddef)))
