@@ -227,7 +227,7 @@ to be circular. The rules for loading are as follows.
 
 ### Functions
 
-- [macro] AUTOLOAD NAME SYSTEM-NAME &KEY (ARGLIST NIL) DOCSTRING
+- [macro] AUTOLOAD NAME SYSTEM-NAME &KEY ARGLIST DOCSTRING
 
     This is the loaddef for autodef DEFUN/AUTO.
 
@@ -345,7 +345,7 @@ to be circular. The rules for loading are as follows.
     See if a loaddef was generated from a
     DEFVAR/AUTO for NAME, but this autodef has not been evaluated.
 
-- [macro] DEFVAR/AUTO VAR &OPTIONAL (VAL NIL) DOC
+- [macro] DEFVAR/AUTO VAR &OPTIONAL VAL DOC
 
     This is an autodef with no public loaddef. See below.
 

@@ -128,6 +128,12 @@
   4. It is an AUTOLOAD-ERROR if the @LOADDEF is not replaced by a
      normal definition or deleted by the loaded system, that is, when
      it remains a @LOADDEF (e.g. in terms of LOADDEF-FUNCTION-P)."
+  ;; This test to prevent infinite recursion can produce false
+  ;; positives. It is written this way to make things easier to test.
+  ;; Maybe we can relax it a bit by requiring only that an
+  ;; ASDF:COMPILE-OP or an ASDF:LOAD-OP is not being performed, but
+  ;; that would also delay detecting problems in interactive
+  ;; development (i.e. directly COMPILE-FILE or LOAD calls).
   (when (or *compile-file-pathname* *load-pathname*)
     (error 'autoload-error :name name :kind kind
            :system-name system-name :cause :during-compile-or-load))
@@ -1024,7 +1030,7 @@
         (loaddefs-file &key (process-arglist t) (process-docstring t)
                             packages (test t))
 
-    - LOADDEFS-FILE designates the pathname where [RECORD-LOADDEFS][
+    - `LOADDEFS-FILE` designates the pathname where [RECORD-LOADDEFS][
       function] writes the [extracted loaddefs][ extract-loaddefs].
       The pathname is relative to ASDF:SYSTEM-SOURCE-DIRECTORY of
       SYSTEM and is OPENed with :IF-EXISTS :SUPERSEDE.
