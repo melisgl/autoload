@@ -309,7 +309,9 @@
   (declare (ignorable arglistp arglist))
   (setf (state name :function) (fdefinition* name))
   #+sbcl
-  (when arglistp
+  (when (and arglistp
+             ;; The SETF has been removed. Hopefully, it'll be reinstated.
+             (ignore-errors (fdefinition '(setf sb-c::%fun-lambda-list))))
     (etypecase arglist
       (cons
        (setf (sb-c::%fun-lambda-list (fdefinition* name)) arglist))
