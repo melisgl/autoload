@@ -256,14 +256,15 @@
   required semantics of DEFUN. NAME is DECLAIMed with FTYPE
   [FUNCTION][type] and NOTINLINE.
 
-  - ARGLIST will be installed as the stub's arglist if specified and
-    it's supported on the platform (currently only SBCL). If ARGLIST
-    is a string, the effective value of ARGLIST is read from it. If
-    the read fails, an AUTOLOAD-WARNING is signalled and processing
-    continues as if ARGLIST had not been provided.
+  - If specified, ARGLIST is what introspective facilities should show
+    for the stub (which has a simple &REST arglist in reality). For
+    example, ARGLIST will be shown by @SLIME-AUTODOC and returned by
+    DREF:ARGLIST if modifying this metadata is supported by the
+    platform (currently only SBCL).
 
-      Arglists are for interactive purposes only. For example, they
-      are shown by @SLIME-AUTODOC and returned by DREF:ARGLIST.
+      If ARGLIST is a string, the effective value is read from it. If
+      the read fails, an AUTOLOAD-WARNING is signalled and processing
+      continues as if ARGLIST had not been provided.
 
   - DOCSTRING, if non-NIL, will be the stub's docstring. If NIL, then
     a generic docstring that says what system it autoloads will be
@@ -433,11 +434,15 @@
     a generic docstring that says what system it autoloads will be
     used.
 
-  - METACLASS is a symbol denoting STANDARD-CLASS or a subclass of it.
-    Also, classes with this metaclass must be allowed to inherit from
-    standard classes. In MOP terms, CLOSER-MOP:VALIDATE-SUPERCLASS
-    must return true when called with an instance of METACLASS and an
-    instance of STANDARD-CLASS.
+  - METACLASS is the metaclass of the autoloaded definition. It must
+    be a symbol denoting STANDARD-CLASS or a subclass of it. The dummy
+    class is defined with this metaclass to make redefinition with the
+    autoloaded class possible.
+
+      Also, classes with this metaclass must be allowed to inherit
+      from standard classes. In MOP terms,
+      CLOSER-MOP:VALIDATE-SUPERCLASS must return true when called with
+      an instance of METACLASS and an instance of STANDARD-CLASS.
 
   The dummy class is also defined at [compile time][clhs] to
   approximate the semantics of DEFCLASS. It has METACLASS with a

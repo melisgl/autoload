@@ -10,9 +10,8 @@
 
 (defsection @links-and-systems (:title "Links and Systems")
   "The official repository is <https://github.com/melisgl/autoload>, and
-  this document is available in various formats on
-  <https://fixnum.com> for the latest version.)
-  for the latest version."
+  the latest version of this manual is available in various formats on
+  <https://fixnum.com>."
   ("autoload" asdf:system)
   ("autoload-doc" asdf:system))
 
@@ -162,7 +161,7 @@
 
   - Multiple @PACKAGES can have their final states and
     interdependencies reconstructed before loading their systems even
-    if they were mutated operations like IMPORT and EXPORT.""")
+    if they were mutated by operations like IMPORT and EXPORT.""")
 
 (dref:define-restart record-loaddefs ()
   "Provided by CHECK-LOADDEFS and also when the compilation of the

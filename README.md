@@ -33,9 +33,8 @@
 ## 1 Links and Systems
 
 The official repository is <https://github.com/melisgl/autoload>, and
-this document is available in various formats on
-<https://fixnum.com> for the latest version.)
-for the latest version.
+the latest version of this manual is available in various formats on
+<https://fixnum.com>.
 
 <a id="x-28-22autoload-22-20ASDF-2FSYSTEM-3ASYSTEM-29"></a>
 
@@ -223,7 +222,7 @@ Autoloading is not only for [Functions][4b04]:
 
 - Multiple [Packages][643f] can have their final states and
   interdependencies reconstructed before loading their systems even
-  if they were mutated operations like [`IMPORT`][8f46] and [`EXPORT`][0c4f].
+  if they were mutated by operations like [`IMPORT`][8f46] and [`EXPORT`][0c4f].
 
 <a id="x-28AUTOLOAD-3A-40BASICS-20MGL-PAX-3ASECTION-29"></a>
 
@@ -314,14 +313,15 @@ to be circular. The rules for loading are as follows.
     required semantics of [`DEFUN`][f472]. `NAME` is [`DECLAIM`][ebea]ed with [`FTYPE`][05c1]
     [`FUNCTION`][119e] and [`NOTINLINE`][9514].
 
-    - `ARGLIST` will be installed as the stub's arglist if specified and
-      it's supported on the platform (currently only SBCL). If `ARGLIST`
-      is a string, the effective value of `ARGLIST` is read from it. If
-      the read fails, an [`AUTOLOAD-WARNING`][da95] is signalled and processing
-      continues as if `ARGLIST` had not been provided.
+    - If specified, `ARGLIST` is what introspective facilities should show
+      for the stub (which has a simple [`&REST`][4336] arglist in reality). For
+      example, `ARGLIST` will be shown by [SLIME autodoc][d78c] and returned by
+      `DREF:ARGLIST` if modifying this metadata is supported by the
+      platform (currently only SBCL).
 
-        Arglists are for interactive purposes only. For example, they
-        are shown by [SLIME autodoc][d78c] and returned by `DREF:ARGLIST`.
+        If `ARGLIST` is a string, the effective value is read from it. If
+        the read fails, an [`AUTOLOAD-WARNING`][da95] is signalled and processing
+        continues as if `ARGLIST` had not been provided.
 
     - `DOCSTRING`, if non-`NIL`, will be the stub's docstring. If `NIL`, then
       a generic docstring that says what system it autoloads will be
@@ -385,11 +385,15 @@ to be circular. The rules for loading are as follows.
       a generic docstring that says what system it autoloads will be
       used.
 
-    - `METACLASS` is a symbol denoting [`STANDARD-CLASS`][c77f] or a subclass of it.
-      Also, classes with this metaclass must be allowed to inherit from
-      standard classes. In MOP terms, `CLOSER-MOP:VALIDATE-SUPERCLASS`
-      must return true when called with an instance of `METACLASS` and an
-      instance of `STANDARD-CLASS`.
+    - `METACLASS` is the metaclass of the autoloaded definition. It must
+      be a symbol denoting [`STANDARD-CLASS`][c77f] or a subclass of it. The dummy
+      class is defined with this metaclass to make redefinition with the
+      autoloaded class possible.
+
+        Also, classes with this metaclass must be allowed to inherit
+        from standard classes. In MOP terms,
+        `CLOSER-MOP:VALIDATE-SUPERCLASS` must return true when called with
+        an instance of `METACLASS` and an instance of `STANDARD-CLASS`.
 
     The dummy class is also defined at [compile time][27c6] to
     approximate the semantics of [`DEFCLASS`][ead6]. It has `METACLASS` with a
@@ -774,6 +778,8 @@ to be circular. The rules for loading are as follows.
 [3d01]: #x-28AUTOLOAD-3ARECORD-LOADDEFS-20RESTART-29 "AUTOLOAD:RECORD-LOADDEFS RESTART"
 
 [42c5]: #x-28AUTOLOAD-3ALOADDEF-CLASS-P-20FUNCTION-29 "AUTOLOAD:LOADDEF-CLASS-P FUNCTION"
+
+[4336]: http://www.lispworks.com/documentation/HyperSpec/Body/03_da.htm "\"3.4.1\" (MGL-PAX:CLHS MGL-PAX:SECTION)"
 
 [451b]: #x-28AUTOLOAD-3ACHECK-LOADDEFS-20FUNCTION-29 "AUTOLOAD:CHECK-LOADDEFS FUNCTION"
 
