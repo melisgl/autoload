@@ -311,7 +311,7 @@
   (setf (state name :function) (fdefinition* name))
   #+sbcl
   (when (and arglistp
-             ;; The SETF has been removed. Hopefully, it'll be reinstated.
+             ;; The SETF was removed and reinstated once.
              (ignore-errors (fdefinition '(setf sb-c::%fun-lambda-list))))
     (etypecase arglist
       (cons
@@ -576,8 +576,9 @@
        (setf (state ',var :variable) :declared))))
 
 (defun loaddef-variable-p (name)
-  "See if a loaddef was [generated][ @automatic-loaddefs] from a
-  DEFVAR/AUTO for NAME, but this @AUTODEF has not been evaluated."
+  "See if a @LOADDEF [generated][ @automatic-loaddefs] from a
+  DEFVAR/AUTO for NAME has been evaluated without a subsequent
+  DEFVAR/AUTO for NAME."
   (eq (state name :variable) :declared))
 
 (defmacro defvar/auto (var &optional (val nil valp) doc)
@@ -656,9 +657,9 @@
   (defpackage/auto macro))
 
 (defun loaddef-package-p (name)
-  "See if a loaddef was [generated][ @automatic-loaddefs] from a
-  DEFPACKAGE/AUTO for NAME, but this @AUTODEF has not been evaluated
-  nor has the package been deleted."
+  "See if a @LOADDEF [generated][ @automatic-loaddefs] from a
+  DEFPACKAGE/AUTO for NAME has been evaluated without a subsequent
+  DEFPACKAGE/AUTO for NAME, nor has the package been deleted."
   (eq (state name :package) (ignore-errors (find-package name))))
 
 (defmacro defpackage/auto (name &rest options)
@@ -1315,7 +1316,7 @@ inherits from both, and use that as :DEFAULT-COMPONENT-CLASS."))
 
 (defun sort-loaddefs (loaddefs)
   ;; FIXME: We should do some lexicographical tree sort instead of
-  ;; fighthing the printer differences between the Lisp
+  ;; fighting the printer differences between the Lisp
   ;; implementations.
   (mapcar #'car
           (sort (mapcar (lambda (loaddef)

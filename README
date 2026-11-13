@@ -346,8 +346,9 @@ to be circular. The rules for loading are as follows.
 
 - [function] LOADDEF-VARIABLE-P NAME
 
-    See if a loaddef was generated from a
-    DEFVAR/AUTO for NAME, but this autodef has not been evaluated.
+    See if a loaddef generated from a
+    DEFVAR/AUTO for NAME has been evaluated without a subsequent
+    DEFVAR/AUTO for NAME.
 
 - [macro] DEFVAR/AUTO VAR &OPTIONAL VAL DOC
 
@@ -385,9 +386,9 @@ to be circular. The rules for loading are as follows.
 
 - [function] LOADDEF-PACKAGE-P NAME
 
-    See if a loaddef was generated from a
-    DEFPACKAGE/AUTO for NAME, but this autodef has not been evaluated
-    nor has the package been deleted.
+    See if a loaddef generated from a
+    DEFPACKAGE/AUTO for NAME has been evaluated without a subsequent
+    DEFPACKAGE/AUTO for NAME, nor has the package been deleted.
 
 - [macro] DEFPACKAGE/AUTO NAME &REST OPTIONS
 
